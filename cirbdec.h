@@ -1,0 +1,11 @@
+extern void         InB(buffer_struct_type *buff,unsigned char *data,int n);
+extern void         In(buffer_struct_type *buff,unsigned char data);
+extern int          InitBuffer(buffer_struct_type *buff,int size);
+extern void         FreeBuffer(buffer_struct_type *buff);
+extern int          Look(buffer_struct_type *buff,unsigned char *data,unsigned int offset);
+extern int          LookB(buffer_struct_type *buff,unsigned char *data,unsigned int n);
+extern int          Get(buffer_struct_type *buff,unsigned char *data);
+extern int          GetB(buffer_struct_type *buff,unsigned char *data,unsigned int n);
+extern int          Forward(buffer_struct_type *buff,unsigned int n);
+extern int          FullBuffer(buffer_struct_type *buff,double fratio);
+extern unsigned int GetBufferFill(buffer_struct_type *buff);
