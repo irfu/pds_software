@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# Used to generate "id.c" from "id.h" in Makefile.
+#
+sed -n 	-e 's/#define ID_H/char IDList[][33]={/p' \
+	-e 's/#endif/"END_OF_LIST                     "};/p' \
+	-e 's/#define /"/' \
+	-e 's/0x.. \/\//", \/\/&/' \
+	-e 's/\/\/ //p' $1 >id.c 

@@ -1,4 +1,4 @@
-
+# =====================================================================
 # Compiles PDS software for LAP
 # =====================================================================
 #
@@ -16,7 +16,7 @@
 # it has to be compiled as 32-bit also on 64-bit systems, e.g. spis 
 # and birra, using the gcc -m32 flag.
 # /Erik P G Johansson 2015-04-27
-
+#
 # gcc options:
 #       -Wall
 #           This enables all the warnings about constructions that some users consider questionable, and that are easy to avoid (or modify to prevent the
@@ -39,6 +39,18 @@
 #
 #           The -mx32 option sets "int", "long", and pointer types to 32 bits, and generates code for the x86-64 architecture.
 #
+#        -o file
+#            Place output in file file.  This applies regardless to whatever sort of output is being produced, whether it be an executable file, an object
+#            file, an assembler file or preprocessed C code.
+# 
+#            If -o is not specified, the default is to put an executable file in a.out, the object file for source.suffix in source.o, its assembler file
+#            in source.s, a precompiled header file in source.suffix.gch, and all preprocessed C source on standard output.
+#
+#
+# Remove flags for debugging information? Might speed up execution?!
+# /Erik P G Johansson 2015-12-04
+# Add flags for optimization? Might speed up execution?!
+# /Erik P G Johansson 2015-12-07
 #======================================================================
 
 VER = 3.09
@@ -46,7 +58,7 @@ CC	= gcc
 #OBJ1    = pds_$(VER).o plnk.o cirb.o id.o OASWlib.o 
 OBJ1    = pds_$(VER).o plnk.o cirb.o id.o
 EF      = -lefence
-CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application.
+CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
 # Libraries required by Fortran 
 FLIBS   = -lifport -lunwind -lcxa -lifcore #$(EF)
 # Fortran includes

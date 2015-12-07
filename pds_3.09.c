@@ -24,11 +24,11 @@
 //  * Fixed bug that sometimes terminates the DecodeScience thread prematurely thus omitting the last hour(s) of data.
 //       Erik P G Johansson 2015-03-31
 //  * Specifically permit the faulty macro 515 to set new vbias2 in every macro loop (not just the first loop) thus
-//  * permitting vbias2 to change value in every macro loop cycle, as described in the .mds file.
+//    permitting vbias2 to change value in every macro loop cycle, as described in the .mds file.
 //       Erik P G Johansson 2015-04-10
 //  * Modified and simplified code that updates certain PDS keyword values in LBL/CAT files copied from
-//  * the template directory so that it now updates more PDS keyword values.
-//  * Thus modified WriteLabelFile and renamed it WriteUpdatedLabelFile.
+//    the template directory so that it now updates more PDS keyword values.
+//    Thus modified WriteLabelFile and renamed it WriteUpdatedLabelFile.
 //       Erik P G Johansson 2015-05-04
 //  * Fixed bug that made INDEX.LBL not adjust to the DATA_SET_ID column changing width.
 //       Erik P G Johansson 2015-05-12
@@ -54,11 +54,11 @@
 // "BUG": The code still does not update the LBL files in the DOCUMENT/ directory.
 //
 // BUG: Appears to use a single line feed (LF) without carriage return (CR) for one single line when updating
-//    CALIB/RPCLAP030101_CALIB_FRQ_E_P2.LBL
 //    CALIB/RPCLAP030101_CALIB_FRQ_D_P1.LBL
 //    CALIB/RPCLAP030101_CALIB_FRQ_E_P1.LBL
 //    CALIB/RPCLAP030101_CALIB_FRQ_D_P2.LBL
-//    NOTE: These are specified in pds.conf.
+//    CALIB/RPCLAP030101_CALIB_FRQ_E_P2.LBL
+//    NOTE: These files are specified in pds.conf.
 // 
 //====================================================================================================================
 
