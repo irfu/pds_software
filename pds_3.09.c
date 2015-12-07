@@ -44,6 +44,10 @@
 //    This led to calibration offsets being multiplied by 16.
 //    (Braces surrounding the statements after two if-then were missing.)
 //       Erik P G Johansson 2015-08-31
+//  * Fixed potential bug that interpreted macro ID strings as decimal numbers rather than hexadecimal numbers.
+//    Code still worked since the result was only used to compare with decimal macro ID numbers
+//    and the code (seemed to) fail well for hexadecimal string representations.
+//       Erik P G Johansson 2015-12-07
 //
 //
 // "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
@@ -253,7 +257,7 @@ int Scet2Date_2(double raw,char *stime,int lfrac);					// Decodes SCET (Space cr
 											// lfrac is long or short fractions of seconds.
 
 int TimeOfDatePDS(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970...) for a PDS date string 
-											// NOTE this is not inverse of Scet2Date!
+											// NOTE: This is not the inverse of Scet2Date!
 
 int GetUTime(char *);									// Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
 
@@ -5454,25 +5458,30 @@ int WritePTabFile(
 		    }
 		}
 		
-                /* FKJN 2014-09-25 extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
-                We need to find the macro, compare to a list of macros and decide if we should let it pass or not.
-                If a bias command is issued on forbidden macros, the bias will change for maximum one Macro Loop(see Meds),
-                but pds will not know when it changes back.
-                */  
-                // FKJN 2014-10-31 added macro 515 & 807
-              if(extra_bias_setting)
-                {
-			FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	 //tstr4 is now macro id on form "MCID0X%04x" we need the 4 numerals.
-			
-			// BUG?! Interpreting string as a decimal number when it should be a hexadecimal number.
-			// Might not be a problem as long as one does not need to check for macro numbers containing letters
-			// (if it fails in a good way). /Erik P G Johansson 2015-11-26
-			// BUG?! Memory leak? strndup returns pointer to allocates memory for string but never de-allocates. /Erik P G Johansson 2015-11-26
-			macro_id=atoi(strndup(property1->value+6,4)); //macroid is now tstr4 stripped of MCID0X and converted to a DECIMAL number.
-			if( macro_id == 505 || macro_id == 506 || macro_id == 604 || macro_id == 515 || macro_id == 807 ) //keep it simple
+        /* FKJN 2014-09-25: Extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
+        We need to find the macro, compare to a list of macros and decide if we should let it pass or not.
+        If a bias command is issued on forbidden macros, the bias will change for maximum one Macro Loop (see Meds),
+        but pds will not know when it changes back.
+        */
+        // FKJN 2014-10-31 added macro 515 & 807
+        if(extra_bias_setting)
+        {
+            FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	 //tstr4 is now macro id on form "MCID0X%04x" we need the 4 numerals.
+            
+            /* BUG FIX: Old code interpreted string as a decimal number when it should be a hexadecimal number.
+             Old code should not have been a problem as long as (1) one does not need to check for macro numbers containing letters, and
+            (2) if the code failed in a good way for non-decimal numbers which it seemed to do. /Erik P G Johansson 2015-12-07
+            */            
+            //macro_id = atoi(strndup(property1->value+6,4)); // Strip off "MCID0X" and converted to a DECIMAL number.  
+            char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
+            sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
+            free(tempstr);
+            
+            //if( macro_id == 505 || macro_id == 506 || macro_id == 604 || macro_id == 515 || macro_id == 807 )
+			if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
    			{
 				extra_bias_setting = 0;
-				 YPrintf("Forbidden bias setting found at %s . Macro %d \n",tstr1,macro_id);
+				 YPrintf("Forbidden bias setting found at %s. Macro %x\n", tstr1, macro_id);
 				// Add some way of detecting that this is the first macro loop with extra_bias_settings?
 			}
 		}
