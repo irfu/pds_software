@@ -494,7 +494,7 @@ int main(int argc, char *argv[])
         calib=1;
     }
     
-    // Only process mission phase abbreviated as second column in Mission_Calender.txt 
+    // Only process mission phase abbreviated as second column in mission calendar file.
     if(GetOption("-mp",argc,argv,tstr1))
     {
         strncpy(mp.abbrev,tstr1,4);
@@ -565,284 +565,286 @@ int main(int argc, char *argv[])
         exit(1);
     }
     
-    if(calib)
+    if(calib) {
         pds.DPLNumber=3;			// Calibrated data has DPL number 3
-        else
-            pds.DPLNumber=2;			// Edited data has DPL number 2
-            
-            sec_epoch=E2Epoch(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
-            
-            // Get mission phase data 
-            if(GetMissionP(&mp,&pds)<0)
-                exit(1);
-            
-            YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
-        printf("DATA_SET_ID                 : %s\n",mp.data_set_id);
-        
-        // Create unquoted data set id
-        strcpy(tstr1,mp.data_set_id);		// Make temporary copy
-        TrimQN(tstr1);			// Remove quotes in temporary copy
-        
-        // Loads second part of conconfiguration information into the PDS structure and opens some log/status files
-        if((status=LoadConfig2(&pds,tstr1))<0) 
-        {
-            fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
-            exit(1);
-        }
-        
-        if(LoadTimeCorr(&pds,&tcp)<0)         // Load the time correlation packets, once and for all!
-        {
-            
-            fprintf(stderr,"Warning: No time correlation packets found.\n"); 
-            fprintf(stderr,"All UTC times from this point are estimates.\n");
-        }
-        
-        // Open VOLDESC.CAT and change some keywords
-        //-----------------------------------------------------------------------------------------------------------
-        sprintf(tstr1,"%sVOLDESC.CAT",pds.apathpds);          // Get full path
-        status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
-        
-        sprintf(tstr2,"ROLAP_1%03d",volume_id);
-        SetP(&cat,"VOLUME_ID",tstr2,1);                       // Set VOLUME_ID
-        
-        
-        // Create unquoted mission phase name
-        strcpy(tstr3,mp.phase_name); // Make temporary copy
-        TrimQN(tstr3);               // Remove quotes in temporary copy
-        
-        // Set the VOLUME_NAME
-        if(calib)
-            sprintf(tstr2,"\"RPCLAP CALIBRATED DATA FOR %s\"",tstr3);
-        else
-            sprintf(tstr2,"\"RPCLAP EDITED RAW DATA FOR %s\"",tstr3);
-        
-        SetP(&cat,"VOLUME_NAME",tstr2,1); // Set VOLUME_NAME
-        
-        WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
-        FreePrp(&cat);                                        // Free property value list
-        
-        
-        // Open DATASET.CAT and change some keywords
-        //-----------------------------------------------------------------------------------------------------------
-        sprintf(tstr1,"%sCATALOG/DATASET.CAT",pds.apathpds);  // Get full path
-        status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
-        
-        Scet2Date_2((double)mp.start,tstr2,0);                // Decode raw time into PDS compliant UTC time
-        YPrintf("Mission phase start         : %s\n",tstr2);
-        printf("Mission phase start         : %s\n",tstr2);
-        SetP(&cat,"START_TIME",tstr2,1);                      // Set START_TIME
-        
-        Scet2Date_2((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
-        YPrintf("Mission phase stop          : %s\n\n",tstr2);
-        printf("Mission phase stop          : %s\n\n",tstr2);
-        SetP(&cat,"STOP_TIME",tstr2,1);                       // Set STOP_TIME
-        
-        SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
-        
-        WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
-        FreePrp(&cat);                                        // Free property value list
-        
-        // Write initial message to system log
-        YPrintf("LAP PDS SYSTEM STARTED     \n");
-        YPrintf("========================================================================\n");
-        
-        if(calib)
-            YPrintf("Generating calibrated PDS data archive\n");
-        
-        AddPathsToSystemLog(&pds); // Add paths to system log file
-        
-        // Update keywords in the calibration files and get calibration data.
-        //---------------------------------------------------------------------------------------------------------------------------------
-        // Calibration files are supposed to reside in the CALIB directory, both for EDITED and CALIBRATED archives
-        // however for EDITED archives the files are not used.
-        
-        // pds->cpathd   Path to calib data
-        // pds->cpathf   Path to fine bias calibration data
-        // pds->cpathc   Path to coarse bias calibration data
-        // pds->cpathi   Path to current bias calibration data
-        // pds->cpathm   Path to offset calibration data
-        
-        InitP(&cc_lbl);                                      // Initialize property value pair list
-        status=ReadLabelFile(&cc_lbl,pds.cpathc);            // Read coarse bias voltage calibration label into property value pair list
-        if(status>=0) status+=ReadTableFile(&cc_lbl,&v_conv,pds.cpathd); // Read coarse bias voltage calibration data into v_conv structure
-        
-        WriteUpdatedLabelFile(&cc_lbl,pds.cpathc);                  // Write back label file with new info
-        
-        InitP(&fc_lbl);                                      // Initialize property value pair list
-        
-        // Read fine bias voltage calibration label into property value pair list
-        status=+ReadLabelFile(&fc_lbl,pds.cpathf);           
-        
-        // Read fine bias voltage calibration data into f_conv structure
-        if(status>=0) status+=ReadTableFile(&fc_lbl,&f_conv,pds.cpathd); 
-        
-        WriteUpdatedLabelFile(&fc_lbl,pds.cpathf);                  // Write back label file with new info
-        
-        InitP(&ic_lbl);                                      // Initialize property value pair list
-        
-        // Read current bias voltage calibration label into property value pair list
-        status=+ReadLabelFile(&ic_lbl,pds.cpathi);           
-        
-        // Read current bias calibration data into i_conv structure
-        if(status>=0) status+=ReadTableFile(&ic_lbl,&i_conv,pds.cpathd);  
-        
-        WriteUpdatedLabelFile(&ic_lbl,pds.cpathi);                  // Write back label file with new info
-        
-        InitP(&tmp_lbl);                                     // Initialize property value pair list
-        status=+ReadLabelFile(&tmp_lbl,pds.cpathdfp1);       // Read density frequency response calibration file probe 1
-        WriteUpdatedLabelFile(&tmp_lbl,pds.cpathdfp1);              // Write back label file with new info
-        
-        FreePrp(&tmp_lbl);                                   // Initialize property value pair list
-        status=+ReadLabelFile(&tmp_lbl,pds.cpathdfp2);       // Read density frequency response calibration file probe 2
-        WriteUpdatedLabelFile(&tmp_lbl,pds.cpathdfp2);              // Write back label file with new info
-        
-        FreePrp(&tmp_lbl);                                   // Initialize property value pair list
-        status=+ReadLabelFile(&tmp_lbl,pds.cpathefp1);       // Read e-field frequency response calibration file probe 1
-        WriteUpdatedLabelFile(&tmp_lbl,pds.cpathefp1);              // Write back label file with new info
-        
-        FreePrp(&tmp_lbl);                                   // Initialize property value pair list
-        status=+ReadLabelFile(&tmp_lbl,pds.cpathefp2);       // Read e-field frequency response calibration file probe 2
-        WriteUpdatedLabelFile(&tmp_lbl,pds.cpathefp2);              // Write back label file with new info
-        
-        status=+GetMCFiles(pds.cpathd,pds.cpathm,&m_conv);   // Get measurement calibration files
-        
-        if(status<0)
-        {
-            YPrintf("Can not get or interpret the calibration files. Exiting.\n");
-            ExitPDS(1);
-        }
-        
-        //Open INDEX table
-        sprintf(tstr1,"%sINDEX.TAB",pds.ipath); 
-        if((pds.itable_fd=fopen(tstr1,"a+"))==NULL) // Open index table for appending and reading
-        {
-            YPrintf("Couldn't open PDS index table file\n");
-            ExitPDS(1);
-        }
-        
-        // Open INDEX label
-        sprintf(tstr1,"%sINDEX.LBL",pds.ipath);
-        if((pds.ilabel_fd=fopen(tstr1,"w"))==NULL) // Open index label for writing, (file remade every time)
-        {
-            YPrintf("Couldn't open PDS index label file\n");
-            ExitPDS(1);
-        }
-        
-        SetupIndex(&ind);
-        
-        // Load all macro descriptions
-        // ----------------------------------------------------------------------------------------------------
-        if(!(status=LoadMacroDesc(macros,pds.macrop)))
-        {
-            YPrintf("Error loading macros\n");
-            ExitPDS(1);
-        }
-        else
-            YPrintf("Loaded %d macro descriptions\n",status);
-        
-        
-        // Initialize inverse log table to decode logarithm sweeps
-        DoILogTable(ilogtab); 
-        
-        // Initialize circular input buffers
-        // ----------------------------------------------------------------------------------------------------
-        YPrintf("Initialize circular buffers\n");
-        
-        if(InitBuffer(&cbtm,SC_SIZE)<0) 
-        {
-            YPrintf("Initialization of circular S/C TM buffer failed\n");
-            FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-            ExitPDS(1);
-        }
-        
-        if(InitBuffer(&cbs,SC_SIZE)<0) 
-        {
-            YPrintf("Initialization of circular Science buffer failed\n");
-            FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-            ExitPDS(1);
-        }
-        
-        // Circular Mirror/Error buffer
-        if(InitBuffer(&cmb,MC_SIZE)<0) 
-        {
-            YPrintf("Initialization of circular Error buffer failed\n");
-            FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-            ExitPDS(1);
-        }
-        
-        if(InitBuffer(&cbh,HK_SIZE)<0) 
-        {
-            YPrintf("Initialization of circular HK buffer failed\n");
-            FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-            ExitPDS(1);
-        }
-        
-        
-        // Setup a gracefull exit if Ctrl-c is pressed! Exits at a convenient starting point!..may take a long time!
-        act.sa_handler=ExitWithGrace;
-        act.sa_flags=0;
-        if((sigemptyset(&act.sa_mask)==-1) || (sigaction(SIGINT,&act,NULL)==-1))
-        {
-            perror("Failed to set SIGINT handler");
-            exit(1);
-        }
-        
-        // For real time version of PDS, (not needed)
-        /*
-         * minp=sched_get_priority_min(SCHEDULING); // [max - min]>=32 guaranteed..
-         * SetPRandSched(pthread_self(),minp+3,SCHEDULING); // Set priority and scheduling of main thread
-         */
-        
-        // Starting data threads
-        // ----------------------------------------------------------------------------------------------------
-        YPrintf("Starting data threads\n");
-        
-        scarg.arg1=&cbtm; // Pass circular TM buffer pointer as an argument
-        
-        if(pthread_create(&sctmthread,NULL,SCDecodeTM,(void *)&scarg)!=0)
+    } else {
+        pds.DPLNumber=2;			// Edited data has DPL number 2
+    }
+    
+    sec_epoch=E2Epoch(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
+    
+    // Get mission phase data 
+    if(GetMissionP(&mp,&pds)<0) {
+        exit(1);
+    }
+    
+    YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
+    printf("DATA_SET_ID                 : %s\n",mp.data_set_id);
+    
+    // Create unquoted data set id
+    strcpy(tstr1,mp.data_set_id);		// Make temporary copy
+    TrimQN(tstr1);			// Remove quotes in temporary copy
+    
+    // Loads second part of conconfiguration information into the PDS structure and opens some log/status files
+    if((status=LoadConfig2(&pds,tstr1))<0) 
+    {
+        fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
+        exit(1);
+    }
+    
+    if(LoadTimeCorr(&pds,&tcp)<0)         // Load the time correlation packets, once and for all!
+    {
+        fprintf(stderr,"Warning: No time correlation packets found.\n"); 
+        fprintf(stderr,"All UTC times from this point are estimates.\n");
+    }
+    
+    // Open VOLDESC.CAT and change some keywords
+    //-----------------------------------------------------------------------------------------------------------
+    sprintf(tstr1,"%sVOLDESC.CAT",pds.apathpds);          // Get full path
+    status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
+    
+    sprintf(tstr2,"ROLAP_1%03d",volume_id);
+    SetP(&cat,"VOLUME_ID",tstr2,1);                       // Set VOLUME_ID
+    
+    
+    // Create unquoted mission phase name
+    strcpy(tstr3,mp.phase_name); // Make temporary copy
+    TrimQN(tstr3);               // Remove quotes in temporary copy
+    
+    // Set the VOLUME_NAME
+    if(calib)
+        sprintf(tstr2,"\"RPCLAP CALIBRATED DATA FOR %s\"",tstr3);
+    else
+        sprintf(tstr2,"\"RPCLAP EDITED RAW DATA FOR %s\"",tstr3);
+    
+    SetP(&cat,"VOLUME_NAME",tstr2,1); // Set VOLUME_NAME
+    
+    WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
+    FreePrp(&cat);                                        // Free property value list
+    
+    
+    // Open DATASET.CAT and change some keywords
+    //-----------------------------------------------------------------------------------------------------------
+    sprintf(tstr1,"%sCATALOG/DATASET.CAT",pds.apathpds);  // Get full path
+    status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
+    
+    Scet2Date_2((double)mp.start,tstr2,0);                // Decode raw time into PDS compliant UTC time
+    YPrintf("Mission phase start         : %s\n",tstr2);
+    printf("Mission phase start         : %s\n",tstr2);
+    SetP(&cat,"START_TIME",tstr2,1);                      // Set START_TIME
+    
+    Scet2Date_2((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
+    YPrintf("Mission phase stop          : %s\n\n",tstr2);
+    printf("Mission phase stop          : %s\n\n",tstr2);
+    SetP(&cat,"STOP_TIME",tstr2,1);                       // Set STOP_TIME
+    
+    SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
+    
+    WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
+    FreePrp(&cat);                                        // Free property value list
+    
+    // Write initial message to system log
+    YPrintf("LAP PDS SYSTEM STARTED     \n");
+    YPrintf("========================================================================\n");
+    
+    if(calib) {
+        YPrintf("Generating calibrated PDS data archive\n");
+    }
+    
+    AddPathsToSystemLog(&pds); // Add paths to system log file
+    
+    // Update keywords in the calibration files and get calibration data.
+    //---------------------------------------------------------------------------------------------------------------------------------
+    // Calibration files are supposed to reside in the CALIB directory, both for EDITED and CALIBRATED archives
+    // however for EDITED archives the files are not used.
+    
+    // pds->cpathd   Path to calib data
+    // pds->cpathf   Path to fine bias calibration data
+    // pds->cpathc   Path to coarse bias calibration data
+    // pds->cpathi   Path to current bias calibration data
+    // pds->cpathm   Path to offset calibration data
+    
+    InitP(&cc_lbl);                                      // Initialize property value pair list
+    status=ReadLabelFile(&cc_lbl,pds.cpathc);            // Read coarse bias voltage calibration label into property value pair list
+    if(status>=0) status+=ReadTableFile(&cc_lbl,&v_conv,pds.cpathd); // Read coarse bias voltage calibration data into v_conv structure
+    
+    WriteUpdatedLabelFile(&cc_lbl,pds.cpathc);                  // Write back label file with new info
+    
+    InitP(&fc_lbl);                                      // Initialize property value pair list
+    
+    // Read fine bias voltage calibration label into property value pair list
+    status=+ReadLabelFile(&fc_lbl,pds.cpathf);           
+    
+    // Read fine bias voltage calibration data into f_conv structure
+    if(status>=0) status+=ReadTableFile(&fc_lbl,&f_conv,pds.cpathd); 
+    
+    WriteUpdatedLabelFile(&fc_lbl,pds.cpathf);                  // Write back label file with new info
+    
+    InitP(&ic_lbl);                                      // Initialize property value pair list
+    
+    // Read current bias voltage calibration label into property value pair list
+    status=+ReadLabelFile(&ic_lbl,pds.cpathi);           
+    
+    // Read current bias calibration data into i_conv structure
+    if(status>=0) status+=ReadTableFile(&ic_lbl,&i_conv,pds.cpathd);  
+    
+    WriteUpdatedLabelFile(&ic_lbl,pds.cpathi);                  // Write back label file with new info
+    
+    InitP(&tmp_lbl);                                     // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl,pds.cpathdfp1);       // Read density frequency response calibration file probe 1
+    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathdfp1);              // Write back label file with new info
+    
+    FreePrp(&tmp_lbl);                                   // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl,pds.cpathdfp2);       // Read density frequency response calibration file probe 2
+    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathdfp2);              // Write back label file with new info
+    
+    FreePrp(&tmp_lbl);                                   // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl,pds.cpathefp1);       // Read e-field frequency response calibration file probe 1
+    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathefp1);              // Write back label file with new info
+    
+    FreePrp(&tmp_lbl);                                   // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl,pds.cpathefp2);       // Read e-field frequency response calibration file probe 2
+    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathefp2);              // Write back label file with new info
+    
+    status=+GetMCFiles(pds.cpathd,pds.cpathm,&m_conv);   // Get measurement calibration files
+    
+    if(status<0)
+    {
+        YPrintf("Can not get or interpret the calibration files. Exiting.\n");
+        ExitPDS(1);
+    }
+    
+    //Open INDEX table
+    sprintf(tstr1,"%sINDEX.TAB",pds.ipath); 
+    if((pds.itable_fd=fopen(tstr1,"a+"))==NULL) // Open index table for appending and reading
+    {
+        YPrintf("Couldn't open PDS index table file\n");
+        ExitPDS(1);
+    }
+    
+    // Open INDEX label
+    sprintf(tstr1,"%sINDEX.LBL",pds.ipath);
+    if((pds.ilabel_fd=fopen(tstr1,"w"))==NULL) // Open index label for writing, (file remade every time)
+    {
+        YPrintf("Couldn't open PDS index label file\n");
+        ExitPDS(1);
+    }
+    
+    SetupIndex(&ind);
+    
+    // Load all macro descriptions
+    // ----------------------------------------------------------------------------------------------------
+    if(!(status=LoadMacroDesc(macros,pds.macrop)))
+    {
+        YPrintf("Error loading macros\n");
+        ExitPDS(1);
+    }
+    else
+        YPrintf("Loaded %d macro descriptions\n",status);
+    
+    
+    // Initialize inverse log table to decode logarithm sweeps
+    DoILogTable(ilogtab); 
+    
+    // Initialize circular input buffers
+    // ----------------------------------------------------------------------------------------------------
+    YPrintf("Initialize circular buffers\n");
+    
+    if(InitBuffer(&cbtm,SC_SIZE)<0) 
+    {
+        YPrintf("Initialization of circular S/C TM buffer failed\n");
+        FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
+        ExitPDS(1);
+    }
+    
+    if(InitBuffer(&cbs,SC_SIZE)<0) 
+    {
+        YPrintf("Initialization of circular Science buffer failed\n");
+        FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
+        ExitPDS(1);
+    }
+    
+    // Circular Mirror/Error buffer
+    if(InitBuffer(&cmb,MC_SIZE)<0) 
+    {
+        YPrintf("Initialization of circular Error buffer failed\n");
+        FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
+        ExitPDS(1);
+    }
+    
+    if(InitBuffer(&cbh,HK_SIZE)<0) 
+    {
+        YPrintf("Initialization of circular HK buffer failed\n");
+        FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
+        ExitPDS(1);
+    }
+    
+    
+    // Setup a gracefull exit if Ctrl-c is pressed! Exits at a convenient starting point!..may take a long time!
+    act.sa_handler=ExitWithGrace;
+    act.sa_flags=0;
+    if((sigemptyset(&act.sa_mask)==-1) || (sigaction(SIGINT,&act,NULL)==-1))
+    {
+        perror("Failed to set SIGINT handler");
+        exit(1);
+    }
+    
+    // For real time version of PDS, (not needed)
+    /*
+     * minp=sched_get_priority_min(SCHEDULING); // [max - min]>=32 guaranteed..
+     * SetPRandSched(pthread_self(),minp+3,SCHEDULING); // Set priority and scheduling of main thread
+     */
+    
+    // Starting data threads
+    // ----------------------------------------------------------------------------------------------------
+    YPrintf("Starting data threads\n");
+    
+    scarg.arg1=&cbtm; // Pass circular TM buffer pointer as an argument
+    
+    if(pthread_create(&sctmthread,NULL,SCDecodeTM,(void *)&scarg)!=0)
+    { 
+        YPrintf("Error starting tm thread");   
+        FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
+        ExitPDS(1); 
+    }
+    
+    // For real time version of PDS, (not needed)
+    //SetPRandSched(sctmthread,minp+2,SCHEDULING); // Set priority and scheduling
+    
+    sarg.arg1=&cbs; // Pass circular science buffer pointer as an argument
+    sarg.arg2=&cmb; // Pass circular mirror buffer pointer as an argument
+    
+    if(pthread_create(&scithread,NULL,DecodeScience,(void *)&sarg)!=0)
+    { 
+        YPrintf("Error starting science thread");   
+        FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
+        ExitPDS(1); 
+    }
+    
+    // For real time version of PDS, (not needed)
+    //SetPRandSched(scithread,minp+1,SCHEDULING); // Set priority and scheduling
+    
+    if(!calib) // If not a calibrated archive then HK exists.
+    {
+        harg.arg1=&cbh; // Pass circular house keeping buffer pointer as an argument
+        if(pthread_create(&hkthread,NULL,DecodeHK,(void *)&harg)!=0)
         { 
-            YPrintf("Error starting tm thread");   
+            YPrintf("Error starting HK thread");
             FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
             ExitPDS(1); 
-        }
-        
+        }  
         // For real time version of PDS, (not needed)
-        //SetPRandSched(sctmthread,minp+2,SCHEDULING); // Set priority and scheduling
-        
-        sarg.arg1=&cbs; // Pass circular science buffer pointer as an argument
-        sarg.arg2=&cmb; // Pass circular mirror buffer pointer as an argument
-        
-        if(pthread_create(&scithread,NULL,DecodeScience,(void *)&sarg)!=0)
-        { 
-            YPrintf("Error starting science thread");   
-            FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-            ExitPDS(1); 
-        }
-        
-        // For real time version of PDS, (not needed)
-        //SetPRandSched(scithread,minp+1,SCHEDULING); // Set priority and scheduling
-        
-        if(!calib) // If not a calibrated archive then HK exists.
-        {
-            harg.arg1=&cbh; // Pass circular house keeping buffer pointer as an argument
-            if(pthread_create(&hkthread,NULL,DecodeHK,(void *)&harg)!=0)
-            { 
-                YPrintf("Error starting HK thread");
-                FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-                ExitPDS(1); 
-            }  
-            // For real time version of PDS, (not needed)
-            // SetPRandSched(hkthread,minp,SCHEDULING); // Set priority and scheduling
-        }
-        
-        YPrintf("\n");
-        YPrintf("DATA FILTERING STARTED          \n");
-        YPrintf("--------------------------------\n");
-        
-        // Go through all DDS archive files, if no new ones can be found we wait 10s and try again.
-        TraverseDDSArchive(&pds);
-        
-        return 0;
+        // SetPRandSched(hkthread,minp,SCHEDULING); // Set priority and scheduling
+    }
+    
+    YPrintf("\n");
+    YPrintf("DATA FILTERING STARTED          \n");
+    YPrintf("--------------------------------\n");
+    
+    // Go through all DDS archive files, if no new ones can be found we wait 10s and try again.
+    TraverseDDSArchive(&pds);
+    
+    return 0;
 }
 
 
@@ -3505,8 +3507,8 @@ int AddPathsToSystemLog(pds_type *p)
 //----------------------------------------------------------------------------------------------------------------------------------
 
 // Get option and return true if found
-// If arg is not null we expect it to exist an argument
-// after the option and it's returned in arg.
+// If arg is not null then we expect there to be an argument
+// after the option and that is returned via arg.
 //
 int GetOption(char *opt,int argc, char *argv[],char *arg)
 {
@@ -3515,7 +3517,7 @@ int GetOption(char *opt,int argc, char *argv[],char *arg)
     {
         if(!strncmp(argv[i],opt,1024)) // Match option
         {
-            if(i<(argc-1)) // If there is space for an argument
+            if(i<(argc-1)) // If the argument list contains another argument after the option (flag).
             {
                 if(arg!=NULL) // We expect an argument to exist for this option if arg is non null.
                     strncpy(arg,argv[i+1],1024); // Copy next entry as argument
@@ -4711,7 +4713,7 @@ int GetMissionP(mp_type *m,pds_type *p)
     
     if((fd=fopen(p->mcpath,"r"))==NULL) 
     {
-        CPrintf("    Couldn't open mission calender: Mission_Calendar.txt\n");
+        CPrintf("    Couldn't open mission calendar file\n");
         return -1;
     }
     nline[255]='\0';
@@ -4741,19 +4743,18 @@ int GetMissionP(mp_type *m,pds_type *p)
         
         if(!strcmp(m->abbrev,abbrev)) // Matching mission phase abbreviation
         {
-            // Get new time from mission calender, convert to seconds
+            // Get new time from mission calendar, convert to seconds
             if((stat=TimeOfDatePDS(sdate,&(m->start)))<0) 
                 CPrintf("    Error mission phase time conversion: %02d\n",stat);
             
             sscanf(duration,"%d",&dur);
             
-            m->stop=m->start+dur*24*3600; // Compute end time
+            m->stop = m->start+dur*24*3600; // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-31, 23:59.60) into account.
             
             if(calib)
             {
                 sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);
                 sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);
-                
             }
             else
             {
@@ -4766,10 +4767,12 @@ int GetMissionP(mp_type *m,pds_type *p)
     }
     fclose(fd);
     
-    printf("Could not find the mission phase in: Mission_Calendar.txt\n");
-    CPrintf("    Could not find the mission phase in: Mission_Calendar.txt\n");
+    printf("Could not find the mission phase in the mission calendar file.\n");
+    CPrintf("    Could not find the mission phase in the mission calendar file.\n");
     return -3; // No phase found
 }
+
+
 
 // Dump macros..this is for debugging
 void TestDumpMacs()
@@ -4779,8 +4782,6 @@ void TestDumpMacs()
         for(j=0;j<8;j++)
             DumpPrp(&macros[i][j]);
 }
-
-
 
 
 
@@ -6980,7 +6981,10 @@ int  FileStatus(FILE *fs,struct stat *sp)
         return 0;
 }
 
-// Resolves,tests and returns a usable path 
+// Accepts a string and checks if it is a real path, and returns a "resolved" path (no symbolic links, no /../ etc).
+// Makes sure there is "/" at the end.
+// NOTE: Should only be used for DIRECTORY PATHS.
+// NOTE: "info_txt" is only used for log messages.
 int  SetupPath(char *info_txt,char *path)
 {
     char tp[PATH_MAX];
@@ -6999,6 +7003,7 @@ int  SetupPath(char *info_txt,char *path)
     }
     strcpy(path,tp);
     
+    // Ensure that the last character of the path string is "/".
     if((l=strlen(path))>0)
     {
         if(path[l-1]!='/') strcat(path,"/");
