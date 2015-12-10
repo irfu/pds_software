@@ -137,9 +137,12 @@ int  AddPathsToSystemLog(pds_type *pds);			// Adds paths to system log
 
 // Program option functions
 //----------------------------------------------------------------------------------------------------------------------------------
-int  GetOption(char *opt,int argc, char *argv[],char *arg);	// Get an input option
+int  GetOption(char *opt,int argc, char *argv[],char *arg);        // Get an input option
 // pointer to file desc pointer pfd is needed and an error stream
 // Functions to load and test external information 
+
+int HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if argv[i] contains non-null components for i >= 1.
+
 //----------------------------------------------------------------------------------------------------------------------------------
 int  LoadConfig1(pds_type *p);					// Loads configuration information first part
 int  LoadConfig2(pds_type *p,char *data_set_id);		// Loads configuration information second part
@@ -152,7 +155,13 @@ int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_t
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);			// Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);	// Loads all macro descriptions
 int  GetMCFiles(char *rpath,char *fpath,m_type *m);		// Get measured data calibration files 
-int  GetMissionP(mp_type *mp,pds_type *pds);			// Given a path, data set version and mission abbreviation (in mp) 
+int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp,pds_type *pds);			// Given a path, data set version and mission abbreviation (in mp) 
+
+// Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
+void DeriveDSIandDSN(
+    char* DATA_SET_ID, char* DATA_SET_NAME,
+    char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float dataSetVersion, char* targetName_dsn);
+
 // returns updated mission phase structure.
 void TestDumpMacs();						// Test dump of macro descriptions
 
@@ -196,7 +205,7 @@ void DispState(int,char *);								// Display state changes for debugging
 // String and alpha numeric handling functions
 //----------------------------------------------------------------------------------------------------------------------------------
 int  Separate(char *,char *,char *,char,int);						// Separate into left & right token
-int  TrimWN(char *);									// Trims initial and trailing whites and all newlines away
+int  TrimWN(char *);									// Trims initial and trailing whitespace and all newlines away
 int  TrimQN(char *);									// Trims initial and trailing quotes and all newlines away
 int  ExtendStr(char *dest,char *src,int elen,char ch);					// Make a new string dest using src extended with ch to elen length. 
 void ReplCh(char *str,char ch1,char ch2);						// Replace all characters ch1 in str with characters ch2
@@ -361,35 +370,35 @@ pds_type pds =
     "",         // Path to time correlation packets
     "",         // Log path
     "",         // Data path PDS science edited		
-    "",		// Data path PDS science calibrated		
-    "",		// Root path to calibration data.		
-    "",		// Path to fine bias calibration data	
-    "",		// Path to coarse bias calibration data	
-    "",		// Path to current bias calibration data	
-    "",		// Path to offset calibration data		
-    "",		// Path to density frequency response probe 1
-    "",		// Path to density frequency response probe 2
-    "",		// Path to e-field frequency response probe 1
-    "",		// Path to e-field frequency response probe 2
+    "",         // Data path PDS science calibrated		
+    "",         // Root path to calibration data.		
+    "",         // Path to fine bias calibration data	
+    "",         // Path to coarse bias calibration data	
+    "",         // Path to current bias calibration data	
+    "",         // Path to offset calibration data		
+    "",         // Path to density frequency response probe 1
+    "",         // Path to density frequency response probe 2
+    "",         // Path to e-field frequency response probe 1
+    "",         // Path to e-field frequency response probe 2
     "",         // Data subdirectory path for PDS science   
-    "",		// Data path PDS HK			       
-    "",		// Data subdirectory path for PDS HK	       
-    "",		// Path to data that has not been accepted	       
-    "",		// Index table file path.		       
+    "",         // Data path PDS HK			       
+    "",         // Data subdirectory path for PDS HK	       
+    "",         // Path to data that has not been accepted	       
+    "",         // Index table file path.
     NULL,       // Log file descriptor LAP PDS System log   
-    NULL,	// S/C packet filtering log		       
-    NULL,	// Log file descriptor Science Decoding log 
-    NULL,	// Log file descriptor HK Decoding log      
-    NULL,	// Log file descriptor dds packet filter log
-    NULL,       // File descriptor to recoverfile		 
-    NULL,	// Science archive PDS data file descriptor	 
-    NULL,	// Science data table file descriptor	 
-    NULL,	// HK archive PDS data file descriptor	 
-    NULL,	// HK data table file descriptor		 
-    NULL,	// Index label file descriptor		 
-    NULL,	// Index table file descriptor		 
-    NULL,	// DDS Read file descriptor			 
-    NULL,	// DDS progress file descriptor		 
+    NULL,       // S/C packet filtering log
+    NULL,       // Log file descriptor Science Decoding log 
+    NULL,       // Log file descriptor HK Decoding log
+    NULL,       // Log file descriptor dds packet filter log
+    NULL,       // File descriptor to recoverfile
+    NULL,       // Science archive PDS data file descriptor	
+    NULL,       // Science data table file descriptor
+    NULL,       // HK archive PDS data file descriptor
+    NULL,       // HK data table file descriptor
+    NULL,       // Index label file descriptor
+    NULL,       // Index table file descriptor
+    NULL,       // DDS Read file descriptor
+    NULL,       // DDS progress file descriptor
 };
 
 
@@ -503,7 +512,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        fprintf(stderr,"Mission phase abbreviation mandatory input\n"); // Check arguments
+        fprintf(stderr,"Mandatory mission phase abbreviation argument is missing.\n");
         exit(1);
     }
     
@@ -522,7 +531,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        fprintf(stderr,"Volume ID mandatory input (Unique for each data set)\n"); // Check arguments
+        fprintf(stderr,"Mandatory volume ID argument is missing (Unique for each data set)\n");
         exit(1);
     }
     
@@ -541,13 +550,11 @@ int main(int argc, char *argv[])
     }
     else
     {
-        fprintf(stderr,"Data set version is mandatory input (incremental for new versions of a data set)\n"); // Check arguments
+        fprintf(stderr,"Mandatory data set version argument is missing (incremental for new versions of a data set)\n");
         exit(1);
     }
     
-    
-    
-    
+  
     // Get debug option
     if(GetOption("-debug",argc,argv,tstr1))
     {
@@ -561,7 +568,7 @@ int main(int argc, char *argv[])
     // Loads first part of configuration information into the PDS structure
     if((status=LoadConfig1(&pds))<0) 
     {
-        fprintf(stderr,"Mangled configuration file (part 1): %d\n",status); // Check arguments
+        fprintf(stderr,"Mangled configuration file (part 1): %d\n",status);
         exit(1);
     }
     
@@ -574,9 +581,66 @@ int main(int argc, char *argv[])
     sec_epoch=E2Epoch(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
     
     // Get mission phase data 
-    if(GetMissionP(&mp,&pds)<0) {
+    if(InitMissionPhaseStructFromMissionCalendar(&mp,&pds) < 0) {
         exit(1);
     }
+
+    
+    // Overwrite mission phase values if values can be found among (optional) command-line arguments.
+    // NOTE: Current implementation requires all or none of these extra options.
+    if (GetOption("-ds", argc, argv, tstr1))
+    {
+        DeriveDSIandDSN(
+                mp.data_set_id, mp.data_set_name,
+                mp.target_id, pds.DPLNumber, mp.abbrev, tstr1, pds.DataSetVersion, mp.target_name_dsn);        
+        
+        
+        if (GetOption("-mpn", argc, argv, tstr1)) {
+            sprintf(mp.phase_name, "\"%s\"", tstr1);    // NOTE: Surround with quotes since the archiving standard requires it.
+        } else {
+            fprintf(stderr, "Can not find option -mpn.\n");
+            exit(1);
+        }
+        
+        
+        if (GetOption("-ps", argc, argv, tstr1)) {
+            if((status=TimeOfDatePDS(tstr1,&(mp.start))) < 0) {
+                fprintf(stderr, "Can not convert argument \"%s\" to a time.\n", tstr1);
+                exit(1);
+            }
+        } else {
+            fprintf(stderr, "Can not find option -ps.\n");
+            exit(1);
+        }
+
+        
+        if (GetOption("-pd", argc, argv, tstr1))
+        {
+            int dur;
+            if (!sscanf(tstr1, "%d", &dur)) {
+                fprintf(stderr, "Can not interpret argument \"%s\".\n", tstr1);
+                exit(1);
+            }
+            mp.stop = mp.start + dur*24*3600;  // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) into account.            
+        }
+        else
+        {
+            fprintf(stderr, "Can not find option -pd.\n");
+            exit(1);
+        }
+    }
+
+    
+    // CHECK ASSERTION that there are no "unused" arguments left.
+    // This implicitly checks for misspelled options/flags and options/flags occurring twice.
+    if (HasMoreArguments(argc, argv))
+    {
+        // Extra newline since preceeding log messages (not stderr) make it difficult to visually spot the error message.
+        fprintf(stderr, "\nCould not interpret all command-line options, or some command-line options occurred multiple times.\n\n");
+        //printUserHelpInfo(stderr, argv[0]);    // NOTE: Prints to stderr.
+        exit(1);
+    }
+    
     
     YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     printf("DATA_SET_ID                 : %s\n",mp.data_set_id);
@@ -849,9 +913,21 @@ int main(int argc, char *argv[])
 
 
 
-// executable_name : String to be displayed as command name.
+// executable_name : <String to be displayed as command name>.
 void printUserHelpInfo(FILE *stream, char *executable_name) {
-    fprintf(stream, "Usage: %s  [-h] [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [ -d pds.dataexcludetimes ] [-calib] [-debug level] -mp mission_phase_abbreviation -vid volume_id -dsv data_set_version\n", executable_name); 
+    fprintf(stream, "Usage: %s  [-h] [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n",
+        executable_name);
+    fprintf(stream, "            [-calib] [-debug <Level>] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
+    fprintf(stream, "            [-ds <Description string>               The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
+    
+    // Values normally obtained from the mission calendar. Sorted by the column order in the mission calendar.
+    // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
+    // since deliveries may split up mission phases.
+    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>              E.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
+    fprintf(stream, "             -ps <Period starting date>             Specific day, e.g. 2015-12-13\n");
+    fprintf(stream, "             -pd <Period duration>]                 Positive integer. Unit: days. E.g. 28\n");
+    fprintf(stream, "\n");
+    fprintf(stream, "NOTE: The user should NOT submit MISSION_PHASE_NAME surrounded by quotes (more than what is required by the command shell.\n");
 }
 
 
@@ -1216,8 +1292,8 @@ void *DecodeHK(void *arg)
         //----------------------------------------------------------------------------------------------------------------------------------------------------
         ti=strlen(pds.apathpds);					// Find position there the root of the PDS archive starts
         sprintf(tstr2,"%s%s",&pds.spathh[ti],lbl_fname);	        // Set path and file name together
-        ExtendStr(tstr3,tstr2,58,' ');		   	        // Make a new string extended with whites to 58 characters
-        ExtendStr(tstr2,stub_fname,25,' ');			// Make a new string extended with whites to 25 characters
+        ExtendStr(tstr3,tstr2,58,' ');		   	        // Make a new string extended with whitespace to 58 characters
+        ExtendStr(tstr2,stub_fname,25,' ');			// Make a new string extended with whitespace to 25 characters
         //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr3,tstr2,prod_creat_time,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
         WriteToIndexTAB(tstr3, tstr2, prod_creat_time);
         
@@ -1498,7 +1574,7 @@ void *DecodeScience(void *arg)
                             CPrintf("    UTC Creation Time: %s\n",tstr1,1);
                             SetP(&comm,"PRODUCT_CREATION_TIME",tstr1,1);       // Set creation time in common PDS parameters, no quotes!
                             
-                            TrimWN(tstr1);                                     // Trim whites
+                            TrimWN(tstr1);                                     // Trim whitespace
                             //sprintf(tstr2,"\"%s, %s\"",tstr1,pds.LabelRevNote);
                             sprintf(tstr2, "\"%s\"", pds.LabelRevNote);        // Modified to not include current time. /Erik P G Johansson 2015-04-10
                             SetP(&comm,"LABEL_REVISION_NOTE",tstr2,1);         // Set LABEL Revision note
@@ -2261,7 +2337,7 @@ void *DecodeScience(void *arg)
                                                         
                                                         CPrintf("    Number of samples current record: %d\n",samples);
                                                         strcpy(tstr1,IDList[id_code]);      // Get ID code name
-                                                        TrimWN(tstr1);                      // Remove trailing whites
+                                                        TrimWN(tstr1);                      // Remove trailing whitespace
                                                         sprintf(tstr2,"\"%s\"",tstr1);      // Add PDS quotes ".." 
                                                         SetP(&comm,"DESCRIPTION",tstr2,1); // Update DESCRIPTION in common PDS parameters
                                                         
@@ -2620,7 +2696,7 @@ void *DecodeScience(void *arg)
                                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_OSCILLATOR",DNTCARE)>0) 
                                                                             InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
                                                                             
-                                                                            // Find first occurance of TM_RATE from start, if found set it in dictionary
+                                                                            // Find first occurrence of TM_RATE from start, if found set it in dictionary
                                                                             if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_TM_RATE",1,DNTCARE)>0)   // Set property2.
                                                                             {
                                                                                 InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
@@ -2909,7 +2985,7 @@ void *DecodeScience(void *arg)
                                                                 if(data_type!=D20 && data_type!=D20T)
                                                                 {
                                                                     sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                                    ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whites to 58 characters
+                                                                    ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
                                                                     
                                                                     if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,0,ini_samples,param_type)>=0)
                                                                     { WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,0,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
@@ -2928,7 +3004,7 @@ void *DecodeScience(void *arg)
                                                                     prod_id[22]='1';
                                                                     
                                                                     sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                                    ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whites to 58 characters
+                                                                    ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
                                                                     
                                                                     SetP(&comm,"PRODUCT_ID",prod_id,1);     // Change PRODUCT ID in common PDS parameters
                                                                     
@@ -2955,7 +3031,7 @@ void *DecodeScience(void *arg)
                                                                     
                                                                     
                                                                     sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                                    ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whites to 58 characters
+                                                                    ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters
                                                                     
                                                                     SetP(&comm,"PRODUCT_ID",prod_id,1);               // Change PRODUCT ID in common PDS parameters
                                                                     
@@ -3075,11 +3151,12 @@ void ExitPDS(int status)
         if (status == 0) {
             
             //-------------------------------------------------------------------------------------------------------------------
+            // BUG FIX:
             // Erik P G Johansson 2015-03-31: Added functionality for delaying the termination of the DecodeScience thread until
-            //                                it has actually finished, or almost finished. Bug fix.
+            //                                it has actually finished, or almost finished.
             //
             // It has been previously observed (v3.07/c3.08) that the DecodeScience thread may otherwise sometimes be terminated
-            // too early and thus the last hours of data in an archive is never written to disk. Even with this bug fix, small
+            // too early and thus the last hours of data in an archive are never written to disk. Even with this bug fix, small
             // amounts of data (minutes) have still been observed to be missing from the end of the last day in an archive but this
             // might have other explanations.
             // NOTE: DecodeScience does not appear to have been designed to actually quit when it runs out of data and it appears
@@ -3292,6 +3369,7 @@ void ExitPDS(int status)
             
             exit(status);                             // Exit with return code "status"
 }
+
 
 // As printf but everything goes into PDS_LOG0
 // If it can't open errors are printed to stderr
@@ -3506,27 +3584,62 @@ int AddPathsToSystemLog(pds_type *p)
 // Program option functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Get option and return true if found
-// If arg is not null then we expect there to be an argument
-// after the option and that is returned via arg.
-//
-int GetOption(char *opt,int argc, char *argv[],char *arg)
+
+/* Get command-line argument (option/flag) and optionally an argument to that option that follows the option.
+ * If "arg" is not null then we expect there to be an argument after the option and which value is returned via "arg".
+ * Return TRUE if-and-only-if the option was found and, if an associated argument was required, if that was found too.
+ * NOTE: The function can not tell the difference between an option and an argument (associated with another option), other than by comparing
+ * strings.
+ * NOTE: The function is designed to only read the same command-line arguments once. Therefore, the function will MODIFY argv[] by setting
+ * used-up arguments to NULL to make it possible to check if there are arguments left over that could not be interpreted. It will thus ignore
+ * values argv[i] == null.
+ */
+int GetOption(char *opt, int argc, char *argv[], char *arg)
 {
     int i;
-    for(i=0;i<argc;i++)
+    for(i=1;i<argc;i++)
     {
-        if(!strncmp(argv[i],opt,1024)) // Match option
+        if((argv[i] != NULL) && !strncmp(argv[i],opt,1024))   // Match option
         {
-            if(i<(argc-1)) // If the argument list contains another argument after the option (flag).
-            {
-                if(arg!=NULL) // We expect an argument to exist for this option if arg is non null.
-                    strncpy(arg,argv[i+1],1024); // Copy next entry as argument
+            //printf("GetOption: argv[%i] = %s\n", i, argv[i]);   // DEBUG
+            if (arg==NULL) {   // We expect an argument to exist for this option if arg is non-null.
+                argv[i] = NULL;
+                return 1;     // CASE: Found option and expected no associated extra argument.
             }
+            else
+            {
+                if ((i+1<argc) && (argv[i+1]!=NULL))   // If the argument list contains an (unused) argument after this option (flag)...
+                {
+                    strncpy(arg,argv[i+1],1024); // Copy next entry as argument
+                    //printf("GetOption: argv[%i] = %s\n", i+1, argv[i+1]);   // DEBUG
+                    argv[i] = NULL;
+                    argv[i+1] = NULL;
+                    return 1;     // CASE: Found option and both required and found associated extra argument.
+                }
+                else
+                {
+                    return 0;     // CASE: Found option and required associated extra argument but did not find it.
+                }
+            }
+        }
+    }
+    return 0;     // CASE: Did not find the option.
+}
+
+
+// Return true if-and-only-if argv[i] contains non-null components (for i >= 1).
+int HasMoreArguments(int argc, char *argv[])
+{
+    int i;
+    for(i=1;i<argc;i++)
+    {
+        if (argv[i] != NULL) {
             return 1;
         }
     }
     return 0;
 }
+
 
 // Functions to load and test external information 
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -3803,7 +3916,7 @@ int  LoadAnomalies(prp_type *p,char *path)
     {
         if(line[0] == '\n') continue; // Empty line..
         if (line[0] == '#') continue; // Remove comments..
-        Separate(line,t_tok,m_tok,'\t',1); // Separate at first occurance of a tab character
+        Separate(line,t_tok,m_tok,'\t',1); // Separate at first occurrence of a tab character
         TrimWN(m_tok);
         InsertTopK(p,t_tok,m_tok); // Insert into linked list of property name value pairs
     }
@@ -3833,7 +3946,7 @@ int  LoadModeDesc(prp_type *p,char *path)
     {
         if(line[0] == '\n') continue; // Empty line..
         if (line[0] == '#') continue; // Remove comments..
-        Separate(line,m_tok,d_tok,':',1); // Separate at first occurance of a : character
+        Separate(line,m_tok,d_tok,':',1); // Separate at first occurrence of a : character
         TrimWN(d_tok);
         InsertTopK(p,m_tok,d_tok); // Insert into linked list of property name value pairs
     }
@@ -3896,8 +4009,8 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
         if(line[0] == '\n') continue; // Empty line..
         if (line[0] == '#') continue; // Remove comments..
         if(line[0] == ' ')  continue;  // White line
-        Separate(line,l_tok,m_tok,'\t',1); // Separate at first occurance of a tab character
-        Separate(line,m_tok,r_tok,'\t',2); // Separate at second occurance of a tab character
+        Separate(line,l_tok,m_tok,'\t',1); // Separate at first occurrence of a tab character
+        Separate(line,m_tok,r_tok,'\t',2); // Separate at second occurrence of a tab character
         TimeOfDatePDS(l_tok,&t);          // Convert time to seconds
         
         
@@ -4699,8 +4812,11 @@ int  GetMCFiles(char *rpath, char *fpath, m_type *m)
  * return 0;
  * }
  */
-// Given a path and mission phase id return start time and stop time of phase.
-int GetMissionP(mp_type *m,pds_type *p)
+
+
+// Given a path (p->mcpath) and mission phase abbreviation (m->abbrev), initialize an instance of mp_type with data from the mission calendar file.
+// Function previously called "GetMissionP".
+int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
 {
     FILE *fd;
     
@@ -4722,45 +4838,53 @@ int GetMissionP(mp_type *m,pds_type *p)
         if(nline[0] == '\n') continue;  // Skip empty lines..
         if(nline[0] == '#')  continue;  // Remove any comments..
         
-        Separate(nline,m->phase_name,abbrev,':',1);             // Get mission phase and abbreviation
-        Separate(nline,sdate,duration,':',3);                   // Get Duration and Date string
-        Separate(nline,m->target_name_did,m->target_id,':',5);  // Get target name for data set id and target id
-        Separate(nline,m->target_type,m->target_name_dsn,':',7); // Get target type and target name for the data set name
-        
-        
+        // Extract values from columns, two columns at a time.
+        Separate(nline, m->phase_name,      abbrev,             ':', 1);  // Get mission phase name (incl. quotes) and abbreviation.
+        Separate(nline, sdate,              duration,           ':', 3);  // Get Duration and Date string.
+        Separate(nline, m->target_name_did, m->target_id,       ':', 5);  // Get "target name for DATA_SET_ID" and "target id".
+        Separate(nline, m->target_type,     m->target_name_dsn, ':', 7);  // Get "target type" and "target name for DATA_SET_NAME".
+
+
         sdate[10]='\0';         // Null terminate
         abbrev[4]='\0';         // Null terminate
         m->target_id[5]='\0';   // Null terminate
         
-        
-        TrimWN(abbrev);             // Trim of whites
-        TrimWN(duration);           // Trim of whites
-        TrimWN(m->phase_name);      // Trim of whites
-        TrimWN(m->target_name_did); // Trim of whites
-        TrimWN(m->target_id);       // Trim of whites
-        TrimWN(m->target_type);     // Trim of whites
-        TrimWN(m->target_name_dsn); // Trim of whites
+        // Trim strings of whitespace (all but starting date).
+        TrimWN(abbrev);
+        TrimWN(duration);
+        TrimWN(m->phase_name);
+        TrimWN(m->target_name_did);
+        TrimWN(m->target_id);
+        TrimWN(m->target_type);
+        TrimWN(m->target_name_dsn);
         
         if(!strcmp(m->abbrev,abbrev)) // Matching mission phase abbreviation
         {
             // Get new time from mission calendar, convert to seconds
-            if((stat=TimeOfDatePDS(sdate,&(m->start)))<0) 
+            if((stat=TimeOfDatePDS(sdate,&(m->start)))<0)
                 CPrintf("    Error mission phase time conversion: %02d\n",stat);
             
             sscanf(duration,"%d",&dur);
             
-            m->stop = m->start+dur*24*3600; // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-31, 23:59.60) into account.
-            
+            m->stop = m->start + dur*24*3600; // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) into account.
+
+            char* descr;
             if(calib)
             {
-                sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);
-                sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);
+//                 sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);
+//                 sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);                
+                descr = "CALIB";
             }
             else
             {
-                sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"EDITED",p->DataSetVersion);
-                sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"EDITED",p->DataSetVersion);
+//                 sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"EDITED",p->DataSetVersion);
+//                 sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"EDITED",p->DataSetVersion);
+                descr = "EDITED";
             }
+            DeriveDSIandDSN(
+                m->data_set_id, m->data_set_name,
+                m->target_id, p->DPLNumber, m->abbrev, descr, p->DataSetVersion, m->target_name_dsn);
+            
             fclose(fd); // Close mission calendar
             return 0;   // Ok, Returns using previous ID and name, exactly what we want! 
         }
@@ -4770,6 +4894,17 @@ int GetMissionP(mp_type *m,pds_type *p)
     printf("Could not find the mission phase in the mission calendar file.\n");
     CPrintf("    Could not find the mission phase in the mission calendar file.\n");
     return -3; // No phase found
+}
+
+
+
+// Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
+void DeriveDSIandDSN(
+    char* DATA_SET_ID, char* DATA_SET_NAME,
+    char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float dataSetVersion, char* targetName_dsn)
+{
+    sprintf(DATA_SET_ID,  "\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",              targetID,       DPLNumber, mpAbbreviation, descr, dataSetVersion);
+    sprintf(DATA_SET_NAME,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"", targetName_dsn, DPLNumber, mpAbbreviation, descr, dataSetVersion);
 }
 
 
@@ -5838,7 +5973,7 @@ int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_cod
                 fprintf(pds.slabel_fd,"ROW_BYTES          = %d\r\n",row_bytes);
                 
                 strcpy(tstr2,IDList[id_code]);      // Get ID code name as description
-                TrimWN(tstr2);                      // Remove trailing whites
+                TrimWN(tstr2);                      // Remove trailing whitespace
                 fprintf(pds.slabel_fd,"DESCRIPTION        = \"%s\"\r\n",tstr2); // Add it
                 fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
                 fprintf(pds.slabel_fd,"NAME        = UTC_TIME\r\n");
@@ -6663,12 +6798,14 @@ void DispState(int s,char *str)
     }
 }
 
+
 // String and alpha numeric handling functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
 // Routine to separate a string into left and right substrings separated
-// by the "occurs" occurance of token "token".
-int Separate(char *str,char *left,char *right,char token,int occurs)
+// by the "occurs"'th occurrence of token "token".
+// The right substring is bounded by both occurrences of token and of end-of-string.
+int Separate(char *str, char *left, char *right, char token, int occurs)
 {
     int len;
     int i;
@@ -6688,7 +6825,7 @@ int Separate(char *str,char *left,char *right,char token,int occurs)
             {
                 lpos=rpos;
                 rpos=&str[i+1];
-                occ++; //Increment occurence of token.
+                occ++; //Increment occurrence of token.
             }
             
             if(occ==occurs)
@@ -6710,7 +6847,8 @@ int Separate(char *str,char *left,char *right,char token,int occurs)
         return -1;
 }
 
-//Trim initial and trailing whites and all newlines away
+
+//Trim initial and trailing whitespace and all newlines away
 int TrimWN(char *str)
 {
     int len,nlen,i;
@@ -6720,13 +6858,13 @@ int TrimWN(char *str)
     if((len=strlen(str))<=0) return -1;
     
     
-    for(i=0;i<len;i++) // First make all newlines or carridge returns to whites
+    for(i=0;i<len;i++)     // First make all newlines or carriage returns to whitespace.
         if(str[i]=='\n' || str[i]=='\r') str[i]=' ';
         
         pos=str;
     
     nlen=len;
-    for(i=0;i<len;i++) // Remove all initial whites
+    for(i=0;i<len;i++)    // Remove all initial whitespace.
     {
         if(state==0)
         {
@@ -6741,7 +6879,7 @@ int TrimWN(char *str)
         *(pos++)=str[i];
     }
     
-    for(i=nlen-1;i>=0;i--) // Remove all trailing whites
+    for(i=nlen-1;i>=0;i--)    // Remove all trailing whitespace.
     {
         if(str[i]==' ') 
             continue;
@@ -6754,6 +6892,7 @@ int TrimWN(char *str)
     
     return 0;
 }
+
 
 //Trim initial and trailing quotes and all newlines away
 int TrimQN(char *str)
@@ -6803,6 +6942,7 @@ int TrimQN(char *str)
     return 0;
 }
 
+
 // Make a new string dest using src extended with ch to elen length. 
 // We assume dest has space enough.
 int ExtendStr(char *dest,char *src,int elen,char ch)
@@ -6821,6 +6961,7 @@ int ExtendStr(char *dest,char *src,int elen,char ch)
     dest[elen]='\0'; // Insert new null character at end of extended string
     return 0;
 }
+
 
 //Replace all ch1 in str with character ch2
 void ReplCh(char *str,char ch1,char ch2)

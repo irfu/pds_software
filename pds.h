@@ -11,10 +11,10 @@
 #define LAP_HK_LEN 12
 
 
-// Manually set values for determining when to cancel the science thread.
-// ----------------------------------------------------------------------
-// NOTE: The optimal time (timeout & delay) values depend on the speed of execution, e.g. (1) on the speed
-// of the host computer itself and (2) whether other processor-intensive applications are running at the same time.
+// Manually set values for determining when to cancel the science (SC) thread.
+// ---------------------------------------------------------------------------
+// NOTE: The optimal time (timeout & delay) values depend on the speed of execution, i.e. on (1) the speed
+// of the host computer itself (the specification) and (2) whether other processor-intensive applications are running at the same time.
 
 // When exiting, try to terminate the science thread only after the science buffer fill value goes below this value
 // (or when exceeding timeout).
@@ -332,8 +332,9 @@ gstype gstations[NGSTATIONS]=
     {0x0082,"NDIU classic (SVTs)            "},
   };
 
-// Contains information about the current mission phase
+// Contains information about the current mission phase.
 // Array lengths are high estimates.
+// NOTE: Not necessarily strictly mission phases, since mission phases can be split up for data deliveries.
 typedef struct mission_phase_struct 
 {
 
@@ -342,9 +343,9 @@ typedef struct mission_phase_struct
   char phase_name[64];
   char abbrev[5];
 
-  char target_name_did[64];
-  char target_name_dsn[32];
-  char target_id[8];
+  char target_name_did[64];      // did = ?!  (Not DATA_SET_ID) Value is used for TARGET_NAME.
+  char target_name_dsn[32];      // dsn = DATA_SET_NAME
+  char target_id[8];             // Used in DATA_SET_ID.
   char target_type[32];
   
   time_t start;
