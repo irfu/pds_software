@@ -471,30 +471,34 @@ int main(int argc, char *argv[])
     // ----------------------------------------------------------------------------------------------------
     
     // Get path option for configuration file
-    if(!GetOption("-c",argc,argv,pds.cpath))
+    if(!GetOption("-c",argc,argv,pds.cpath)) {
         sprintf(pds.cpath,"%s/%s",getenv("HOME"),"pds.conf");
+    }
     
     // Get path option for anomaly file
-    if(!GetOption("-a",argc,argv,pds.apath))
+    if(!GetOption("-a",argc,argv,pds.apath)) {
         sprintf(pds.apath,"%s/%s",getenv("HOME"),"pds.anomalies");
+    }
     
     // Get path option for bias file
-    if(!GetOption("-b",argc,argv,pds.bpath))
+    if(!GetOption("-b",argc,argv,pds.bpath)) {
         sprintf(pds.bpath,"%s/%s",getenv("HOME"),"pds.bias");
+    }
     
     // Get path option for exclude file
-    //if(!GetOption("-e",argc,argv,pds.bpath))  // Erik P G Johansson 2015-03-24: Bug: Argument-specified path assigned to pds.pbath, not pds.epath.
-    if(!GetOption("-e",argc,argv,pds.epath))    // Erik P G Johansson 2015-03-24: Fixed bug. Store path in correct variable.
+    if(!GetOption("-e",argc,argv,pds.epath)) {   // Erik P G Johansson 2015-03-24: Fixed bug. Store path in correct variable.
         sprintf(pds.epath,"%s/%s",getenv("HOME"),"pds.exclude");
+    }
     
     // Get path option for mode description file
-    //if(!GetOption("-m",argc,argv,pds.bpath))   // Erik P G Johansson 2015-03-24: Bug: Argument-specified path assigned to pds.pbath, not pds.mpath.
-    if(!GetOption("-m",argc,argv,pds.mpath))     // Erik P G Johansson 2015-03-24: Fixed bug. Store path in correct variable.
+    if(!GetOption("-m",argc,argv,pds.mpath)) {    // Erik P G Johansson 2015-03-24: Fixed bug. Store path in correct variable.
         sprintf(pds.mpath,"%s/%s",getenv("HOME"),"pds.modes");
+    }
     
     // Erik P G Johansson 2015-03-25: Added
-    if(!GetOption("-d",argc,argv,pds.depath))
+    if(!GetOption("-d",argc,argv,pds.depath)) {
         sprintf(pds.depath,"%s/%s",getenv("HOME"),"pds.dataexcludetimes");
+    }
     
     // Get calibration option
     if(GetOption("-calib",argc,argv,NULL))
@@ -554,7 +558,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
     
-  
+    
     // Get debug option
     if(GetOption("-debug",argc,argv,tstr1))
     {
@@ -584,15 +588,15 @@ int main(int argc, char *argv[])
     if(InitMissionPhaseStructFromMissionCalendar(&mp,&pds) < 0) {
         exit(1);
     }
-
+    
     
     // Overwrite mission phase values if values can be found among (optional) command-line arguments.
     // NOTE: Current implementation requires all or none of these extra options.
     if (GetOption("-ds", argc, argv, tstr1))
     {
         DeriveDSIandDSN(
-                mp.data_set_id, mp.data_set_name,
-                mp.target_id, pds.DPLNumber, mp.abbrev, tstr1, pds.DataSetVersion, mp.target_name_dsn);        
+            mp.data_set_id, mp.data_set_name,
+            mp.target_id, pds.DPLNumber, mp.abbrev, tstr1, pds.DataSetVersion, mp.target_name_dsn);        
         
         
         if (GetOption("-mpn", argc, argv, tstr1)) {
@@ -612,7 +616,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Can not find option -ps.\n");
             exit(1);
         }
-
+        
         
         if (GetOption("-pd", argc, argv, tstr1))
         {
@@ -629,7 +633,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-
+    
     
     // CHECK ASSERTION that there are no "unused" arguments left.
     // This implicitly checks for misspelled options/flags and options/flags occurring twice.
@@ -676,10 +680,11 @@ int main(int argc, char *argv[])
     TrimQN(tstr3);               // Remove quotes in temporary copy
     
     // Set the VOLUME_NAME
-    if(calib)
+    if(calib) {
         sprintf(tstr2,"\"RPCLAP CALIBRATED DATA FOR %s\"",tstr3);
-    else
+    } else {
         sprintf(tstr2,"\"RPCLAP EDITED RAW DATA FOR %s\"",tstr3);
+    }
     
     SetP(&cat,"VOLUME_NAME",tstr2,1); // Set VOLUME_NAME
     
@@ -730,7 +735,9 @@ int main(int argc, char *argv[])
     
     InitP(&cc_lbl);                                      // Initialize property value pair list
     status=ReadLabelFile(&cc_lbl,pds.cpathc);            // Read coarse bias voltage calibration label into property value pair list
-    if(status>=0) status+=ReadTableFile(&cc_lbl,&v_conv,pds.cpathd); // Read coarse bias voltage calibration data into v_conv structure
+    if(status>=0) {
+        status+=ReadTableFile(&cc_lbl,&v_conv,pds.cpathd); // Read coarse bias voltage calibration data into v_conv structure
+    }
     
     WriteUpdatedLabelFile(&cc_lbl,pds.cpathc);                  // Write back label file with new info
     
@@ -740,7 +747,9 @@ int main(int argc, char *argv[])
     status=+ReadLabelFile(&fc_lbl,pds.cpathf);           
     
     // Read fine bias voltage calibration data into f_conv structure
-    if(status>=0) status+=ReadTableFile(&fc_lbl,&f_conv,pds.cpathd); 
+    if(status>=0) {
+        status+=ReadTableFile(&fc_lbl,&f_conv,pds.cpathd); 
+    }
     
     WriteUpdatedLabelFile(&fc_lbl,pds.cpathf);                  // Write back label file with new info
     
@@ -750,7 +759,9 @@ int main(int argc, char *argv[])
     status=+ReadLabelFile(&ic_lbl,pds.cpathi);           
     
     // Read current bias calibration data into i_conv structure
-    if(status>=0) status+=ReadTableFile(&ic_lbl,&i_conv,pds.cpathd);  
+    if(status>=0) {
+        status+=ReadTableFile(&ic_lbl,&i_conv,pds.cpathd);  
+    }
     
     WriteUpdatedLabelFile(&ic_lbl,pds.cpathi);                  // Write back label file with new info
     
@@ -916,7 +927,7 @@ int main(int argc, char *argv[])
 // executable_name : <String to be displayed as command name>.
 void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "Usage: %s  [-h] [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n",
-        executable_name);
+            executable_name);
     fprintf(stream, "            [-calib] [-debug <Level>] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
     fprintf(stream, "            [-ds <Description string>               The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
     
@@ -957,8 +968,9 @@ void *SCDecodeTM(void *arg)
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
     status+= pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,&oldtype);
     
-    if(status>0)
+    if(status>0) {
         PPrintf("SCDecodeTM thread might not work properly.");
+    }
     
     while(1)
     {
@@ -1133,7 +1145,9 @@ void *SCDecodeTM(void *arg)
                     length=((buff[2]<<8) | buff[3])-9;           // Get data length
                     PPrintf("LAP Science packet found\n");
                     
-                    if(length<0) continue;
+                    if(length<0) {
+                        continue;
+                    }
                     
                     rawt=DecodeSCTime(&buff[4]);      // Decode S/C time into raw time
                     DecodeRawTime(rawt,tstr,0);       // Decode raw time to PDS compliant date format
@@ -1171,6 +1185,7 @@ void *SCDecodeTM(void *arg)
     }   // while
 }
 
+
 // -= THREAD TO DECODE HK =-
 void *DecodeHK(void *arg)
 {   
@@ -1202,8 +1217,9 @@ void *DecodeHK(void *arg)
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
     status+= pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,&oldtype);
     
-    if(status>0)
+    if(status>0) {
         HPrintf("DecodeHK thread might not work properly.");
+    }
     
     
     InitP(&hkl);						// Initialize linked property/value list for PDS LAP HK
@@ -1218,10 +1234,11 @@ void *DecodeHK(void *arg)
     SetP(&hkl,"DATA_SET_ID",mp.data_set_id,1);		// Set DATA SET ID in HK parameters
     SetP(&hkl,"DATA_SET_NAME",mp.data_set_name,1);	// Set DATA SET NAME in HK parameters
     
-    if(calib) // Set product type
+    if(calib) {// Set product type
         SetP(&hkl,"PRODUCT_TYPE","\"RDR\"",1);
-    else
+    } else {
         SetP(&hkl,"PRODUCT_TYPE","\"EDR\"",1);
+    }
     
     ch=(buffer_struct_type *)((arg_type *)arg)->arg1;	// Get circular house keeping buffer pointer
     
@@ -1303,14 +1320,18 @@ void *DecodeHK(void *arg)
         strcat(tstr2,lbl_fname);				        // Add lbl filename to data path 
         
         if((pds.hlabel_fd=fopen(tstr2,"w"))==NULL)
+        {
             HPrintf("Couldn't open PDS HK LBL data file: %s!!\n",tstr2);
+        }
         else
         {
             strcpy(tstr2,pds.spathh);				// Copy data path
             strcat(tstr2,tab_fname);				// Add tab filename to data path 
             
-            if((pds.htable_fd=fopen(tstr2,"w"))==NULL    )	// Open HK table file
+            if((pds.htable_fd=fopen(tstr2,"w"))==NULL)          // Open HK table file
+            {
                 HPrintf("Couldn't open PDS HK TAB data file: %s!!\n",tab_fname);
+            }
             else 
             {
                 fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);	// Add first HK line from above into the present table file
@@ -1444,8 +1465,9 @@ void *DecodeScience(void *arg)
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
     status+= pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,&oldtype);
     
-    if(status>0)
+    if(status>0) {
         YPrintf("Decode Science thread might not work properly.");
+    }
     
     
     // Get pointer to circular buffer structures containing indata
@@ -1471,430 +1493,411 @@ void *DecodeScience(void *arg)
         printf("Warning: Extra bias settings can not be done\n");
     }
     
-    if(nbias>0 && bias!=NULL && debug>1)
-        for(i=0;i<nbias;i++)
+    if(nbias>0 && bias!=NULL && debug>1) {
+        for(i=0;i<nbias;i++) {
             printf("Time %d DBIAS %x EBIAS %x\n",bias[i][0],bias[i][1],bias[i][2]);
-        
-        if(nmode>0 && mode!=NULL && debug>1)
-            for(i=0;i<nmode;i++)
-                printf("Time %d Mode 0x%02x\n",mode[i][0],mode[i][1]);
-            
-            // Load Exclude file
-            if(calib)
-                if((nexcl=LoadExclude(&exclude,pds.epath))<0) 
+        }
+    }
+    
+    if(nmode>0 && mode!=NULL && debug>1)
+    {
+        for(i=0;i<nmode;i++)
+        {
+            printf("Time %d Mode 0x%02x\n",mode[i][0],mode[i][1]);
+        }
+    }
+    
+    // Load Exclude file
+    if(calib) {
+        if((nexcl=LoadExclude(&exclude,pds.epath))<0) 
+        {
+            YPrintf("Warning: Calibration macros will not be excluded\n");
+            printf("Warning: Calibration macros will not be excluded\n");
+        }
+    }
+    
+    // Erik P G Johansson 2015-03-25: Added reading data exclude list file.
+    if((LoadDataExcludeTimes(&dataExcludeTimes, pds.depath)))
+    {
+        YPrintf("Warning: Can not load data exclude times.\n");   // Write to "pds system log".
+        printf( "Warning: Can not load data exclude times.\n");
+    }
+    
+    // Load Macro descriptions
+    if(LoadModeDesc(&mdesc,pds.mpath)<0)
+    {
+        YPrintf("Warning: No macro descriptions INST_MODE_DESC cant be set\n");
+        printf("Warning: No macro descriptions INST_MODE_DESC cant be set\n");
+    }
+    
+    //DumpPrp(&mdesc); 
+    // STATE MACHINE LOOP
+    in_sync=1;           // Assume we are in sync!
+    state=S02_TEST_SYNC; // Set starting state
+    while(1)
+    { 
+        pthread_testcancel();
+        switch(state)
+        {
+            case S01_GET_MAINH: 
+                DispState(state,"STATE = S01_GET_MAINH\n");
+                
+                macro_status=1;   // Assume initially that no macro description is found
+                macro_priority=0; // Assume we do not trust macro info more than parameters inside the data
+                
+                GetBuffer(cb,buff,1);      // Get a byte from circular science buffer
+                
+                byte_sum+=buff[0];         // Increase byte sum
+                
+                if(buff[0]==M_HEAD) 
                 {
-                    YPrintf("Warning: Calibration macros will not be excluded\n");
-                    printf("Warning: Calibration macros will not be excluded\n");
+                    if(in_sync) {            // Are we nicely in sync ?
+                        main_h_sum=byte_sum; // Set main header sum to byte sum
+                    } else {
+                        main_h_sum=M_HEAD;   // Nope force main_h_sum to header byte
+                    }
+                    
+                    CPrintf("Found start of LAP science block\n"); 
+                    
+                    in_sync=1;             // Assume we are in sync
+                    byte_sum=0;
+                    meas_seq=0;            // Set number of measurement sequences to none
+                    state=S02_TEST_SYNC;   // Found header change state
+                }
+                break;
+                
+            case S02_TEST_SYNC:
+                DispState(state,"STATE = S02_TEST_SYNC\n");
+                ClearCommonPDS(&comm);       // Clear common PDS parameters
+                ClearDictPDS(&dict);         // Clear dictionary PDS LAP parameters
+                UnCheckAll(&macros[mb][ma]); // Uncheck all in current macro description 
+                
+                if(main_h_sum==M_HEAD) {      // Test if we are in sync
+                    state=S03_GET_TIME_CODE;   // In sync pds has been written go get time code
+                } else {
+                    in_sync=0;               // Indicate not nicely in sync
+                    state=S01_GET_MAINH;     // Not in sync! try to get in sync!
+                }
+                break;
+                
+            case S03_GET_TIME_CODE:
+                DispState(state,"STATE = S03_GET_TIME_CODE\n");
+                
+                GetBuffer(cb,buff,5);        // Get 5 bytes from circular science buffer
+                
+                CPrintf("============================================================================\n");
+                rstime=DecodeLAPTime(buff);    // Get raw time, decode LAP S/C time in Science data
+                DecodeRawTime(rstime,stime,0); // Decode raw time into PDS compliant UTC time
+                CPrintf("    SCET time: %s OBT time: %016.6f\n",stime,rstime);
+                CPrintf("Mission ID: %s Phase: %s\n",mp.abbrev,mp.phase_name);
+                SetP(&comm,"MISSION_PHASE_NAME",mp.phase_name,1);  // Set mission phase name in common PDS parameters
+                SetP(&comm,"TARGET_TYPE",mp.target_type,1);        // Set target type in common PDS parameters
+                SetP(&comm,"TARGET_NAME",mp.target_name_did,1);    // Set target name in common PDS parameters
+                
+                if(calib) {
+                    SetP(&comm,"PRODUCT_TYPE","\"RDR\"",1);
+                } else {
+                    SetP(&comm,"PRODUCT_TYPE","\"EDR\"",1);
                 }
                 
-                // Erik P G Johansson 2015-03-25: Added reading data exclude list file.
-                if((LoadDataExcludeTimes(&dataExcludeTimes, pds.depath)))
-                {
-                    YPrintf("Warning: Can not load data exclude times.\n");   // Write to "pds system log".
-                    printf( "Warning: Can not load data exclude times.\n");
-                }
+                GetUTime(tstr1);                                   // Get current UTC time     
+                CPrintf("    UTC Creation Time: %s\n",tstr1,1);
+                SetP(&comm,"PRODUCT_CREATION_TIME",tstr1,1);       // Set creation time in common PDS parameters, no quotes!
                 
-                // Load Macro descriptions
-                if(LoadModeDesc(&mdesc,pds.mpath)<0)
-                {
-                    YPrintf("Warning: No macro descriptions INST_MODE_DESC cant be set\n");
-                    printf("Warning: No macro descriptions INST_MODE_DESC cant be set\n");
-                }
+                TrimWN(tstr1);                                     // Trim whitespace
+                //sprintf(tstr2,"\"%s, %s\"",tstr1,pds.LabelRevNote);
+                sprintf(tstr2, "\"%s\"", pds.LabelRevNote);        // Modified to not include current time. /Erik P G Johansson 2015-04-10
+                SetP(&comm,"LABEL_REVISION_NOTE",tstr2,1);         // Set LABEL Revision note
                 
-                //DumpPrp(&mdesc); 
-                // STATE MACHINE LOOP
-                in_sync=1;           // Assume we are in sync!
-                state=S02_TEST_SYNC; // Set starting state
-                while(1)
-                { 
-                    pthread_testcancel();
-                    switch(state)
+                curr.old_macro=macro_id; // Remember old macro id at this point
+                
+                // Do we correct for anomalies ?
+                if(FindP(&anom,&property1,stime,1,DNTCARE)>0)
+                {
+                    //printf("TIME: %s SELECT: %s\n",property1->name,property1->value);
+                    macro_priority=1; // Set higher priority on macro description, thus trust it above information in data
+                    if(!strcmp(property1->value,"FROM_DATA"))
                     {
-                        case S01_GET_MAINH: 
-                            DispState(state,"STATE = S01_GET_MAINH\n");
-                            
-                            macro_status=1;   // Assume initially that no macro description is found
-                            macro_priority=0; // Assume we do not trust macro info more than parameters inside the data
-                            
-                            GetBuffer(cb,buff,1);      // Get a byte from circular science buffer
-                            
-                            byte_sum+=buff[0];         // Increase byte sum
-                            
-                            if(buff[0]==M_HEAD) 
+                        state=S04_GET_ID_CODE; // Get ID code
+                    }
+                    else
+                    {
+                        sscanf(property1->value,"%x",&macro_id); // Set macro ID
+                        state=S06_GET_MACRO_DESC;  // Find macro description
+                    }
+                }
+                else
+                {
+                    state=S04_GET_ID_CODE;
+                }
+                break;
+                
+                case S04_GET_ID_CODE:
+                    DispState(state,"STATE = S04_GET_ID_CODE\n");
+                    GetBuffer(cb,buff,1); // Get a byte from circular science buffer
+                    
+                    if(buff[0]==0xCC) // Found Sub Header
+                    { 
+                        GetBuffer(cb,buff,1); // Get a byte from circular science buffer
+                        
+                        id_code=buff[0];        // Remember id code
+                        
+                        params=0;               // Assume no parameters in science stream
+                        param_type=NO_PARAMS;   // Default type of parameters, none
+                        state=S11_GET_LENGTH;   // Assume next state is this one
+                        
+                        curr.sensor=SENS_NONE;  // Set current sensor to 0 thus none 1=Sens 1, 2=Sens 2 and  3=Sens 1 & 2 
+                        curr.transmitter=SENS_NONE; // Set current transmitter to none
+                        CPrintf("----------------------------------------------------------------------------\n");
+                        
+                        // !macro_status = macro desc found
+                        // At this point:
+                        // If anomaly found in pds.anomalies
+                        // 1) If macro id was provided in pds.anomalies it is already set at this point!
+                        // 2) if it wasn't it will be determined by:
+                        // 2.1) Finding a macro ID tag below and returning here!
+                        // 2.2) Finding it at a later stage by finger printing and not posssible to return here
+                        //
+                        // Thus we can not fix ID code problems in data, if we do not directly provide a macro id
+                        // in the anomally file..this we can easily do!
+                        
+                        // Macro information has high priority and a macro description has been found!
+                        // Thus we want to overide id code in data!
+                        if(macro_priority && !macro_status) 
+                        {
+                            if((val=FindIDCode(&macros[mb][ma],meas_seq+1))<0)
                             {
-                                if(in_sync)            // Are we nicely in sync ?
-                                    main_h_sum=byte_sum; // Set main header sum to byte sum
-                                    else
-                                        main_h_sum=M_HEAD;   // Nope force main_h_sum to header byte
-                                        
-                                        CPrintf("Found start of LAP science block\n"); 
-                                    
-                                    in_sync=1;             // Assume we are in sync
-                                    byte_sum=0;
-                                meas_seq=0;            // Set number of measurement sequences to none
-                                state=S02_TEST_SYNC;   // Found header change state
+                                CPrintf("Can't override ID code with information from macro: 0x%04x\n",macro_id);
                             }
-                            break;
-                            
-                        case S02_TEST_SYNC:
-                            DispState(state,"STATE = S02_TEST_SYNC\n");
-                            ClearCommonPDS(&comm);       // Clear common PDS parameters
-                            ClearDictPDS(&dict);         // Clear dictionary PDS LAP parameters
-                            UnCheckAll(&macros[mb][ma]); // Uncheck all in current macro description 
-                            
-                            if(main_h_sum==M_HEAD)       // Test if we are in sync
-                                state=S03_GET_TIME_CODE;   // In sync pds has been written go get time code
+                            else
+                            {
+                                CPrintf("Anomaly correction overrides ID Code %d with %d for sequence %d in current data set\n",id_code,val,meas_seq+1);
+                                id_code=val;
+                            }
+                        }
+                        
+                        switch(id_code) // Test ID Code
+                        {
+                            case MACRO_ID_TAG:
+                                state=S05_GET_MACRO_ID;
+                                break;
+                            case SECOND_ID_01: // Second sub ID to be expected
+                                state=S04_GET_ID_CODE; // Get second sub ID 
+                                // Set a flag indicating second sub id list 
+                                // currently not existing!, but for contingency!
+                                break;
+                            case P2_TRANSMITTER: // Transmitting on P2! no data on P2 but probably on P1
+                                
+                                curr.sensor=SENS_P1;
+                                curr.transmitter=SENS_P2; // Set current transmitter to P2
+                                state=S04_GET_ID_CODE;
+                                break;
+                            case P1_TRANSMITTER: // Transmitting on P1! no data on P1 but probably on P2
+                                curr.sensor=SENS_P2;
+                                curr.transmitter=SENS_P1; // Set current transmitter on P1
+                                state=S04_GET_ID_CODE;
+                                break;
+                                
+                                // This is a dirty workaround for the generic macros
+                                // we can accept a low! probability 0.002 % for the 
+                                // workaround to do harm, currently we do not use generic
+                                // macros.
+                                
+                            case GENERIC_ID_P1:
+                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                
+                                if(buff[0]==0xCC && buff[1]==GENERIC_ID_P2)
+                                {
+                                    Forward(cb,1); // Go forward skip ID code
+                                    state=S04_GET_ID_CODE; // Look for next ID code
+                                }
                                 else
                                 {
-                                    in_sync=0;               // Indicate not nicely in sync
-                                    state=S01_GET_MAINH;     // Not in sync! try to get in sync!
+                                    curr.sensor=SENS_P1; // Set current sensor to sensor 1/probe 1
+                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
+                                    meas_seq++; // Increase number of measurement sequences
+                                    CPrintf("    Found science data, from generic macro, ID CODE:   0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 }
                                 break;
-                            
-                        case S03_GET_TIME_CODE:
-                            DispState(state,"STATE = S03_GET_TIME_CODE\n");
-                            
-                            GetBuffer(cb,buff,5);        // Get 5 bytes from circular science buffer
-                            
-                            CPrintf("============================================================================\n");
-                            rstime=DecodeLAPTime(buff);    // Get raw time, decode LAP S/C time in Science data
-                            DecodeRawTime(rstime,stime,0); // Decode raw time into PDS compliant UTC time
-                            CPrintf("    SCET time: %s OBT time: %016.6f\n",stime,rstime);
-                            CPrintf("Mission ID: %s Phase: %s\n",mp.abbrev,mp.phase_name);
-                            SetP(&comm,"MISSION_PHASE_NAME",mp.phase_name,1);  // Set mission phase name in common PDS parameters
-                            SetP(&comm,"TARGET_TYPE",mp.target_type,1);        // Set target type in common PDS parameters
-                            SetP(&comm,"TARGET_NAME",mp.target_name_did,1);    // Set target name in common PDS parameters
-                            
-                            if(calib)
-                                SetP(&comm,"PRODUCT_TYPE","\"RDR\"",1);
-                            else
-                                SetP(&comm,"PRODUCT_TYPE","\"EDR\"",1);
-                            
-                            GetUTime(tstr1);                                   // Get current UTC time     
-                            CPrintf("    UTC Creation Time: %s\n",tstr1,1);
-                            SetP(&comm,"PRODUCT_CREATION_TIME",tstr1,1);       // Set creation time in common PDS parameters, no quotes!
-                            
-                            TrimWN(tstr1);                                     // Trim whitespace
-                            //sprintf(tstr2,"\"%s, %s\"",tstr1,pds.LabelRevNote);
-                            sprintf(tstr2, "\"%s\"", pds.LabelRevNote);        // Modified to not include current time. /Erik P G Johansson 2015-04-10
-                            SetP(&comm,"LABEL_REVISION_NOTE",tstr2,1);         // Set LABEL Revision note
-                            
-                            curr.old_macro=macro_id; // Remember old macro id at this point
-                            
-                            // Do we correct for anomalies ?
-                            if(FindP(&anom,&property1,stime,1,DNTCARE)>0)
-                            {
-                                //printf("TIME: %s SELECT: %s\n",property1->name,property1->value);
-                                macro_priority=1; // Set higher priority on macro description, thus trust it above information in data
-                                if(!strcmp(property1->value,"FROM_DATA"))
-                                    state=S04_GET_ID_CODE; // Get ID code
-                                    else
-                                    {
-                                        sscanf(property1->value,"%x",&macro_id); // Set macro ID
-                                        state=S06_GET_MACRO_DESC;  // Find macro description
-                                    }
-                            }
-                            else
-                                state=S04_GET_ID_CODE;
-                            break;
-                            
-                        case S04_GET_ID_CODE:
-                            DispState(state,"STATE = S04_GET_ID_CODE\n");
-                            GetBuffer(cb,buff,1); // Get a byte from circular science buffer
-                            
-                            if(buff[0]==0xCC) // Found Sub Header
-                            { 
-                                GetBuffer(cb,buff,1); // Get a byte from circular science buffer
                                 
-                                id_code=buff[0];        // Remember id code
+                                // This is a dirty workaround for the generic macros
+                                // we can accept a low! probability 0.002% for the
+                                // workaround to do harm, currently we do not use generic
+                                // macros.
+                            case GENERIC_ID_P2:
+                                LookBuffer(cb,buff,2);     // Look ahed two bytes
                                 
-                                params=0;               // Assume no parameters in science stream
-                                param_type=NO_PARAMS;   // Default type of parameters, none
-                                state=S11_GET_LENGTH;   // Assume next state is this one
-                                
-                                curr.sensor=SENS_NONE;  // Set current sensor to 0 thus none 1=Sens 1, 2=Sens 2 and  3=Sens 1 & 2 
-                                curr.transmitter=SENS_NONE; // Set current transmitter to none
-                                CPrintf("----------------------------------------------------------------------------\n");
-                                
-                                // !macro_status = macro desc found
-                                // At this point:
-                                // If anomaly found in pds.anomalies
-                                // 1) If macro id was provided in pds.anomalies it is already set at this point!
-                                // 2) if it wasn't it will be determined by:
-                                // 2.1) Finding a macro ID tag below and returning here!
-                                // 2.2) Finding it at a later stage by finger printing and not posssible to return here
-                                //
-                                // Thus we can not fix ID code problems in data, if we do not directly provide a macro id
-                                // in the anomally file..this we can easily do!
-                                
-                                // Macro information has high priority and a macro description has been found!
-                                // Thus we want to overide id code in data!
-                                if(macro_priority && !macro_status) 
+                                if(buff[0]==0xCC && buff[1]==GENERIC_ID_20BIT)
                                 {
-                                    if((val=FindIDCode(&macros[mb][ma],meas_seq+1))<0)
-                                        CPrintf("Can't override ID code with information from macro: 0x%04x\n",macro_id);
-                                    else
-                                    {
-                                        CPrintf("Anomaly correction overrides ID Code %d with %d for sequence %d in current data set\n",id_code,val,meas_seq+1);
-                                        id_code=val;
-                                    }
+                                    Forward(cb,1); // Go forward skip ID code
+                                    state=S04_GET_ID_CODE; // Look for next ID code
+                                }
+                                else
+                                {  
+                                    curr.sensor=SENS_P2; // Set current sensor to sensor 2/probe 2
+                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
+                                    meas_seq++; // Increase number of measurement sequences
+                                    CPrintf("    Found science data, from generic macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
+                                } 
+                                break;
+                                
+                                // This is a dirty workaround for the generic macros
+                                // we can accept a low! probability 0.002 % for the 
+                                // workaround to do harm, however we do not use generic
+                                // macros.
+                                
+                            case GENERIC_LDL_P1:
+                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                
+                                if(buff[0]==0xCC && buff[1]==GENERIC_LDL_P2)
+                                {
+                                    Forward(cb,1);         // Go forward skip ID code
+                                    state=S04_GET_ID_CODE; // Look for next ID code
+                                }
+                                else
+                                {	  
+                                    curr.sensor=SENS_P1; // Set current sensor to sensor 1/probe 1
+                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
+                                    meas_seq++; // Increase number of measurement sequences
+                                    CPrintf("    Found science data, from generic LDL macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
+                                }
+                                break;
+                                
+                            case GENERIC_LDL_P2:
+                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                
+                                if(buff[0]==0xCC && buff[1]==GENERIC_LDL_20BIT)
+                                {
+                                    Forward(cb,1);         // Go forward skip ID code
+                                    state=S04_GET_ID_CODE; // Look for next ID code
+                                }
+                                else
+                                {    
+                                    curr.sensor=SENS_P2;  // Set current sensor to sensor 2/probe 2
+                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
+                                    meas_seq++; // Increase number of measurement sequences
+                                    CPrintf("    Found science data, from generic LDL macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
+                                }
+                                break;
+                                
+                            case D_SWEEP_P2_RAW_16BIT_BIP:
+                            case D_SWEEP_P2_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!! 
+                                curr.sensor++;              // Increment current sensor, (Set to 0 at top of switch)    
+                            case D_SWEEP_P1_RAW_16BIT_BIP:
+                            case D_SWEEP_P1_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!!
+                                curr.sensor++;              // Increment current sensor, (Set to 0 at top of switch)
+                                params=6;
+                                meas_seq++;                 // Increase number of measurement sequences
+                                CPrintf("    Found sweep science data, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
+                                param_type=SWEEP_PARAMS;
+                                state=S07_GET_PARAMS;
+                                break;
+                            case D_P1P2INTRL_TRNC_20BIT_RAW_BIP:
+                            case D_P1P2INTRL_20BIT_RAW_BIP:
+                            case E_P1P2INTRL_TRNC_20BIT_RAW_BIP:
+                            case E_P1P2INTRL_20BIT_RAW_BIP:
+                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                            case D_P2_TRNC_20_BIT_RAW_BIP:
+                            case E_P2_TRNC_20_BIT_RAW_BIP:
+                            case D_P2_20_BIT_RAW_BIP:
+                            case E_P2_20_BIT_RAW_BIP:    
+                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                            case D_P1_TRNC_20_BIT_RAW_BIP:
+                            case D_P1_20_BIT_RAW_BIP:
+                            case E_P1_TRNC_20_BIT_RAW_BIP:
+                            case E_P1_20_BIT_RAW_BIP:
+                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                params=2;
+                                meas_seq++; // Increase number of measurement sequences
+                                CPrintf("    Found science data, ID CODE: 0x%.2x Sequence %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
+                                param_type=ADC20_PARAMS;
+                                state=S07_GET_PARAMS;
+                                break;
+                                
+                            case D_DIFF_P1P2:
+                            case E_DIFF_P1P2:
+                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                            case D_P2_RAW_16BIT:
+                            case E_P2_16BIT_RAW:
+                            case D_P2_RAW_16BIT_D2:
+                            case D_P2_RAW_16BIT_D4:
+                            case E_P2_RAW_16BIT_D2:
+                            case E_P2_RAW_16BIT_D16:
+                            case E_P2_RAW_16BIT_D4:
+                            case E_P2_RAW_16BIT_D8:
+                            case D_P2_RAW_16BIT_D16:
+                            case D_P2_RAW_16BIT_D8:
+                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                            case D_P1_RAW_16BIT:
+                            case E_P1_16BIT_RAW:
+                            case D_P1_RAW_16BIT_D4:
+                            case D_P1_RAW_16BIT_D2:
+                            case D_P1_RAW_16BIT_D8:
+                            case D_P1_RAW_16BIT_D16:
+                            case E_P1_RAW_16BIT_D2:
+                            case E_P1_RAW_16BIT_D4:
+                            case E_P1_RAW_16BIT_D8:
+                            case E_P1_RAW_16BIT_D16:
+                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                meas_seq++;    // Increase number of measurement sequences
+                                CPrintf("    Found science data, no parameters, ID CODE: 0x%.2x Sequence: %d Sensor: %d \n",id_code,meas_seq,curr.sensor);
+                                state=S11_GET_LENGTH;
+                                break; 
+                                
+                            default:
+                                CPrintf("    Found undefined, ID CODE:   0x%.2x\n",id_code);
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        in_sync=0; // Indicate out of sync.
+                        state=S01_GET_MAINH; // No sub ID, End or out of sync
+                    }
+                    break;
+                    
+                            case S05_GET_MACRO_ID:
+                                DispState(state,"STATE = S05_GET_MACRO_ID\n");
+                                
+                                GetBuffer(cb,buff,2); // Get 2 bytes from circular science buffer
+                                
+                                hb=buff[0]<<8;      // Extract hi byte
+                                lb=buff[1];         // Extract lo byte
+                                macro_id=(hb | lb); // Put together hi and lo byte
+                                CPrintf("    Executed macro was, MACRO ID: 0x%.4x\n",macro_id);	
+                                state=S06_GET_MACRO_DESC;
+                                break;
+                                
+                            case S06_GET_MACRO_DESC:
+                                DispState(state,"STATE = S06_GET_MACRO_DESC\n");
+                                
+                                sprintf(tstr1,"MCID0X%04x",macro_id);
+                                SetP(&comm,"INSTRUMENT_MODE_ID",tstr1,1);         // Set mode id in common PDS parameter
+                                SetP(&comm,"DATA_SET_ID",mp.data_set_id,1);       // Set DATA SET ID in common PDS parameters
+                                SetP(&comm,"DATA_SET_NAME",mp.data_set_name,1);   // Set DATA SET NAME in common PDS parameters
+                                
+                                // Find human description of macro in macro mode descriptions
+                                sprintf(tstr1,"0x%04x",macro_id); // Create search variable..to search for in linked list of property name value pairs.
+                                if(FindP(&mdesc,&property1,tstr1,1,0)>0)
+                                {
+                                    SetP(&comm,"INSTRUMENT_MODE_DESC",property1->value,1); // Set human description of mode
                                 }
                                 
-                                switch(id_code) // Test ID Code
-                                {
-                                    case MACRO_ID_TAG:
-                                        state=S05_GET_MACRO_ID;
-                                        break;
-                                    case SECOND_ID_01: // Second sub ID to be expected
-                                        state=S04_GET_ID_CODE; // Get second sub ID 
-                                        // Set a flag indicating second sub id list 
-                                        // currently not existing!, but for contingency!
-                                        break;
-                                    case P2_TRANSMITTER: // Transmitting on P2! no data on P2 but probably on P1
-                                        
-                                        curr.sensor=SENS_P1;
-                                        curr.transmitter=SENS_P2; // Set current transmitter to P2
-                                        state=S04_GET_ID_CODE;
-                                        break;
-                                    case P1_TRANSMITTER: // Transmitting on P1! no data on P1 but probably on P2
-                                        curr.sensor=SENS_P2;
-                                        curr.transmitter=SENS_P1; // Set current transmitter on P1
-                                        state=S04_GET_ID_CODE;
-                                        break;
-                                        
-                                        // This is a dirty workaround for the generic macros
-                                        // we can accept a low! probability 0.002 % for the 
-                                        // workaround to do harm, currently we do not use generic
-                                        // macros.
-                                        
-                                    case GENERIC_ID_P1:
-                                        LookBuffer(cb,buff,2);     // Look ahed two bytes
-                                        
-                                        if(buff[0]==0xCC && buff[1]==GENERIC_ID_P2)
+                                sprintf(tstr1,"\"%d\"",pds.DPLNumber);
+                                
+                                SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level id...
+                                
+                                // Search for macro with right macro id in macs matrix
+                                macro_status=1; // Indicate that we haven't found the macro 
+                                for(mb=0;macro_status && mb<MAX_MACRO_BLCKS;mb++)
+                                    for(ma=0;macro_status && ma<MAX_MACROS_INBL;ma++)
+                                    {
+                                        if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_MACRO_ID_TAG",1,0)>0)
                                         {
-                                            Forward(cb,1); // Go forward skip ID code
-                                            state=S04_GET_ID_CODE; // Look for next ID code
-                                        }
-                                        else
-                                        {
-                                            curr.sensor=SENS_P1; // Set current sensor to sensor 1/probe 1
-                                            state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                            meas_seq++; // Increase number of measurement sequences
-                                            CPrintf("    Found science data, from generic macro, ID CODE:   0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                        }
-                                        break;
-                                        
-                                        // This is a dirty workaround for the generic macros
-                                        // we can accept a low! probability 0.002% for the
-                                        // workaround to do harm, currently we do not use generic
-                                        // macros.
-                                    case GENERIC_ID_P2:
-                                        LookBuffer(cb,buff,2);     // Look ahed two bytes
-                                        
-                                        if(buff[0]==0xCC && buff[1]==GENERIC_ID_20BIT)
-                                        {
-                                            Forward(cb,1); // Go forward skip ID code
-                                            state=S04_GET_ID_CODE; // Look for next ID code
-                                        }
-                                        else
-                                        {  
-                                            curr.sensor=SENS_P2; // Set current sensor to sensor 2/probe 2
-                                            state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                            meas_seq++; // Increase number of measurement sequences
-                                            CPrintf("    Found science data, from generic macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                        } 
-                                        break;
-                                        
-                                        // This is a dirty workaround for the generic macros
-                                        // we can accept a low! probability 0.002 % for the 
-                                        // workaround to do harm, however we do not use generic
-                                        // macros.
-                                        
-                                    case GENERIC_LDL_P1:
-                                        LookBuffer(cb,buff,2);     // Look ahed two bytes
-                                        
-                                        if(buff[0]==0xCC && buff[1]==GENERIC_LDL_P2)
-                                        {
-                                            Forward(cb,1);         // Go forward skip ID code
-                                            state=S04_GET_ID_CODE; // Look for next ID code
-                                        }
-                                        else
-                                        {	  
-                                            curr.sensor=SENS_P1; // Set current sensor to sensor 1/probe 1
-                                            state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                            meas_seq++; // Increase number of measurement sequences
-                                            CPrintf("    Found science data, from generic LDL macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                        }
-                                        break;
-                                        
-                                    case GENERIC_LDL_P2:
-                                        LookBuffer(cb,buff,2);     // Look ahed two bytes
-                                        
-                                        if(buff[0]==0xCC && buff[1]==GENERIC_LDL_20BIT)
-                                        {
-                                            Forward(cb,1);         // Go forward skip ID code
-                                            state=S04_GET_ID_CODE; // Look for next ID code
-                                        }
-                                        else
-                                        {    
-                                            curr.sensor=SENS_P2;  // Set current sensor to sensor 2/probe 2
-                                            state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                            meas_seq++; // Increase number of measurement sequences
-                                            CPrintf("    Found science data, from generic LDL macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                        }
-                                        break;
-                                        
-                                    case D_SWEEP_P2_RAW_16BIT_BIP:
-                                    case D_SWEEP_P2_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!! 
-                                        curr.sensor++;              // Increment current sensor, (Set to 0 at top of switch)    
-                                    case D_SWEEP_P1_RAW_16BIT_BIP:
-                                    case D_SWEEP_P1_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!!
-                                        curr.sensor++;              // Increment current sensor, (Set to 0 at top of switch)
-                                        params=6;
-                                        meas_seq++;                 // Increase number of measurement sequences
-                                        CPrintf("    Found sweep science data, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                        param_type=SWEEP_PARAMS;
-                                        state=S07_GET_PARAMS;
-                                        break;
-                                    case D_P1P2INTRL_TRNC_20BIT_RAW_BIP:
-                                    case D_P1P2INTRL_20BIT_RAW_BIP:
-                                    case E_P1P2INTRL_TRNC_20BIT_RAW_BIP:
-                                    case E_P1P2INTRL_20BIT_RAW_BIP:
-                                        curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
-                                    case D_P2_TRNC_20_BIT_RAW_BIP:
-                                    case E_P2_TRNC_20_BIT_RAW_BIP:
-                                    case D_P2_20_BIT_RAW_BIP:
-                                    case E_P2_20_BIT_RAW_BIP:    
-                                        curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
-                                    case D_P1_TRNC_20_BIT_RAW_BIP:
-                                    case D_P1_20_BIT_RAW_BIP:
-                                    case E_P1_TRNC_20_BIT_RAW_BIP:
-                                    case E_P1_20_BIT_RAW_BIP:
-                                        curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
-                                        params=2;
-                                        meas_seq++; // Increase number of measurement sequences
-                                        CPrintf("    Found science data, ID CODE: 0x%.2x Sequence %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                        param_type=ADC20_PARAMS;
-                                        state=S07_GET_PARAMS;
-                                        break;
-                                        
-                                    case D_DIFF_P1P2:
-                                    case E_DIFF_P1P2:
-                                        curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
-                                    case D_P2_RAW_16BIT:
-                                    case E_P2_16BIT_RAW:
-                                    case D_P2_RAW_16BIT_D2:
-                                    case D_P2_RAW_16BIT_D4:
-                                    case E_P2_RAW_16BIT_D2:
-                                    case E_P2_RAW_16BIT_D16:
-                                    case E_P2_RAW_16BIT_D4:
-                                    case E_P2_RAW_16BIT_D8:
-                                    case D_P2_RAW_16BIT_D16:
-                                    case D_P2_RAW_16BIT_D8:
-                                        curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
-                                    case D_P1_RAW_16BIT:
-                                    case E_P1_16BIT_RAW:
-                                    case D_P1_RAW_16BIT_D4:
-                                    case D_P1_RAW_16BIT_D2:
-                                    case D_P1_RAW_16BIT_D8:
-                                    case D_P1_RAW_16BIT_D16:
-                                    case E_P1_RAW_16BIT_D2:
-                                    case E_P1_RAW_16BIT_D4:
-                                    case E_P1_RAW_16BIT_D8:
-                                    case E_P1_RAW_16BIT_D16:
-                                        curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
-                                        meas_seq++;    // Increase number of measurement sequences
-                                        CPrintf("    Found science data, no parameters, ID CODE: 0x%.2x Sequence: %d Sensor: %d \n",id_code,meas_seq,curr.sensor);
-                                        state=S11_GET_LENGTH;
-                                        break; 
-                                        
-                                    default:
-                                        CPrintf("    Found undefined, ID CODE:   0x%.2x\n",id_code);
-                                        break;
-                                }
-                            }
-                            else
-                            {
-                                in_sync=0; // Indicate out of sync.
-                                state=S01_GET_MAINH; // No sub ID, End or out of sync
-                            }
-                            break;
-                            
-                                    case S05_GET_MACRO_ID:
-                                        DispState(state,"STATE = S05_GET_MACRO_ID\n");
-                                        
-                                        GetBuffer(cb,buff,2); // Get 2 bytes from circular science buffer
-                                        
-                                        hb=buff[0]<<8;      // Extract hi byte
-                                        lb=buff[1];         // Extract lo byte
-                                        macro_id=(hb | lb); // Put together hi and lo byte
-                                        CPrintf("    Executed macro was, MACRO ID: 0x%.4x\n",macro_id);	
-                                        state=S06_GET_MACRO_DESC;
-                                        break;
-                                        
-                                    case S06_GET_MACRO_DESC:
-                                        DispState(state,"STATE = S06_GET_MACRO_DESC\n");
-                                        
-                                        sprintf(tstr1,"MCID0X%04x",macro_id);
-                                        SetP(&comm,"INSTRUMENT_MODE_ID",tstr1,1);         // Set mode id in common PDS parameter
-                                        SetP(&comm,"DATA_SET_ID",mp.data_set_id,1);       // Set DATA SET ID in common PDS parameters
-                                        SetP(&comm,"DATA_SET_NAME",mp.data_set_name,1);   // Set DATA SET NAME in common PDS parameters
-                                        
-                                        // Find human description of macro in macro mode descriptions
-                                        sprintf(tstr1,"0x%04x",macro_id); // Create search variable..to search for in linked list of property name value pairs.
-                                        if(FindP(&mdesc,&property1,tstr1,1,0)>0)
-                                            SetP(&comm,"INSTRUMENT_MODE_DESC",property1->value,1); // Set human description of mode
-                                            
-                                            sprintf(tstr1,"\"%d\"",pds.DPLNumber);
-                                        
-                                        SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level id...
-                                        
-                                        // Search for macro with right macro id in macs matrix
-                                        macro_status=1; // Indicate that we haven't found the macro 
-                                        for(mb=0;macro_status && mb<MAX_MACRO_BLCKS;mb++)
-                                            for(ma=0;macro_status && ma<MAX_MACROS_INBL;ma++)
+                                            //TrimQN(property1->value);
+                                            if(!sscanf(property1->value,"\"%x\"",&val)) 
                                             {
-                                                if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_MACRO_ID_TAG",1,0)>0)
-                                                {
-                                                    //TrimQN(property1->value);
-                                                    if(!sscanf(property1->value,"\"%x\"",&val)) 
-                                                    {
-                                                        CPrintf("    MACRO ID corrupt in macro description\n");
-                                                        
-                                                        if(finger_printing) // Are we finger printing ?
-                                                        {
-                                                            finger_printing=0;
-                                                            state=S09_COMPARE_PARAMS;
-                                                        }
-                                                        else
-                                                            state=S04_GET_ID_CODE;
-                                                    }
-                                                    else
-                                                        if(val==macro_id)
-                                                        {
-                                                            // Move temporary buffer to it's end, This buffer will be used to dump
-                                                            // science data that dosn't contain macro id's to special files that
-                                                            // should be manually checked and then resubmitted to this pds program
-                                                            // using the correct macro id on the commandline.
-                                                            Forward(ct,ct->fill); 
-                                                            CPrintf("    Macro description found, Block %d, Macro num %d\n",mb,ma);
-                                                            macro_status=0; // We found macro description!
-                                                            if(pds.uaccpt_fd!=NULL) 
-                                                            {
-                                                                fclose(pds.uaccpt_fd);
-                                                                pds.uaccpt_fd=NULL;
-                                                            }
-                                                            break;
-                                                        }
-                                                }
-                                            }      
-                                            
-                                            if(macro_status) 
-                                            {
-                                                CPrintf("    Error Couldn't find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
-                                            }
-                                            else
-                                                mb--; // mb is one step to much here since break above only breaks out of inner loop!
+                                                CPrintf("    MACRO ID corrupt in macro description\n");
                                                 
                                                 if(finger_printing) // Are we finger printing ?
                                                 {
@@ -1902,1201 +1905,1314 @@ void *DecodeScience(void *arg)
                                                     state=S09_COMPARE_PARAMS;
                                                 }
                                                 else
+                                                {
                                                     state=S04_GET_ID_CODE;
-                                                break;
-                                            
-                                            case S07_GET_PARAMS:
-                                                DispState(state,"STATE = S07_GET_PARAMS\n");
-                                                
-                                                // Get params bytes from circular science buffer
-                                                GetBuffer(cb,buff,params); // Get 2 bytes from circular science buffer
-                                                
-                                                state=S08_DECODE_PARAMS;
-                                                break;
-                                                
-                                            case S08_DECODE_PARAMS:
-                                                DispState(state,"STATE = S08_DECODE_PARAMS\n");
-                                                // DECODE PARAMS TO PDS FORMAT
-                                                CPrintf("    Decoding parameters %d Bytes Type %d Sensor %d\n",params,param_type,curr.sensor);
-                                                
-                                                if(param_type==SWEEP_PARAMS) // DECODE SWEEP PARAMETERS
-                                                {
-                                                    W0=buff[1];                // Put together words since
-                                                    W1=(buff[2]<<8 | buff[3]); // we sometimes have parameters
-                                                    W2=(buff[4]<<8 | buff[5]); // crossing byte boundaries.
-                                                    
-                                                    sw_info.formatv=GetBitF(W2,2,0); // Remember raw format value
-                                                    switch(sw_info.formatv)          // Decode LAP_SWEEP_FORMAT 
-                                                    {
-                                                        case 0:
-                                                            strcpy(sw_info.format,"UP");
-                                                            break;
-                                                        case 1:
-                                                            strcpy(sw_info.format,"DOWN UP");
-                                                            break;
-                                                        case 2:
-                                                            strcpy(sw_info.format,"DOWN");
-                                                            break;
-                                                        case 3:
-                                                            strcpy(sw_info.format,"UP DOWN");
-                                                            break;
-                                                        default:
-                                                            strcpy(sw_info.format,"UNKNOWN");
-                                                    }
-                                                    
-                                                    if(GetBitF(W2,1,2))  // Decode LAP_SWEEP_RESOLUTION 
-                                                        strcpy(sw_info.resolution,"FINE");
-                                                    else
-                                                        strcpy(sw_info.resolution,"COARSE");
-                                                    
-                                                    if(GetBitF(W2,1,3)) // Decode LAP_SWEEPING_P1 
-                                                        strcpy(sw_info.p1,"YES");
-                                                    else
-                                                        strcpy(sw_info.p1,"NO");
-                                                    
-                                                    if(GetBitF(W2,1,4)) // Decode LAP_SWEEPING_P2 
-                                                        strcpy(sw_info.p2,"YES");
-                                                    else
-                                                        strcpy(sw_info.p2,"NO");
-                                                    
-                                                    sw_info.p1_fine_offs = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
-                                                    sw_info.p2_fine_offs = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
-                                                    sw_info.plateau_dur   = 1<<(GetBitF(W1,4,0)+1);// LAP_SWEEP_PLATEAU_DURATION
-                                                    sw_info.steps        = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
-                                                    sw_info.height       = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
-                                                    sw_info.start_bias   = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
-                                                    
-                                                    sw_info.sweep_dur_s  = (sw_info.steps+3)* sw_info.plateau_dur; // Total duration of sweep in samples (Not same as it's length!)
-                                                    
-                                                    
-                                                    // POPULATE PDS LAP Dictionary with sweep info.
-                                                    //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_START_BIAS",sw_info.start_bias);         // Removed/moved 2015-02-17, Erik P G Johansson.
-                                                    //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEP_HEIGHT",sw_info.height);            // Removed/moved 2015-02-23, Erik P G Johansson.
-                                                    //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEPS",sw_info.steps);                   // Removed/moved 2015-02-17, Erik P G Johansson.
-                                                    //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_PLATEAU_DURATION",sw_info.plateau_dur);  // Removed/moved 2015-02-17, Erik P G Johansson.
-                                                    //InsertTopQ(&dict,"ROSETTA:LAP_SWEEP_RESOLUTION",sw_info.resolution);          // Removed/moved 2015-02-23, Erik P G Johansson.
-                                                    //InsertTopQ(&dict,"ROSETTA:LAP_SWEEP_FORMAT",sw_info.format);                  // Removed/moved 2015-02-23, Erik P G Johansson.
-                                                    
-                                                    if(!strcmp("YES",sw_info.p1)) // If sweeping P1
-                                                    {
-                                                        // Edit 2015-02-17, 2015-02-23, Erik P G Johansson:
-                                                        // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_START_BIAS",       sw_info.start_bias);
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEP_HEIGHT",      sw_info.height);		  
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEPS",            sw_info.steps);		  
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
-                                                        InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_RESOLUTION",       sw_info.resolution);
-                                                        InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_FORMAT",           sw_info.format);
-                                                        
-                                                        // Insert fine offset for P1 into dictionary
-                                                        InsertTopQV(&dict,"ROSETTA:LAP_P1_FINE_SWEEP_OFFSET",sw_info.p1_fine_offs); 
-                                                        // Insert who's sweeping into PDS dictionary 
-                                                        InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P1",sw_info.p1); 
-                                                    }
-                                                    
-                                                    if(!strcmp("YES",sw_info.p2)) // If sweeping P2
-                                                    {
-                                                        // Edit 2015-02-17, 2015-02-23, Erik P G Johansson:
-                                                        // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_START_BIAS",       sw_info.start_bias);
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEP_HEIGHT",      sw_info.height);
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEPS",            sw_info.steps);
-                                                        InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
-                                                        InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_RESOLUTION",       sw_info.resolution);
-                                                        InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_FORMAT",           sw_info.format);
-                                                        
-                                                        // Insert fine offset for P2 into dictionary
-                                                        InsertTopQV(&dict,"ROSETTA:LAP_P2_FINE_SWEEP_OFFSET",sw_info.p2_fine_offs); 
-                                                        // Insert who's sweeping into PDS dictionary
-                                                        InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P2",sw_info.p2); 
-                                                    }
                                                 }
-                                                
-                                                if(param_type==ADC20_PARAMS)
+                                            }
+                                            else
+                                                if(val==macro_id)
                                                 {
-                                                    // ADD ADC20 parameter decoding |MALEN|DA20CTRL|.....|MARESFAC|
-                                                    // I use  getbitf everywhere for consistency! (could have done
-                                                    // things like: (buff[0] & 0xf0)>>4
-                                                    
-                                                    a20_info.moving_average_length = (1<<GetBitF(buff[0],4,4)); // Length of moving average filter
-                                                    a20_info.adc20_control         = GetBitF(buff[0],4,0);      // Indicate full, truncated,..and so on
-                                                    a20_info.resampling_factor     = (1<<GetBitF(buff[1],4,0)); // Downsampling factor..(Thus keep every n:th samp)
-                                                    
-                                                    // POPULATE PDS LAP Dictionary with 20 bit ADC info.
-                                                    InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_DOWNSAMPLE",a20_info.resampling_factor);
-                                                    InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH", a20_info.moving_average_length);
-                                                    InsertTopQ( &dict,"ROSETTA:LAP_P1P2_ADC20_STATUS",    a20status[a20_info.adc20_control & 0xf]);
-                                                    
-                                                    if((a20_info.adc20_control & 0x3)==0x02) curr.sensor=SENS_P1; // Modify current sensor from both P1 and P2 to P1 only
-                                                    if((a20_info.adc20_control& 0x3 )==0x01) curr.sensor=SENS_P2; // Modify current sensor from both P1 and P2 to P2 only
-                                                    // Above: I don't treat the combination there only the lowest bits are used for the 20 bit ADC:s
-                                                    //        cause we never will use it..it's not scientific!
-                                                }
-                                                state=S11_GET_LENGTH; // Error unknown parameter type, continue to get length
-                                                break;
-                                                
-                                                
-                                                case S09_COMPARE_PARAMS:
-                                                    DispState(state,"STATE = S09_COMPARE_PARAMS\n");
-                                                    if(!macro_status && !macro_priority) // If a macro description exists and macro description has lowest priority over data parameters
+                                                    // Move temporary buffer to it's end, This buffer will be used to dump
+                                                    // science data that dosn't contain macro id's to special files that
+                                                    // should be manually checked and then resubmitted to this pds program
+                                                    // using the correct macro id on the commandline.
+                                                    Forward(ct,ct->fill); 
+                                                    CPrintf("    Macro description found, Block %d, Macro num %d\n",mb,ma);
+                                                    macro_status=0; // We found macro description!
+                                                    if(pds.uaccpt_fd!=NULL) 
                                                     {
-                                                        // Go through all property/value pairs in dictionary and compare to macro description
-                                                        for(i=0;i<dict.no_prop;i++) 
-                                                        {
-                                                            GetNo(&dict,&property1,i); // Get property number i from dictionary
-                                                            // Find property in macro description, in dictionary they occur only once.
-                                                            if(FindP(&macros[mb][ma],&property2,property1->name,1,UNCHECKED)>0) // Look for unchecked ones 
-                                                            {
-                                                                if(ComparePrp(property1,property2)) // Compare properties
-                                                                {
-                                                                    CPrintf("    Warning mismatch between parameters and macro description\n");
-                                                                    CPrintf("    MACRO: %s=%s\n",property2->name,property2->value);
-                                                                    CPrintf("    PARAM: %s=%s\n",property1->name,property1->value);
-                                                                    // Remove warning keyword..enough with warning in logs
-                                                                    //InsertTopQ(&dict,"ROSETTA:LAP_SC_VS_MACRO_MISMATCH","WARNING");
-                                                                    break; // Break out of loop
-                                                                }
-                                                                
-                                                                // Below some special cases, that need to be excluded from the next 
-                                                                // comparison in the current measurement cycle.
-                                                                if(!strcmp(property2->name,"ROSETTA:LAP_SWEEPING_P1"))
-                                                                {
-                                                                    // We need to exclude SWEEPING_P2 since they exist in pairs in the macro description
-                                                                    if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_SWEEPING_P2",1,UNCHECKED)>0) // Look for P2 
-                                                                        Check(property2); // Check this one so we don't look for it the next time
-                                                                }
-                                                                
-                                                                if(!strcmp(property2->name,"ROSETTA:LAP_SWEEPING_P2"))
-                                                                {
-                                                                    // We need to exclude SWEEPING_P1 since they exist in pairs in the macro description
-                                                                    if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_SWEEPING_P1",1,UNCHECKED)>0) // Look for P1
-                                                                        Check(property2); // Check this one so we don't look for it the next time
-                                                                }
-                                                                
-                                                                // Everything that occurs more than once in the macro description need to be excluded successively
-                                                                // Other properties such as TM_RATE will probably be used in more than one label file so 
-                                                                // we do uncheck them again.
-                                                                if(property2!=NULL)
-                                                                {
-                                                                    Check(property2);
-                                                                    strcpy(tstr1,property2->name);
-                                                                }
-                                                                
-                                                                if(FindP(&macros[mb][ma],&property2,tstr1,1,UNCHECKED)==0) // Look for unchecked ones 
-                                                                    Check(property2);
-                                                            }
-                                                        }
+                                                        fclose(pds.uaccpt_fd);
+                                                        pds.uaccpt_fd=NULL;
                                                     }
-                                                    state=S14_RESOLVE_MACRO_PARAMETERS; // Resolve macro parameters
                                                     break;
-                                                    
-                                                    case S11_GET_LENGTH:
-                                                        DispState(state,"STATE = S11_GET_LENGTH\n");
-                                                        
-                                                        GetBuffer(cb,buff,2); // Get 2 bytes from circular science buffer
-                                                        
-                                                        hb=buff[0]<<8;
-                                                        lb=buff[1];
-                                                        length=(hb | lb)*2;
-                                                        CPrintf("    Data length: %d Bytes\n",length);
-                                                        
-                                                        if(length>RIDICULUS) // If length is ridiculously long
+                                                }
+                                        }
+                                    }      
+                                    
+                                    if(macro_status) 
+                                    {
+                                        CPrintf("    Error Couldn't find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
+                                    }
+                                    else
+                                        mb--; // mb is one step to much here since break above only breaks out of inner loop!
+                                        
+                                        if(finger_printing) // Are we finger printing ?
+                                        {
+                                            finger_printing=0;
+                                            state=S09_COMPARE_PARAMS;
+                                        }
+                                        else
+                                            state=S04_GET_ID_CODE;
+                                        break;
+                                    
+                                    case S07_GET_PARAMS:
+                                        DispState(state,"STATE = S07_GET_PARAMS\n");
+                                        
+                                        // Get params bytes from circular science buffer
+                                        GetBuffer(cb,buff,params); // Get 2 bytes from circular science buffer
+                                        
+                                        state=S08_DECODE_PARAMS;
+                                        break;
+                                        
+                                    case S08_DECODE_PARAMS:
+                                        DispState(state,"STATE = S08_DECODE_PARAMS\n");
+                                        // DECODE PARAMS TO PDS FORMAT
+                                        CPrintf("    Decoding parameters %d Bytes Type %d Sensor %d\n",params,param_type,curr.sensor);
+                                        
+                                        if(param_type==SWEEP_PARAMS) // DECODE SWEEP PARAMETERS
+                                        {
+                                            W0=buff[1];                // Put together words since
+                                            W1=(buff[2]<<8 | buff[3]); // we sometimes have parameters
+                                            W2=(buff[4]<<8 | buff[5]); // crossing byte boundaries.
+                                            
+                                            sw_info.formatv=GetBitF(W2,2,0); // Remember raw format value
+                                            switch(sw_info.formatv)          // Decode LAP_SWEEP_FORMAT 
+                                            {
+                                                case 0:
+                                                    strcpy(sw_info.format,"UP");
+                                                    break;
+                                                case 1:
+                                                    strcpy(sw_info.format,"DOWN UP");
+                                                    break;
+                                                case 2:
+                                                    strcpy(sw_info.format,"DOWN");
+                                                    break;
+                                                case 3:
+                                                    strcpy(sw_info.format,"UP DOWN");
+                                                    break;
+                                                default:
+                                                    strcpy(sw_info.format,"UNKNOWN");
+                                            }
+                                            
+                                            if(GetBitF(W2,1,2)) {  // Decode LAP_SWEEP_RESOLUTION 
+                                                strcpy(sw_info.resolution,"FINE");
+                                            } else {
+                                                strcpy(sw_info.resolution,"COARSE");
+                                            }
+                                            
+                                            if(GetBitF(W2,1,3)) { // Decode LAP_SWEEPING_P1 
+                                                strcpy(sw_info.p1,"YES");
+                                            } else {
+                                                strcpy(sw_info.p1,"NO");
+                                            }
+                                            
+                                            if(GetBitF(W2,1,4)) {// Decode LAP_SWEEPING_P2 
+                                                strcpy(sw_info.p2,"YES");
+                                            } else {
+                                                strcpy(sw_info.p2,"NO");
+                                            }
+                                            
+                                            sw_info.p1_fine_offs = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
+                                            sw_info.p2_fine_offs = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
+                                            sw_info.plateau_dur   = 1<<(GetBitF(W1,4,0)+1);// LAP_SWEEP_PLATEAU_DURATION
+                                            sw_info.steps        = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
+                                            sw_info.height       = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
+                                            sw_info.start_bias   = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
+                                            
+                                            sw_info.sweep_dur_s  = (sw_info.steps+3)* sw_info.plateau_dur; // Total duration of sweep in samples (Not same as it's length!)
+                                            
+                                            
+                                            // POPULATE PDS LAP Dictionary with sweep info.
+                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_START_BIAS",sw_info.start_bias);         // Removed/moved 2015-02-17, Erik P G Johansson.
+                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEP_HEIGHT",sw_info.height);            // Removed/moved 2015-02-23, Erik P G Johansson.
+                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEPS",sw_info.steps);                   // Removed/moved 2015-02-17, Erik P G Johansson.
+                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_PLATEAU_DURATION",sw_info.plateau_dur);  // Removed/moved 2015-02-17, Erik P G Johansson.
+                                            //InsertTopQ(&dict,"ROSETTA:LAP_SWEEP_RESOLUTION",sw_info.resolution);          // Removed/moved 2015-02-23, Erik P G Johansson.
+                                            //InsertTopQ(&dict,"ROSETTA:LAP_SWEEP_FORMAT",sw_info.format);                  // Removed/moved 2015-02-23, Erik P G Johansson.
+                                            
+                                            if(!strcmp("YES",sw_info.p1)) // If sweeping P1
+                                            {
+                                                // Edit 2015-02-17, 2015-02-23, Erik P G Johansson:
+                                                // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_START_BIAS",       sw_info.start_bias);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEP_HEIGHT",      sw_info.height);		  
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEPS",            sw_info.steps);		  
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
+                                                InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_RESOLUTION",       sw_info.resolution);
+                                                InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_FORMAT",           sw_info.format);
+                                                
+                                                // Insert fine offset for P1 into dictionary
+                                                InsertTopQV(&dict,"ROSETTA:LAP_P1_FINE_SWEEP_OFFSET",sw_info.p1_fine_offs); 
+                                                // Insert who's sweeping into PDS dictionary 
+                                                InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P1",sw_info.p1); 
+                                            }
+                                            
+                                            if(!strcmp("YES",sw_info.p2)) // If sweeping P2
+                                            {
+                                                // Edit 2015-02-17, 2015-02-23, Erik P G Johansson:
+                                                // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_START_BIAS",       sw_info.start_bias);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEP_HEIGHT",      sw_info.height);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEPS",            sw_info.steps);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
+                                                InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_RESOLUTION",       sw_info.resolution);
+                                                InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_FORMAT",           sw_info.format);
+                                                
+                                                // Insert fine offset for P2 into dictionary
+                                                InsertTopQV(&dict,"ROSETTA:LAP_P2_FINE_SWEEP_OFFSET",sw_info.p2_fine_offs); 
+                                                // Insert who's sweeping into PDS dictionary
+                                                InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P2",sw_info.p2); 
+                                            }
+                                        }
+                                        
+                                        if(param_type==ADC20_PARAMS)
+                                        {
+                                            // ADD ADC20 parameter decoding |MALEN|DA20CTRL|.....|MARESFAC|
+                                            // I use  getbitf everywhere for consistency! (could have done
+                                            // things like: (buff[0] & 0xf0)>>4
+                                            
+                                            a20_info.moving_average_length = (1<<GetBitF(buff[0],4,4)); // Length of moving average filter
+                                            a20_info.adc20_control         = GetBitF(buff[0],4,0);      // Indicate full, truncated,..and so on
+                                            a20_info.resampling_factor     = (1<<GetBitF(buff[1],4,0)); // Downsampling factor..(Thus keep every n:th samp)
+                                            
+                                            // POPULATE PDS LAP Dictionary with 20 bit ADC info.
+                                            InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_DOWNSAMPLE",a20_info.resampling_factor);
+                                            InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH", a20_info.moving_average_length);
+                                            InsertTopQ( &dict,"ROSETTA:LAP_P1P2_ADC20_STATUS",    a20status[a20_info.adc20_control & 0xf]);
+                                            
+                                            if((a20_info.adc20_control & 0x3)==0x02) { curr.sensor=SENS_P1; }// Modify current sensor from both P1 and P2 to P1 only
+                                            if((a20_info.adc20_control& 0x3 )==0x01) { curr.sensor=SENS_P2; }// Modify current sensor from both P1 and P2 to P2 only
+                                            // Above: I don't treat the combination there only the lowest bits are used for the 20 bit ADC:s
+                                            //        cause we never will use it..it's not scientific!
+                                        }
+                                        state=S11_GET_LENGTH; // Error unknown parameter type, continue to get length
+                                        break;
+                                        
+                                        
+                                        case S09_COMPARE_PARAMS:
+                                            DispState(state,"STATE = S09_COMPARE_PARAMS\n");
+                                            if(!macro_status && !macro_priority) // If a macro description exists and macro description has lowest priority over data parameters
+                                            {
+                                                // Go through all property/value pairs in dictionary and compare to macro description
+                                                for(i=0;i<dict.no_prop;i++) 
+                                                {
+                                                    GetNo(&dict,&property1,i); // Get property number i from dictionary
+                                                    // Find property in macro description, in dictionary they occur only once.
+                                                    if(FindP(&macros[mb][ma],&property2,property1->name,1,UNCHECKED)>0) // Look for unchecked ones 
+                                                    {
+                                                        if(ComparePrp(property1,property2)) // Compare properties
                                                         {
-                                                            CPrintf("    Ridicuously long length in science data, trying to resync\n");
-                                                            in_sync=0; // Indicate not in sync
-                                                            state=S01_GET_MAINH; //Resync
+                                                            CPrintf("    Warning mismatch between parameters and macro description\n");
+                                                            CPrintf("    MACRO: %s=%s\n",property2->name,property2->value);
+                                                            CPrintf("    PARAM: %s=%s\n",property1->name,property1->value);
+                                                            // Remove warning keyword..enough with warning in logs
+                                                            //InsertTopQ(&dict,"ROSETTA:LAP_SC_VS_MACRO_MISMATCH","WARNING");
+                                                            break; // Break out of loop
                                                         }
-                                                        else
+                                                        
+                                                        // Below some special cases, that need to be excluded from the next 
+                                                        // comparison in the current measurement cycle.
+                                                        if(!strcmp(property2->name,"ROSETTA:LAP_SWEEPING_P1"))
                                                         {
-                                                            if(SyncAhead(cb,length)) // Extra sync test added 040413
-                                                                state=S12_GET_DATA;
-                                                            else
+                                                            // We need to exclude SWEEPING_P2 since they exist in pairs in the macro description
+                                                            if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_SWEEPING_P2",1,UNCHECKED)>0) // Look for P2 
+                                                                Check(property2); // Check this one so we don't look for it the next time
+                                                        }
+                                                        
+                                                        if(!strcmp(property2->name,"ROSETTA:LAP_SWEEPING_P2"))
+                                                        {
+                                                            // We need to exclude SWEEPING_P1 since they exist in pairs in the macro description
+                                                            if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_SWEEPING_P1",1,UNCHECKED)>0) // Look for P1
+                                                                Check(property2); // Check this one so we don't look for it the next time
+                                                        }
+                                                        
+                                                        // Everything that occurs more than once in the macro description need to be excluded successively
+                                                        // Other properties such as TM_RATE will probably be used in more than one label file so 
+                                                        // we do uncheck them again.
+                                                        if(property2!=NULL)
+                                                        {
+                                                            Check(property2);
+                                                            strcpy(tstr1,property2->name);
+                                                        }
+                                                        
+                                                        if(FindP(&macros[mb][ma],&property2,tstr1,1,UNCHECKED)==0) // Look for unchecked ones
+                                                        {
+                                                            Check(property2);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            state=S14_RESOLVE_MACRO_PARAMETERS; // Resolve macro parameters
+                                            break;
+                                            
+                                            case S11_GET_LENGTH:
+                                                DispState(state,"STATE = S11_GET_LENGTH\n");
+                                                
+                                                GetBuffer(cb,buff,2); // Get 2 bytes from circular science buffer
+                                                
+                                                hb=buff[0]<<8;
+                                                lb=buff[1];
+                                                length=(hb | lb)*2;
+                                                CPrintf("    Data length: %d Bytes\n",length);
+                                                
+                                                if(length>RIDICULUS) // If length is ridiculously long
+                                                {
+                                                    CPrintf("    Ridicuously long length in science data, trying to resync\n");
+                                                    in_sync=0; // Indicate not in sync
+                                                    state=S01_GET_MAINH; //Resync
+                                                }
+                                                else
+                                                {
+                                                    if(SyncAhead(cb,length)) // Extra sync test added 2004-04-13.
+                                                    {
+                                                        state=S12_GET_DATA;
+                                                    }
+                                                    else
+                                                    {
+                                                        CPrintf("    Broken science data packet, trying to resync\n");
+                                                        in_sync=0; // Indicate not in sync
+                                                        state=S01_GET_MAINH; //Resync
+                                                    }
+                                                }
+                                                break;
+                                                
+                                            case S12_GET_DATA:
+                                                DispState(state,"STATE = S12_GET_DATA\n");
+                                                // Get length bytes from circular science buffer 
+                                                GetBuffer(cb,buff,length); 
+                                                
+                                                if(param_type==NO_PARAMS)
+                                                {
+                                                    state=S14_RESOLVE_MACRO_PARAMETERS; // Resolve macro parameters
+                                                }
+                                                else
+                                                {
+                                                    state=S09_COMPARE_PARAMS;           // Check data parameters macro consistency
+                                                }
+                                                break;
+                                                
+                                            case S13_RECONNECT:
+                                                DispState(state,"STATE = S13_RECONNECT\n");
+                                                break;
+                                                
+                                            case S14_RESOLVE_MACRO_PARAMETERS: 
+                                                DispState(state,"STATE = S14_RESOLVE_MACRO_PARAMETERS\n");
+                                                
+                                                
+                                                // Fingerprinting for the right macro description, this is a bit dirty. 
+                                                // But we need to do it on the prom macros (8 of them). All macros in flash
+                                                // contain the macro id in the science data stream. 
+                                                if(macro_status) // If no macro description
+                                                {
+                                                    CPrintf("    WARNING: Finger printing macro id.\n");
+                                                    finger_printing=1;
+                                                    if(length==40 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
+                                                    {
+                                                        // Brute force macro settings!
+                                                        macro_id=0x201; // Set macro id
+                                                        state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
+                                                        break;
+                                                    }
+                                                    
+                                                    if(400<=length && length<=512 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
+                                                    {
+                                                        LookBuffer(cb,tbuff,2);     // Look ahed two bytes
+                                                        
+                                                        if(tbuff[0]==0xCC)
+                                                        {
+                                                            if(tbuff[1]==D_P2_RAW_16BIT)
                                                             {
-                                                                CPrintf("    Broken science data packet, trying to resync\n");
-                                                                in_sync=0; // Indicate not in sync
-                                                                state=S01_GET_MAINH; //Resync
+                                                                macro_id=0x202; // Set macro id
+                                                                state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
+                                                            }
+                                                            
+                                                            if(tbuff[1]==E_P2_TRNC_20_BIT_RAW_BIP)
+                                                            {
+                                                                macro_id=0x203; // Set macro id
+                                                                state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                             }
                                                         }
                                                         break;
+                                                    }
+                                                    
+                                                    if(1930<=length && length<=1950 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
+                                                    {
+                                                        LookBuffer(cb,tbuff,2);     // Look ahed two bytes
                                                         
-                                                    case S12_GET_DATA:
-                                                        DispState(state,"STATE = S12_GET_DATA\n");
-                                                        // Get length bytes from circular science buffer 
-                                                        GetBuffer(cb,buff,length); 
-                                                        
-                                                        if(param_type==NO_PARAMS)
-                                                            state=S14_RESOLVE_MACRO_PARAMETERS; // Resolve macro parameters
-                                                            else
-                                                                state=S09_COMPARE_PARAMS;           // Check data parameters macro consistency
-                                                                break;
-                                                            
-                                                    case S13_RECONNECT:
-                                                        DispState(state,"STATE = S13_RECONNECT\n");
-                                                        break;
-                                                        
-                                                    case S14_RESOLVE_MACRO_PARAMETERS: 
-                                                        DispState(state,"STATE = S14_RESOLVE_MACRO_PARAMETERS\n");
-                                                        
-                                                        
-                                                        // Fingerprinting for the right macro description, this is a bit dirty. 
-                                                        // But we need to do it on the prom macros (8 of them). All macros in flash
-                                                        // contain the macro id in the science data stream. 
-                                                        if(macro_status) // If no macro description
+                                                        if(tbuff[0]==0xCC)
                                                         {
-                                                            CPrintf("    WARNING: Finger printing macro id.\n");
-                                                            finger_printing=1;
-                                                            if(length==40 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
+                                                            if(tbuff[1]==D_P2_RAW_16BIT)
                                                             {
-                                                                // Brute force macro settings!
-                                                                macro_id=0x201; // Set macro id
+                                                                macro_id=0x204; // Set macro id
                                                                 state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                                 break;
                                                             }
-                                                            
-                                                            if(400<=length && length<=512 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
-                                                            {
-                                                                LookBuffer(cb,tbuff,2);     // Look ahed two bytes
-                                                                
-                                                                if(tbuff[0]==0xCC)
-                                                                {
-                                                                    if(tbuff[1]==D_P2_RAW_16BIT)
-                                                                    {
-                                                                        macro_id=0x202; // Set macro id
-                                                                        state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
-                                                                    }
-                                                                    
-                                                                    if(tbuff[1]==E_P2_TRNC_20_BIT_RAW_BIP)
-                                                                    {
-                                                                        macro_id=0x203; // Set macro id
-                                                                        state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
-                                                                    }
-                                                                }
-                                                                break;
-                                                            }
-                                                            
-                                                            if(1930<=length && length<=1950 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
-                                                            {
-                                                                LookBuffer(cb,tbuff,2);     // Look ahed two bytes
-                                                                
-                                                                if(tbuff[0]==0xCC)
-                                                                {
-                                                                    if(tbuff[1]==D_P2_RAW_16BIT)
-                                                                    {
-                                                                        macro_id=0x204; // Set macro id
-                                                                        state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
-                                                                        break;
-                                                                    }
-                                                                }		  
-                                                            }
-                                                            
-                                                            if(length==8950 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
-                                                            {
-                                                                // Brute force macro settings!
-                                                                macro_id=0x205; // Set macro id
-                                                                state=S06_GET_MACRO_DESC;  // Break out of switch, and get macro description
-                                                                break;
-                                                            }
-                                                            
-                                                            if(length==1024 && id_code==E_P1_RAW_16BIT_D4)
-                                                            {
-                                                                // Brute force macro settings!
-                                                                macro_id=0x207; // Set macro id
-                                                                state=S06_GET_MACRO_DESC;  // Break out of switch, and get macro description
-                                                                break;
-                                                            }
-                                                            
-                                                            finger_printing=0;
-                                                        }   // if (macro_status) 
-                                                        
-                                                        // We are in a position of choices here!
-                                                        //--------------------------------------
-                                                        // The normal operation of the instrument is by running
-                                                        // a macro that returns a macro id. But we can also run
-                                                        // the instrument from the old prom macros that don't
-                                                        // return a macro id. In the first case we can derive a
-                                                        // lot of information from the macro description stored
-                                                        // here on earth. In the second case we have to derive
-                                                        // everything from the parameters in the science stream 
-                                                        // and the data ID tag. So far so good! But in the case
-                                                        // there both exist we have to choose where to derive the
-                                                        // information from. I'll try to derive as little as possible
-                                                        // and use what's in the science stream. But some things need
-                                                        // to be derived, the data ID code might be a bit safer to
-                                                        // use than the info from the macro since it's derived in 
-                                                        // fewer steps!
-                                                        
-                                                        
-                                                        CPrintf("    Parsing ID Code: %s\n",IDList[id_code]); 
-                                                        
-                                                        // To keep the information coming as close to the  source as possible 
-                                                        // we derive info from the ID code string directly. 
-                                                        // We do not compile information in a secondary file..
-                                                        // that would give two sources of info and consistency problems could occur.
-                                                        // Note: The ID strings are at this moment fixed and will not change
-                                                        //       the amount of id strings may however increase!
-                                                        
-                                                        dsa16_p1 = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
-                                                        dsa16_p2 = -1;   // Indicate that "down sampl 16 bit sensor 2" value is not resolved
-                                                        
-                                                        if((tp=strstr(IDList[id_code],"16BIT_D"))!=NULL)
-                                                        {
-                                                            if(curr.sensor==SENS_P1)
-                                                                if(!sscanf(&tp[7],"%d",&dsa16_p1)) dsa16_p1=-1; // Error in conversion
-                                                                
-                                                                if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
-                                                                    if(!sscanf(&tp[7],"%d",&dsa16_p2)) dsa16_p2=-1; // Error in conversion
-                                                        }
-                                                        
-                                                        curr.bias_mode=DENSITY; // Assume density mode
-                                                        if((tp=strstr(IDList[id_code],"E_"))!=NULL) // Check if E-FIELD mode
-                                                            curr.bias_mode=E_FIELD;
-                                                        
-                                                        
-                                                        // 20 Bit ADC data is interleaved if both P1 and P2 are used. If full 20 bit:s are used
-                                                        // We have for n samples
-                                                        //
-                                                        // S1  S1  S2  S2  S3  S3       Sn  Sn  |S1S1S2S2S3S3S4S4...SnSn
-                                                        // ------------------------------------------------------------------------------------
-                                                        // PSE1PSE2PSE1PSE2PSE1PSE2.....PSE1PSE2|P1P2P1P2P1P2P1P2...P1P2
-                                                        //
-                                                        //
-                                                        // PSE1 = 16 Bits probe/sensor 1
-                                                        // PSE2 = 16 Bits probe/sensor 2
-                                                        //
-                                                        // P1   = 4 Bits probe/sensor 1
-                                                        // P2   = 4 Bits probe/sensor 2
-                                                        //
-                                                        // Now we have 16+4 is 20 bit, for truncated 20 bit adc:s we only keep the 16 bits!
-                                                        // 
-                                                        // And number of samples is now the byte length multiplied by a factor of:
-                                                        // 
-                                                        // Full  p1 & p2: 1/5
-                                                        // Trunc p1 & p2: 1/4
-                                                        // Full p1      : 2/5
-                                                        // Trunc p1     : 1/2
-                                                        // Full p2      : 2/5
-                                                        // Trunc p2     : 1/2
-                                                        //
-                                                        data_type=D16; // Set data type to default 16 bit
-                                                        if(param_type==ADC20_PARAMS) // Test if 20 Bit ADC:s (ADC20) are involved!
-                                                        {
-                                                            switch(curr.sensor)
-                                                            {
-                                                                case SENS_P1:	
-                                                                    if(a20_info.adc20_control & 0x08)
-                                                                    {
-                                                                        samples=length*2/5; // Sensor P1 only full 20 Bit ADC
-                                                                        data_type=D201;
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        // Sensor P1 only truncated 20 Bit ADC
-                                                                        data_type=D201T;
-                                                                        samples=length/2;   
-                                                                    }
-                                                                    break;
-                                                                case SENS_P2:
-                                                                    if(a20_info.adc20_control & 0x04) 
-                                                                    {
-                                                                        samples=length*2/5; // Sensor P2 only full 20 Bit ADC
-                                                                        data_type=D202;
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        // Sensor P2 only truncated 20 Bit ADC
-                                                                        data_type=D202T;
-                                                                        samples=length/2;   
-                                                                    }
-                                                                    break;
-                                                                case SENS_P1P2: 
-                                                                    if((a20_info.adc20_control & 0x0C)==0x0C) 
-                                                                    {
-                                                                        samples=length/5; // Full 20 Bit ADC:s P1 and P2
-                                                                        data_type=D20;
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        // Truncated 20 Bit ADC:s P1 and P2
-                                                                        data_type=D20T; 
-                                                                        samples=length/4; 
-                                                                    }
-                                                                    break;
-                                                                default:
-                                                                    break;
-                                                            }
-                                                        }
-                                                        else
-                                                        {
-                                                            samples=length/2; // Number of samples then 20 Bit ADC:s are not used and no compression. 
-                                                            if(id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) // If log compression is used
-                                                                samples=length; // Log compression used
-                                                        }
-                                                        
-                                                        sprintf(tstr1,"%d",samples);
-                                                        SetP(&comm,"FILE_RECORDS",tstr1,1); // Set number of records (in data table file) in common PDS parameters
-                                                        
-                                                        CPrintf("    Number of samples current record: %d\n",samples);
-                                                        strcpy(tstr1,IDList[id_code]);      // Get ID code name
-                                                        TrimWN(tstr1);                      // Remove trailing whitespace
-                                                        sprintf(tstr2,"\"%s\"",tstr1);      // Add PDS quotes ".." 
-                                                        SetP(&comm,"DESCRIPTION",tstr2,1); // Update DESCRIPTION in common PDS parameters
-                                                        
-                                                        if(!macro_status) // If a macro description exists
-                                                        {
-                                                            //Find subheader for measurement sequence meas_seq
-                                                            if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)   // Set property1. Read many times afterwards with FindB(..).
-                                                            {
-                                                                if (debug>0)
-                                                                    printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);   // DEBUG
-                                                                    
-                                                                    // Find downsampling value probe 1 in macro and if no id value exists use macro desc. value
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",0)>0)
-                                                                    {
-                                                                        sscanf(property2->value,"\"%x\"",&val);
-                                                                        if(dsa16_p1==-1 || macro_priority) // Value not resolved from ID or macro has high priority use macro value instead
-                                                                            dsa16_p1=val;
-                                                                        
-                                                                        if(dsa16_p1!=val)
-                                                                            CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");
-                                                                        //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p1);
-                                                                    }
-                                                                    
-                                                                    // Find downsampling value probe 2 in macro and if no id value exists use macro desc. value
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",DNTCARE)>0)
-                                                                    {
-                                                                        sscanf(property2->value,"\"%x\"",&val);
-                                                                        if(dsa16_p2==-1 || macro_priority) // Value not resolved from ID  or macro has high priority use macro value instead
-                                                                            dsa16_p2=val;
-                                                                        
-                                                                        if(dsa16_p2!=val && !macro_priority) // Print mismatch warning..only if macro desc. has low priority
-                                                                            CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");		
-                                                                        //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p2);
-                                                                    }
-                                                                    
-                                                                    // Test if digital filter was turned on for probe 1, if so add information to dictionary
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",DNTCARE)>0)
-                                                                    {
-                                                                        if(!strcmp(property2->value,"\"ENABLED\""))
-                                                                        {
-                                                                            if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
-                                                                            {
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_CUTOFF",0)>0)
-                                                                                    InsertTopK(&dict,property2->name,property2->value);	
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",0)>0)
-                                                                                    InsertTopK(&dict,property2->name,property2->value);	
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                    
-                                                                    // Test if digital filter was turned on for probe 2, if so add information to dictionary
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_STATUS",DNTCARE)>0)
-                                                                    {
-                                                                        if(!strcmp(property2->value,"\"ENABLED\""))
-                                                                        {
-                                                                            if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
-                                                                            {
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_CUTOFF",0)>0)
-                                                                                    InsertTopK(&dict,property2->name,property2->value);	
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_STATUS",0)>0)
-                                                                                    InsertTopK(&dict,property2->name,property2->value);	
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                    curr.afilter=0; // Assume no analog filter
-                                                                    
-                                                                    //===============================================================================================
-                                                                    // Code referring to P1.
-                                                                    //===============================================================================================
-                                                                    
-                                                                    if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
-                                                                    {
-                                                                        // If no sweeping and current sensor is sensor 1 or sensor 1 and 2 check the bias mode for sensor 1
-                                                                        if(param_type!=SWEEP_PARAMS)
-                                                                        {
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_BIAS_MODE",DNTCARE)>0)
-                                                                            {
-                                                                                if(curr.bias_mode==E_FIELD) // Current mode according to ID is E-FIELD
-                                                                                {
-                                                                                    // Is it so according to macro description, or macro description has high priority
-                                                                                    if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority)
-                                                                                        InsertTopK(&dict,property2->name,property2->value); // Yes, Lets set it
-                                                                                        else
-                                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
-                                                                                            
-                                                                                            // Need to keep old bias in case of no macro change..to accomodate for extra bias
-                                                                                            // settings outside of macros.
-                                                                                            if(macro_id!=curr.old_macro) 
-                                                                                            {
-                                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_IBIAS1",DNTCARE)>0) // Find current bias
-                                                                                                {
-                                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                    if(!sscanf(property2->value,"\"%x\"",&curr.ibias1))
-                                                                                                    {
-                                                                                                        CPrintf("    Invalid fix current bias p1, using default 0x7f\n");
-                                                                                                        curr.ibias1=0x007f;
-                                                                                                    }
-                                                                                                }
-                                                                                            }
-                                                                                            else
-                                                                                                InsertTopQV(&dict,"ROSETTA:LAP_IBIAS1",curr.ibias1); // No macro change keep old bias
-                                                                                                
-                                                                                                if(param_type!=ADC20_PARAMS)
-                                                                                                {
-                                                                                                    // Find duration ADC16 E-Field
-                                                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_EFIELD_FIX_DURATION",DNTCARE)>0) 
-                                                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                }
-                                                                                }
-                                                                                
-                                                                                if(curr.bias_mode==DENSITY)   // Current mode according to ID is DENSITY
-                                                                                {
-                                                                                    // Is it so according to macro description, or macro description has high priority
-                                                                                    if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority)
-                                                                                        InsertTopK(&dict,property2->name,property2->value);// Yes, Lets set it
-                                                                                        else
-                                                                                            InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
-                                                                                            
-                                                                                            // Need to keep old bias in case of no macro change..to accomodate for extra bias
-                                                                                            // settings outside of macros.
-                                                                                            if(macro_id!=curr.old_macro)
-                                                                                            {
-                                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_VBIAS1",DNTCARE)>0) // Find voltage bias
-                                                                                                {
-                                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                    if(!sscanf(property2->value,"\"%x\"",&curr.vbias1))
-                                                                                                    {
-                                                                                                        CPrintf("    Invalid fix voltage bias p1, using default 0x7f\n");
-                                                                                                        curr.vbias1=0x007f;
-                                                                                                    }
-                                                                                                    if (debug>0)
-                                                                                                        printf("    Macro: Set fix voltage bias VBIAS1 = %04x (curr.vbias1; hex TM units)\n", curr.vbias1);  // DEBUG
-                                                                                                }
-                                                                                            }
-                                                                                            else
-                                                                                                InsertTopQV(&dict,"ROSETTA:LAP_VBIAS1",curr.vbias1); // No macro change keep old bias
-                                                                                                
-                                                                                                
-                                                                                                if(param_type!=ADC20_PARAMS)
-                                                                                                {
-                                                                                                    // Find duration ADC16 Density
-                                                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_DENSITY_FIX_DURATION",DNTCARE)>0) 
-                                                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary				      
-                                                                                                }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        
-                                                                        // Find LAP_P1_ADC16_FILTER
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_FILTER",DNTCARE)>0) 
-                                                                        {
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                            sscanf(property2->value,"\"%d\"",&curr.afilter);
-                                                                        }
-                                                                        //  Find LAP P1_RX_OR_TX
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_RX_OR_TX",DNTCARE)>0) 
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                            
-                                                                            // Find LAP_P1_STRATEGY_OR_RANGE
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_STRATEGY_OR_RANGE",DNTCARE)>0) 
-                                                                            {
-                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                strncpy(curr.gain1,property2->value,16);
-                                                                            }
-                                                                            
-                                                                            // Find LAP_P1_RANGE_DENS_BIAS "+-32" or "+-5"
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_RANGE_DENS_BIAS",DNTCARE)>0) 
-                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                
-                                                                                // Find LAP_P1_ADC16 mode
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16",DNTCARE)>0) 
-                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                    
-                                                                                    // Find LAP_P1_ADC20 mode
-                                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC20",DNTCARE)>0) 
-                                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                        
-                                                                                        // Find LAP_FEEDBACK_P1
-                                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_FEEDBACK_P1",DNTCARE)>0) 
-                                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                    }   // if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
-                                                                    
-                                                                    //===============================================================================================
-                                                                    // Code referring to P2.
-                                                                    //===============================================================================================
-                                                                    
-                                                                    if (debug>0) {   // DEBUG
-                                                                        printf("    property1: %s = \"%s\"\n", property1->name, property1->value);
-                                                                        printf("    param_type = %i\n", param_type);
-                                                                    }
-                                                                    if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
-                                                                    {
-                                                                        if(param_type!=SWEEP_PARAMS)
-                                                                        {
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_BIAS_MODE",DNTCARE)>0)
-                                                                            {
-                                                                                if(curr.bias_mode==E_FIELD) // Current mode according to ID is E-FIELD
-                                                                                {
-                                                                                    // Is it so according to macro description, or macro description has high priority
-                                                                                    if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) 
-                                                                                        InsertTopK(&dict,property2->name,property2->value); // Yes, Lets set it
-                                                                                        else
-                                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
-                                                                                            
-                                                                                            // Need to keep old bias in case of no macro change..to accomodate for extra bias
-                                                                                            // settings outside of macros.
-                                                                                            if(macro_id!=curr.old_macro) 
-                                                                                            {
-                                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_IBIAS2",DNTCARE)>0) // Find current bias
-                                                                                                {
-                                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                    if(!sscanf(property2->value,"\"%x\"",&curr.ibias2))
-                                                                                                    {
-                                                                                                        CPrintf("    Invalid fix current bias p2, using default 0x7f\n");
-                                                                                                        curr.ibias2=0x007f;
-                                                                                                    }
-                                                                                                }
-                                                                                            }
-                                                                                            else
-                                                                                                InsertTopQV(&dict,"ROSETTA:LAP_IBIAS2",curr.ibias2); // No macro change keep old bias
-                                                                                                
-                                                                                                if(param_type!=ADC20_PARAMS)
-                                                                                                {
-                                                                                                    // Find duration ADC16 E-Field
-                                                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_EFIELD_FIX_DURATION",DNTCARE)>0) 
-                                                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                }
-                                                                                }
-                                                                                
-                                                                                if(curr.bias_mode==DENSITY)   // Current mode according to ID is DENSITY
-                                                                                {
-                                                                                    if (debug>0) {   // DEBUG
-                                                                                        printf("    property2: %s = \"%s\"\n", property2->name, property2->value);
-                                                                                        printf("    macro_priority = %i\n", macro_priority);
-                                                                                    }
-                                                                                    // Is it so according to macro description, or macro description has high priority
-                                                                                    if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority)
-                                                                                        InsertTopK(&dict,property2->name,property2->value);// Yes, Lets set it
-                                                                                        else
-                                                                                            InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
-                                                                                            
-                                                                                            //----------------------------------------------------------------------------------------------------
-                                                                                            // Need to keep old bias in case of no macro change..to accomodate for extra bias
-                                                                                            // settings outside of macros. /Unknown, before 2015-04-07
-                                                                                            //----------------------------------------------------------------------------------------------------
-                                                                                            // The macro 515 that was uploaded to Rosetta is malfunctioning and appears to use two different values
-                                                                                            // for VBIAS2 in the macro loop despite that this should never happen.
-                                                                                            // For the pds code to be able to change the bias during every macro loop, the code has to specificly
-                                                                                            // permit macro 515 to set VBIAS2 in _every_ macro loop, not just the first one.
-                                                                                            // NOTE: Macro 515 is also on the list of macros that can not receive extra, external bias settings
-                                                                                            // ("kommenderingar"). See WritePTabFile, "if (extra_bias_setting) ..." .
-                                                                                            // NOTE: One could of course make the same exception for VBIAS1 to preserve the "symmetry between
-                                                                                            // the probes" but that is unnecessary since VBIAS1 is constant throughout the macro loop as intended.
-                                                                                            // /Erik P G Johansson, 2015-04-07
-                                                                                            //----------------------------------------------------------------------------------------------------
-                                                                                            //if(macro_id!=curr.old_macro)
-                                                                                            if ((macro_id!=curr.old_macro) || macro_id==0x515)
-                                                                                            {
-                                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_VBIAS2",DNTCARE)>0) // Find voltage bias
-                                                                                                {
-                                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                    if(!sscanf(property2->value,"\"%x\"",&curr.vbias2))
-                                                                                                    {
-                                                                                                        CPrintf("    Invalid fix voltage bias p2, using default 0x7f\n");
-                                                                                                        curr.vbias2=0x007f;
-                                                                                                    }
-                                                                                                    if (debug>0)
-                                                                                                        printf("    Macro: Set fix voltage bias VBIAS2 = %04x (curr.vbias2; hex TM units)\n", curr.vbias2);  // DEBUG
-                                                                                                }
-                                                                                            }
-                                                                                            else
-                                                                                                InsertTopQV(&dict,"ROSETTA:LAP_VBIAS2",curr.vbias2); // No macro change keep old bias
-                                                                                                
-                                                                                                
-                                                                                                if(param_type!=ADC20_PARAMS)
-                                                                                                { 
-                                                                                                    // Find duration ADC16 Density
-                                                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_DENSITY_FIX_DURATION",DNTCARE)>0) 
-                                                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                                }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        
-                                                                        // Find LAP_P2_ADC16_FILTER
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_FILTER",DNTCARE)>0) 
-                                                                        {
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                            sscanf(property2->value,"\"%d\"",&curr.afilter);
-                                                                        }
-                                                                        //  Find LAP P2_RX_OR_TX
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_RX_OR_TX",DNTCARE)>0) 
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                            
-                                                                            // Find LAP_P2_STRATEGY_OR_RANGE
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_STRATEGY_OR_RANGE",DNTCARE)>0) 
-                                                                            {
-                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                strncpy(curr.gain2,property2->value,16);
-                                                                            }
-                                                                            
-                                                                            // Find LAP_P2_RANGE_DENS_BIAS "+-32" or "+-5"
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_RANGE_DENS_BIAS",DNTCARE)>0) 
-                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                
-                                                                                // Find LAP_P2_ADC16 mode
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16",DNTCARE)>0) 
-                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                    
-                                                                                    // Find LAP_P2_ADC20 mode
-                                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC20",DNTCARE)>0) 
-                                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                        
-                                                                                        // Find LAP_FEEDBACK_P2
-                                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_FEEDBACK_P2",DNTCARE)>0) 
-                                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                    }   // if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
-                                                                    
-                                                                    //===============================================================================================
-                                                                    
-                                                                    // If transmitter is turned on
-                                                                    if(curr.transmitter==SENS_P1 || curr.transmitter==SENS_P2)
-                                                                    {      
-                                                                        
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_STATUS",DNTCARE)>0) 
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                            
-                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_AMPLITUDE",DNTCARE)>0) 
-                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                
-                                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_FREQUENCY",DNTCARE)>0) 
-                                                                                    InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                    }
-                                                                    
-                                                                    // If we are currently transmitting on P1
-                                                                    if(curr.transmitter==SENS_P1)
-                                                                    {
-                                                                        //  Find LAP P1_RX_OR_TX
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_RX_OR_TX",DNTCARE)>0) 
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                    }
-                                                                    
-                                                                    // If we are currently transmitting on P2
-                                                                    if(curr.transmitter==SENS_P2)
-                                                                    {
-                                                                        //  Find LAP P2_RX_OR_TX
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_RX_OR_TX",DNTCARE)>0) 
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                    }
-                                                                    
-                                                                    // Find bootstrap
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_BOOTSTRAP",DNTCARE)>0) 
-                                                                        InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                        
-                                                                        // Find DAC Oscillator
-                                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_OSCILLATOR",DNTCARE)>0) 
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                            
-                                                                            // Find first occurrence of TM_RATE from start, if found set it in dictionary
-                                                                            if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_TM_RATE",1,DNTCARE)>0)   // Set property2.
-                                                                            {
-                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                                                
-                                                                                tm_rate=property2->value[1]; // First char as telemetry rate (M)inimum,(N)ormal,(B)urst skipping quote character
-                                                                                if(!strcmp(property2->value,"\"NONE\""))
-                                                                                    tm_rate='Z';            // And (Z)ero if no telemetry rate
-                                                                            }
-                                                                            
-                                                                            if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
-                                                                            {
-                                                                                CPrintf("    %d sequence starts %d aqps from start of sequence\n",meas_seq,aqps_seq);
-                                                                                curr.offset_time=aqps_seq*32.0;
-                                                                                curr.seq_time=rstime+curr.offset_time;      // Calculate time of current sequence
-                                                                                
-                                                                                Raw2OBT_Str(curr.seq_time,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
-                                                                                
-                                                                                SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr1,1);
-                                                                                
-                                                                                DecodeRawTime(curr.seq_time,tstr1,0);   // Decode raw time into PDS compliant UTC time
-                                                                                CPrintf("    Current sequence start time is: %s\n",tstr1); 
-                                                                                SetP(&comm,"START_TIME",tstr1,1);        // Update START_TIME in common PDS parameters
-                                                                                
-                                                                                
-                                                                                // Create data path for current day
-                                                                                tstr1[10]='\0';                 // Truncate hh:mm:ss away and keep CCYY-MM-DD
-                                                                                
-                                                                                StrucDir(tstr1,pds.dpathse,pds.spaths); // Test if RPCLAPYYMMDD structure exists for current time 
-                                                                                // if not create necessary directories.
-                                                                                
-                                                                                // Replace - in CCYY-MM-DD by null terminations
-                                                                                // So we can convert date from CCYY-MM-DD
-                                                                                // into YYMMDD
-                                                                                
-                                                                                tstr1[4]='\0'; 
-                                                                                tstr1[7]='\0'; 
-                                                                                
-                                                                                // Get higest alphanumeric value in filenames in dpathse matching pattern  "RPCLAPYYMM*_*_*S.LBL"
-                                                                                // This causes the alphanum value to restart at zero everynew day..
-                                                                                // (Any matching days from previous runs are not overwritten until alphanum wraps..
-                                                                                //  but that means identical data are stored twice in the same data set and that should not be done)
-                                                                                //
-                                                                                sprintf(tstr3,"RPCLAP%s%s*_*_*S.LBL",&tstr1[2],&tstr1[5]);
-                                                                                GetAlphaNum(alphanum_s,pds.spaths,tstr3); 
-                                                                                IncAlphaNum(alphanum_s);         // Increment alphanumeric value
-                                                                                
-                                                                                
-                                                                                // Put together file name
-                                                                                // -----------------------------------------------------------------------------------------------------------------------------------
-                                                                                // 000000000011111111112222222
-                                                                                // 012345678901234567890123456.012
-                                                                                // RPCLAPYYMMDD-2Z7S-RDB14NSXX.EXT 
-                                                                                // This is a 27.3 file name and it's accepted in PDS3
-                                                                                // Currently we have 2 unused characters..
-                                                                                
-                                                                                sprintf(tstr2,"RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",&tstr1[2],&tstr1[5],&tstr1[8],alphanum_s,curr.sensor,curr.afilter,tm_rate); // Compile product ID	  
-                                                                                
-                                                                                if(param_type==ADC20_PARAMS) tstr2[16]='T'; // Set to [T]wenty bit ADC:s (or [S]ixteen bit)
-                                                                                if(calib) tstr2[18]='C';                    // Set to [C]alibrated archive
-                                                                                if(curr.bias_mode==E_FIELD)  tstr2[19]='E'; // Set to E-Field
-                                                                                if(param_type==SWEEP_PARAMS) tstr2[20]='S'; // Indicate [B]ias or [S]weep
-                                                                                
-                                                                                strcpy(lbl_fname,tstr2);              // Save prod id as label filename
-                                                                                strcpy(tab_fname,tstr2);              // Save prod id as table filename
-                                                                                strcat(lbl_fname,".LBL");             // Add .LBL extension
-                                                                                strcat(tab_fname,".TAB");             // Add .TAB extension
-                                                                                
-                                                                                sprintf(prod_id,"\"%s\"",tstr2);         // Add PDS quotes ".." 
-                                                                                SetP(&comm,"PRODUCT_ID",prod_id,1);     // Set PRODUCT ID in common PDS parameters
-                                                                                
-                                                                                sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                                                SetP(&comm,"FILE_NAME",tstr1,1);     // Set filename in common PDS parameters
-                                                                                
-                                                                                sprintf(tstr1,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                                                SetP(&comm,"^TABLE",tstr1,1);        // Set link to table in common PDS parameters
-                                                                                
-                                                                                
-                                                                                curr.factor=0.0; // Init
-                                                                                // Compute stop time of current sequence
-                                                                                if(param_type==SWEEP_PARAMS)
-                                                                                {
-                                                                                    // (una  sensore at one time for swiping you sii!)
-                                                                                    curr.factor=sw_info.sweep_dur_s/SAMP_FREQ_ADC16/samples; // Factor for sweeps!
-                                                                                }
-                                                                                else
-                                                                                {
-                                                                                    
-                                                                                    if(param_type!=ADC20_PARAMS)
-                                                                                    {
-                                                                                        if(dsa16_p1==-1) // -1 here => Probably generic macro
-                                                                                        {
-                                                                                            dsa16_p1=1;
-                                                                                            CPrintf("    Warning, parameter not resolved probably generic macro, using default no resampling on ADC16 P1\n");
-                                                                                        }
-                                                                                        
-                                                                                        if(dsa16_p2==-1) // -1 here => Probably generic macro
-                                                                                        {
-                                                                                            dsa16_p2=1;
-                                                                                            CPrintf("    Warning, parameter not resolved probably generic macro, using default no resampling on ADC16 P2\n");
-                                                                                        }
-                                                                                    }
-                                                                                    
-                                                                                    switch(curr.sensor)
-                                                                                    {
-                                                                                        case SENS_P1:
-                                                                                            if(param_type==ADC20_PARAMS)
-                                                                                                curr.factor=a20_info.resampling_factor/SAMP_FREQ_ADC20; 
-                                                                                            else
-                                                                                                curr.factor=dsa16_p1/SAMP_FREQ_ADC16;
-                                                                                            break;
-                                                                                        case SENS_P2:
-                                                                                        case SENS_P1P2: // In this case dsa16_p1==dsa16_p2
-                                                                                            if(param_type==ADC20_PARAMS)
-                                                                                                curr.factor=a20_info.resampling_factor/SAMP_FREQ_ADC20; 
-                                                                                            else
-                                                                                                curr.factor=dsa16_p2/SAMP_FREQ_ADC16; 
-                                                                                            break;
-                                                                                        default:
-                                                                                            curr.factor=1/SAMP_FREQ_ADC16; 
-                                                                                            break;
-                                                                                    } 
-                                                                                }
-                                                                                curr.stop_time=curr.seq_time+(samples-1)*curr.factor; // Calculate current stop time
-                                                                                
-                                                                                Raw2OBT_Str(curr.stop_time,pds.SCResetCounter,tstr5); // Compile OBT string and add reset number of S/C clock
-                                                                                
-                                                                                SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",tstr5,1);
-                                                                                
-                                                                                DecodeRawTime(curr.stop_time,tstr5,0);  // Decode raw time into PDS compliant UTC time
-                                                                                CPrintf("    Current sequence stop  time is: %s\n",tstr5); 
-                                                                                SetP(&comm,"STOP_TIME",tstr5,1);         // Update STOP_TIME in common PDS parameters 		     
-                                                                            }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
-                                                            }   // if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)
-                                                        }   // if(!macro_status)
-                                                        else // No macro description fits! And no anomaly overide exists! Derive all that we can without it! and send it to log file 
-                                                        {  // Problematic data is stored in UnAccepted_Data directory
-                                                            CPrintf("    No macro description fits, data will be stored in the UnAccepted_Data directory\n");
-                                                            if(param_type==NO_PARAMS)
-                                                            {
-                                                                if(dsa16_p1==-1) 
-                                                                {
-                                                                    dsa16_p1=1; // Conversion errors use default 1
-                                                                    CPrintf("    Warning, parameter not resolved, using default no resampling on ADC16 P1\n");
-                                                                }
-                                                                
-                                                                if(dsa16_p2==-1) 
-                                                                {
-                                                                    dsa16_p2=1; // Conversion errors use default 1 
-                                                                    CPrintf("    Warning, parameter not resolved, using default no resampling on ADC16 P2\n");
-                                                                }
-                                                            }
-                                                            
-                                                            Raw2OBT_Str(rstime,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
-                                                            
-                                                            SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr5,1);
-                                                            CPrintf("    OBT time start of measurement cycle: %s \n",tstr5);
-                                                            
-                                                            if(param_type==NO_PARAMS) 
-                                                            {
-                                                                if(curr.sensor==SENS_P1)
-                                                                    CPrintf("    Duration P1 %d/[samples]\n",dsa16_p1*samples);
-                                                                
-                                                                if(curr.sensor==SENS_P2)
-                                                                    CPrintf("    Duration P2 %d/[samples]\n",dsa16_p2*samples);
-                                                            }
-                                                            
-                                                            if(param_type==SWEEP_PARAMS)
-                                                            {
-                                                                
-                                                                if(curr.sensor==SENS_P1)
-                                                                    CPrintf("    Duration P1 %d (sweep)\n",sw_info.sweep_dur_s);
-                                                                
-                                                                if(curr.sensor==SENS_P2)
-                                                                    CPrintf("    Duration P2 %d (sweep)\n",sw_info.sweep_dur_s);
-                                                            }
-                                                            
-                                                            if(param_type==ADC20_PARAMS)
-                                                            { 
-                                                                if(curr.sensor==SENS_P1)
-                                                                    CPrintf("    Duration P1\n",samples*a20_info.resampling_factor);
-                                                                
-                                                                if(curr.sensor==SENS_P1)
-                                                                    CPrintf("    Duration P2\n",samples*a20_info.resampling_factor);
-                                                                
-                                                                if(curr.sensor==SENS_P1P2)
-                                                                    CPrintf("    Duration P1 & P2\n",samples*a20_info.resampling_factor);
-                                                            }
-                                                        }   // if(!macro_status) ... else ...
-                                                        
-                                                        // Downsampling values should be resolved at this point so lets put them in!
-                                                        // This part is always executed if we have a macro description or not.
-                                                        if(param_type==NO_PARAMS || param_type==SWEEP_PARAMS)
-                                                        {
-                                                            if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
-                                                                InsertTopQV(&dict,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",dsa16_p1);
-                                                            
-                                                            if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
-                                                                InsertTopQV(&dict,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",dsa16_p2);
-                                                        }
-                                                        state=S15_WRITE_PDS_FILES; // Change state
+                                                        }		  
+                                                    }
+                                                    
+                                                    if(length==8950 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
+                                                    {
+                                                        // Brute force macro settings!
+                                                        macro_id=0x205; // Set macro id
+                                                        state=S06_GET_MACRO_DESC;  // Break out of switch, and get macro description
                                                         break;
-                                                        
-                                                        case S15_WRITE_PDS_FILES:
-                                                            DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
-                                                            
-                                                            //------------------------------------------------------------------------
-                                                            // Erik P G Johansson 2015-03-25: Added functionality for excluding data.
-                                                            // 
-                                                            // Determine whether to include/exclude entire TAB&LBL file pair.
-                                                            // Can be compared with the (CALIB) macro exclusion check.
-                                                            //------------------------------------------------------------------------
-                                                            int excludeData = 0;   // Boolean flag.
-                                                            if (dataExcludeTimes != NULL) {
-                                                                if (DecideWhetherToExcludeData(dataExcludeTimes, &comm, &excludeData)) {
-                                                                    YPrintf("DecodeScience: Error when trying to determine whether to exclude data. - Keeps data by default.\n");
-                                                                    printf( "DecodeScience: Error when trying to determine whether to exclude data. - Keeps data by default.\n");
-                                                                } else {
-                                                                    if (excludeData) {
-                                                                        CPrintf("DecodeScience: Excluding data.\n");  // Really superfluous printout since DecideWhetherToExcludeData also prints.
-                                                                        ClearDictPDS(&dict);   // Clear dict     since that is what the macro CALIB macro exclusion code does.
-                                                                        state=S04_GET_ID_CODE; // Set this state since that is what the macro CALIB macro exclusion code does.
-                                                                        break;
-                                                                    }
-                                                                }
-                                                            }
-                                                            
-                                                            // ------------------------------------------------------------------------------------
-                                                            // Look for the existence of a macro ID before checking for (CALIB) macros to exclude.
-                                                            // Early macros (before the first flight software update in space) did not have macro
-                                                            // descriptions/IDs since that functionality had not been implemented yet.
-                                                            // /Erik P G Johansson summarizing Reine Gill 2015-03-26.
-                                                            // ------------------------------------------------------------------------------------
-                                                            if(!macro_status) // IF we have a macro description (macro_status==0 means we have).
+                                                    }
+                                                    
+                                                    if(length==1024 && id_code==E_P1_RAW_16BIT_D4)
+                                                    {
+                                                        // Brute force macro settings!
+                                                        macro_id=0x207; // Set macro id
+                                                        state=S06_GET_MACRO_DESC;  // Break out of switch, and get macro description
+                                                        break;
+                                                    }
+                                                    
+                                                    finger_printing=0;
+                                                }   // if (macro_status) 
+                                                
+                                                // We are in a position of choices here!
+                                                //--------------------------------------
+                                                // The normal operation of the instrument is by running
+                                                // a macro that returns a macro id. But we can also run
+                                                // the instrument from the old prom macros that don't
+                                                // return a macro id. In the first case we can derive a
+                                                // lot of information from the macro description stored
+                                                // here on earth. In the second case we have to derive
+                                                // everything from the parameters in the science stream 
+                                                // and the data ID tag. So far so good! But in the case
+                                                // there both exist we have to choose where to derive the
+                                                // information from. I'll try to derive as little as possible
+                                                // and use what's in the science stream. But some things need
+                                                // to be derived, the data ID code might be a bit safer to
+                                                // use than the info from the macro since it's derived in 
+                                                // fewer steps!
+                                                
+                                                
+                                                CPrintf("    Parsing ID Code: %s\n",IDList[id_code]); 
+                                                
+                                                // To keep the information coming as close to the  source as possible 
+                                                // we derive info from the ID code string directly. 
+                                                // We do not compile information in a secondary file..
+                                                // that would give two sources of info and consistency problems could occur.
+                                                // Note: The ID strings are at this moment fixed and will not change
+                                                //       the amount of id strings may however increase!
+                                                
+                                                dsa16_p1 = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
+                                                dsa16_p2 = -1;   // Indicate that "down sampl 16 bit sensor 2" value is not resolved
+                                                
+                                                if((tp=strstr(IDList[id_code],"16BIT_D"))!=NULL)
+                                                {
+                                                    if(curr.sensor==SENS_P1) {
+                                                        if(!sscanf(&tp[7],"%d",&dsa16_p1)) {
+                                                            dsa16_p1=-1; // Error in conversion
+                                                        }
+                                                    }
+                                                    
+                                                    if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
+                                                    {
+                                                        if(!sscanf(&tp[7],"%d",&dsa16_p2)) {
+                                                            dsa16_p2=-1; // Error in conversion
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                curr.bias_mode=DENSITY; // Assume density mode
+                                                if((tp=strstr(IDList[id_code],"E_"))!=NULL) // Check if E-FIELD mode
+                                                {
+                                                    curr.bias_mode=E_FIELD;
+                                                }
+                                                
+                                                
+                                                // 20 Bit ADC data is interleaved if both P1 and P2 are used. If full 20 bit:s are used
+                                                // We have for n samples
+                                                //
+                                                // S1  S1  S2  S2  S3  S3       Sn  Sn  |S1S1S2S2S3S3S4S4...SnSn
+                                                // ------------------------------------------------------------------------------------
+                                                // PSE1PSE2PSE1PSE2PSE1PSE2.....PSE1PSE2|P1P2P1P2P1P2P1P2...P1P2
+                                                //
+                                                //
+                                                // PSE1 = 16 Bits probe/sensor 1
+                                                // PSE2 = 16 Bits probe/sensor 2
+                                                //
+                                                // P1   = 4 Bits probe/sensor 1
+                                                // P2   = 4 Bits probe/sensor 2
+                                                //
+                                                // Now we have 16+4 is 20 bit, for truncated 20 bit adc:s we only keep the 16 bits!
+                                                // 
+                                                // And number of samples is now the byte length multiplied by a factor of:
+                                                // 
+                                                // Full  p1 & p2: 1/5
+                                                // Trunc p1 & p2: 1/4
+                                                // Full p1      : 2/5
+                                                // Trunc p1     : 1/2
+                                                // Full p2      : 2/5
+                                                // Trunc p2     : 1/2
+                                                //
+                                                data_type=D16; // Set data type to default 16 bit
+                                                if(param_type==ADC20_PARAMS) // Test if 20 Bit ADC:s (ADC20) are involved!
+                                                {
+                                                    switch(curr.sensor)
+                                                    {
+                                                        case SENS_P1:	
+                                                            if(a20_info.adc20_control & 0x08)
                                                             {
-                                                                if(calib)
-                                                                {
-                                                                    for(i=0;i<nexcl;i++)
-                                                                    {
-                                                                        if(exclude[i]==macro_id) // Exclude current macro..in case of calibration macro
-                                                                        {
-                                                                            CPrintf("Excluding calibration macro: 0x%04x\n",macro_id);
-                                                                            state=S04_GET_ID_CODE;
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                    if(state==S04_GET_ID_CODE) break; // Double break :)
-                                                                }
-                                                                
-                                                                // WRITE TO INDEX.TAB
-                                                                //
-                                                                // Example row:
-                                                                //000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000111111111111111111111111111111111111111111111111111111
-                                                                //000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999000000000011111111112222222222333333333344444444444444
-                                                                //123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234566667777
-                                                                //"DATA/CALIBRATED/2003/JAN/D16/ ","RPCLAP030116_01NS_REB20BS.LBL","2004-04-15T12:50:22","2003-01-16T08:20:59.207","2003-01-16T08:20:59.316","MCID0x212"<CR><LF>
-                                                                
-                                                                FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);    // Get macro ID
-                                                                FindP(&comm,&property2,"PRODUCT_CREATION_TIME",1,DNTCARE); // Get product creation time
-                                                                //FindP(&comm,&property3,"START_TIME",1,DNTCARE);          // Get start time
-                                                                //FindP(&comm,&property4,"STOP_TIME",1,DNTCARE);           // Get stop time
-                                                                
-                                                                
-                                                                // Find position there the root of the PDS archive starts
-                                                                ti1=strlen(pds.apathpds); 
-                                                                
-                                                                
-                                                                if(param_type==SWEEP_PARAMS)
-                                                                {
-                                                                    // Below we compensate for a well known bug during sweeping.
-                                                                    // All sweeps start with two initial plateaus, with the same width as the 
-                                                                    // plateaus in the sweep part itself. And at the previous bias voltage.
-                                                                    // Now the first initial plateau has a corrupted length that is varying.
-                                                                    // We could simply truncate it off! But instead we figure out by how
-                                                                    // much it varies! Everything to get the correct current vector!
-                                                                    // Further more one sample is always missing at the end of a sweep!
-                                                                    
-                                                                    if(curr.sensor==SENS_P1)
-                                                                        samp_plateau=sw_info.plateau_dur/dsa16_p1; // Samples on one plateau
-                                                                        else
-                                                                            samp_plateau=sw_info.plateau_dur/dsa16_p2; // Samples on one plateau
-                                                                            
-                                                                            ini_samples=samples+1-(sw_info.steps+1)*samp_plateau; // Initial samples before sweep starts
-                                                                }
-                                                                
-                                                                // WRITE TO DATA LABEL FILE .LBL, TABLE FILE .TAB, and add to INDEX.TAB
-                                                                if(data_type!=D20 && data_type!=D20T)
-                                                                {
-                                                                    sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                                    ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
-                                                                    
-                                                                    if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,0,ini_samples,param_type)>=0)
-                                                                    { WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,0,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
-                                                                        
-                                                                        strncpy(tstr2,lbl_fname,29);
-                                                                        tstr2[25]='\0';
-                                                                        
-                                                                        //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
-                                                                        WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                                    }
-                                                                }
-                                                                else // Split interleaved 20 Bit data into two pairs of label and tab files
-                                                                {
-                                                                    lbl_fname[21]='1';
-                                                                    tab_fname[21]='1';
-                                                                    prod_id[22]='1';
-                                                                    
-                                                                    sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                                    ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
-                                                                    
-                                                                    SetP(&comm,"PRODUCT_ID",prod_id,1);     // Change PRODUCT ID in common PDS parameters
-                                                                    
-                                                                    
-                                                                    // Name changed
-                                                                    sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                                    SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters		  
-                                                                    sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                                    SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
-                                                                    
-                                                                    if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,1,ini_samples,param_type)>=0)
-                                                                    {
-                                                                        WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,1,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);  
-                                                                        
-                                                                        strncpy(tstr2,lbl_fname,29);
-                                                                        tstr2[25]='\0';
-                                                                        
-                                                                        //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
-                                                                        WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                                    }
-                                                                    lbl_fname[21]='2';
-                                                                    tab_fname[21]='2';
-                                                                    prod_id[22]='2';
-                                                                    
-                                                                    
-                                                                    sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                                    ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters
-                                                                    
-                                                                    SetP(&comm,"PRODUCT_ID",prod_id,1);               // Change PRODUCT ID in common PDS parameters
-                                                                    
-                                                                    
-                                                                    // Name changed
-                                                                    sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                                    SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters		  
-                                                                    sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                                    SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
-                                                                    
-                                                                    if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,2,ini_samples,param_type)>=0)
-                                                                    {
-                                                                        WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,2,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
-                                                                        
-                                                                        strncpy(tstr2,lbl_fname,29);
-                                                                        tstr2[25]='\0';
-                                                                        
-                                                                        //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
-                                                                        WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                                    }
-                                                                }
-                                                                
-                                                                ClearDictPDS(&dict);   // Clear dictionary PDS LAP parameters, common parameters are not cleared until a new measurement cycle beginns
-                                                            }   // if(!macro_status)
+                                                                samples=length*2/5; // Sensor P1 only full 20 Bit ADC
+                                                                data_type=D201;
+                                                            }
                                                             else
                                                             {
-                                                                // At this point a macro description could not be found.
-                                                                // If finger printing was enabled it must have failed.
-                                                                // Anomally correction must also have failed at this point.
-                                                                // Data will be stored in the UnAccepted_Data directory
-                                                                // and requires manual attention.
-                                                                YPrintf("Macro description missing, data stored in UnAccepted_Data\n"); // Put a note in the system log
-                                                                CPrintf("    Dump data to %s\n",pds.uapath); // No macro description dump to unaccepted files
-                                                                
-                                                                if(pds.uaccpt_fd==NULL)
+                                                                // Sensor P1 only truncated 20 Bit ADC
+                                                                data_type=D201T;
+                                                                samples=length/2;   
+                                                            }
+                                                            break;
+                                                        case SENS_P2:
+                                                            if(a20_info.adc20_control & 0x04) 
+                                                            {
+                                                                samples=length*2/5; // Sensor P2 only full 20 Bit ADC
+                                                                data_type=D202;
+                                                            }
+                                                            else
+                                                            {
+                                                                // Sensor P2 only truncated 20 Bit ADC
+                                                                data_type=D202T;
+                                                                samples=length/2;   
+                                                            }
+                                                            break;
+                                                        case SENS_P1P2: 
+                                                            if((a20_info.adc20_control & 0x0C)==0x0C) 
+                                                            {
+                                                                samples=length/5; // Full 20 Bit ADC:s P1 and P2
+                                                                data_type=D20;
+                                                            }
+                                                            else
+                                                            {
+                                                                // Truncated 20 Bit ADC:s P1 and P2
+                                                                data_type=D20T; 
+                                                                samples=length/4; 
+                                                            }
+                                                            break;
+                                                        default:
+                                                            break;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    samples=length/2; // Number of samples then 20 Bit ADC:s are not used and no compression. 
+                                                    if(id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) // If log compression is used
+                                                    {
+                                                        samples=length; // Log compression used
+                                                    }
+                                                }
+                                                
+                                                sprintf(tstr1,"%d",samples);
+                                                SetP(&comm,"FILE_RECORDS",tstr1,1); // Set number of records (in data table file) in common PDS parameters
+                                                
+                                                CPrintf("    Number of samples current record: %d\n",samples);
+                                                strcpy(tstr1,IDList[id_code]);      // Get ID code name
+                                                TrimWN(tstr1);                      // Remove trailing whitespace
+                                                sprintf(tstr2,"\"%s\"",tstr1);      // Add PDS quotes ".." 
+                                                SetP(&comm,"DESCRIPTION",tstr2,1); // Update DESCRIPTION in common PDS parameters
+                                                
+                                                if(!macro_status) // If a macro description exists
+                                                {
+                                                    //Find subheader for measurement sequence meas_seq
+                                                    if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)   // Set property1. Read many times afterwards with FindB(..).
+                                                    {
+                                                        if (debug>0) {
+                                                            printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);   // DEBUG
+                                                        }
+                                                        
+                                                        // Find downsampling value probe 1 in macro and if no id value exists use macro desc. value
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",0)>0)
+                                                        {
+                                                            sscanf(property2->value,"\"%x\"",&val);
+                                                            if(dsa16_p1==-1 || macro_priority) { // Value not resolved from ID or macro has high priority use macro value instead
+                                                                dsa16_p1=val;
+                                                            }
+                                                            
+                                                            if(dsa16_p1!=val) {
+                                                                CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");
+                                                            }
+                                                            //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p1);
+                                                        }
+                                                        
+                                                        // Find downsampling value probe 2 in macro and if no id value exists use macro desc. value
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",DNTCARE)>0)
+                                                        {
+                                                            sscanf(property2->value,"\"%x\"",&val);
+                                                            if(dsa16_p2==-1 || macro_priority)  { // Value not resolved from ID  or macro has high priority use macro value instead
+                                                                dsa16_p2=val;
+                                                            }
+                                                            
+                                                            if(dsa16_p2!=val && !macro_priority)  { // Print mismatch warning..only if macro desc. has low priority
+                                                                CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");
+                                                            }
+                                                            //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p2);
+                                                        }
+                                                        
+                                                        // Test if digital filter was turned on for probe 1, if so add information to dictionary
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",DNTCARE)>0)
+                                                        {
+                                                            if(!strcmp(property2->value,"\"ENABLED\""))
+                                                            {
+                                                                if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
                                                                 {
-                                                                    if(GetUnacceptedFName(tstr1)<0) // Get a unnaccepted filename
-                                                                        CPrintf("    Can't create filename for unaccepted data, uses default\n");
-                                                                    else 
-                                                                        CPrintf("    UnAccepted file: %s\n",tstr1);
-                                                                    strcpy(tstr2,pds.uapath);
-                                                                    strcat(tstr2,tstr1);
-                                                                    if((pds.uaccpt_fd=fopen(tstr2,"w"))==NULL)
-                                                                        CPrintf("    Couldn't open data file for unaccepted data?\n");
-                                                                }
-                                                                
-                                                                if(pds.uaccpt_fd!=NULL)
-                                                                {
-                                                                    val=ct->fill-1;
-                                                                    if(val>0)
-                                                                    {
-                                                                        GetBuffer(ct,buff,val); 
-                                                                        fwrite(buff,1,val,pds.uaccpt_fd);
-                                                                        fflush(pds.uaccpt_fd); // Flush it!
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_CUTOFF",0)>0) {
+                                                                        InsertTopK(&dict,property2->name,property2->value);
+                                                                    }
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",0)>0) {
+                                                                        InsertTopK(&dict,property2->name,property2->value);
                                                                     }
                                                                 }
-                                                            }    // if (!macro_status) ... else ...
-                                                            state=S04_GET_ID_CODE;
-                                                            break;     
-                                                            default:
-                                                                DispState(state,"STATE = UNKNOWN\n");
+                                                            }
+                                                        }
+                                                        
+                                                        // Test if digital filter was turned on for probe 2, if so add information to dictionary
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_STATUS",DNTCARE)>0)
+                                                        {
+                                                            if(!strcmp(property2->value,"\"ENABLED\""))
+                                                            {
+                                                                if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
+                                                                {
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_CUTOFF",0)>0) {
+                                                                        InsertTopK(&dict,property2->name,property2->value);
+                                                                    }
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_STATUS",0)>0) {
+                                                                        InsertTopK(&dict,property2->name,property2->value);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        curr.afilter=0; // Assume no analog filter
+                                                        
+                                                        //===============================================================================================
+                                                        // Code referring to P1.
+                                                        //===============================================================================================
+                                                        
+                                                        if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
+                                                        {
+                                                            // If no sweeping and current sensor is sensor 1 or sensor 1 and 2 check the bias mode for sensor 1
+                                                            if(param_type!=SWEEP_PARAMS)
+                                                            {
+                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_BIAS_MODE",DNTCARE)>0)
+                                                                {
+                                                                    if(curr.bias_mode==E_FIELD) // Current mode according to ID is E-FIELD
+                                                                    {
+                                                                        // Is it so according to macro description, or macro description has high priority
+                                                                        if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
+                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, Lets set it
+                                                                        } else {
+                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
+                                                                        }
+                                                                        
+                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // settings outside of macros.
+                                                                        if(macro_id!=curr.old_macro) 
+                                                                        {
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_IBIAS1",DNTCARE)>0) // Find current bias
+                                                                            {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                                if(!sscanf(property2->value,"\"%x\"",&curr.ibias1))
+                                                                                {
+                                                                                    CPrintf("    Invalid fix current bias p1, using default 0x7f\n");
+                                                                                    curr.ibias1=0x007f;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            InsertTopQV(&dict,"ROSETTA:LAP_IBIAS1",curr.ibias1); // No macro change keep old bias
+                                                                        }
+                                                                        
+                                                                        if(param_type!=ADC20_PARAMS)
+                                                                        {
+                                                                            // Find duration ADC16 E-Field
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_EFIELD_FIX_DURATION",DNTCARE)>0) {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    if(curr.bias_mode==DENSITY)   // Current mode according to ID is DENSITY
+                                                                    {
+                                                                        // Is it so according to macro description, or macro description has high priority
+                                                                        if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority) {
+                                                                            InsertTopK(&dict,property2->name,property2->value);// Yes, Lets set it
+                                                                        } else {
+                                                                            InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
+                                                                        }
+                                                                        
+                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // settings outside of macros.
+                                                                        if(macro_id!=curr.old_macro)
+                                                                        {
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_VBIAS1",DNTCARE)>0) // Find voltage bias
+                                                                            {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                                if(!sscanf(property2->value,"\"%x\"",&curr.vbias1))
+                                                                                {
+                                                                                    CPrintf("    Invalid fix voltage bias p1, using default 0x7f\n");
+                                                                                    curr.vbias1=0x007f;
+                                                                                }
+                                                                                if (debug>0) {
+                                                                                    printf("    Macro: Set fix voltage bias VBIAS1 = %04x (curr.vbias1; hex TM units)\n", curr.vbias1);  // DEBUG
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            InsertTopQV(&dict,"ROSETTA:LAP_VBIAS1",curr.vbias1); // No macro change keep old bias
+                                                                        }
+                                                                        
+                                                                        
+                                                                        if(param_type!=ADC20_PARAMS)
+                                                                        {
+                                                                            // Find duration ADC16 Density
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_DENSITY_FIX_DURATION",DNTCARE)>0) {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            
+                                                            // Find LAP_P1_ADC16_FILTER
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_FILTER",DNTCARE)>0) 
+                                                            {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                sscanf(property2->value,"\"%d\"",&curr.afilter);
+                                                            }
+                                                            //  Find LAP P1_RX_OR_TX
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_RX_OR_TX",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_P1_STRATEGY_OR_RANGE
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_STRATEGY_OR_RANGE",DNTCARE)>0) 
+                                                            {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                strncpy(curr.gain1,property2->value,16);
+                                                            }
+                                                            
+                                                            // Find LAP_P1_RANGE_DENS_BIAS "+-32" or "+-5"
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_RANGE_DENS_BIAS",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_P1_ADC16 mode
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_P1_ADC20 mode
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC20",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_FEEDBACK_P1
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_FEEDBACK_P1",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                        }   // if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
+                                                        
+                                                        //===============================================================================================
+                                                        // Code referring to P2.
+                                                        //===============================================================================================
+                                                        
+                                                        if (debug>0) {   // DEBUG
+                                                            printf("    property1: %s = \"%s\"\n", property1->name, property1->value);
+                                                            printf("    param_type = %i\n", param_type);
+                                                        }
+                                                        if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
+                                                        {
+                                                            if(param_type!=SWEEP_PARAMS)
+                                                            {
+                                                                if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_BIAS_MODE",DNTCARE)>0)
+                                                                {
+                                                                    if(curr.bias_mode==E_FIELD) // Current mode according to ID is E-FIELD
+                                                                    {
+                                                                        // Is it so according to macro description, or macro description has high priority
+                                                                        if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
+                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, Lets set it
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
+                                                                        }
+                                                                        
+                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // settings outside of macros.
+                                                                        if(macro_id!=curr.old_macro) 
+                                                                        {
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_IBIAS2",DNTCARE)>0) // Find current bias
+                                                                            {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                                if(!sscanf(property2->value,"\"%x\"",&curr.ibias2))
+                                                                                {
+                                                                                    CPrintf("    Invalid fix current bias p2, using default 0x7f\n");
+                                                                                    curr.ibias2=0x007f;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        else
+                                                                        {                                                                                        
+                                                                            InsertTopQV(&dict,"ROSETTA:LAP_IBIAS2",curr.ibias2); // No macro change keep old bias
+                                                                        }
+                                                                        
+                                                                        if(param_type!=ADC20_PARAMS)
+                                                                        {
+                                                                            // Find duration ADC16 E-Field
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_EFIELD_FIX_DURATION",DNTCARE)>0) 
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    if(curr.bias_mode==DENSITY)   // Current mode according to ID is DENSITY
+                                                                    {
+                                                                        if (debug>0) {   // DEBUG
+                                                                            printf("    property2: %s = \"%s\"\n", property2->name, property2->value);
+                                                                            printf("    macro_priority = %i\n", macro_priority);
+                                                                        }
+                                                                        // Is it so according to macro description, or macro description has high priority
+                                                                        if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority) {                                                                                        
+                                                                            InsertTopK(&dict,property2->name,property2->value);// Yes, Lets set it
+                                                                        }
+                                                                        else {
+                                                                            InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
+                                                                        }
+                                                                        
+                                                                        //----------------------------------------------------------------------------------------------------
+                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // settings outside of macros. /Unknown, before 2015-04-07
+                                                                        //----------------------------------------------------------------------------------------------------
+                                                                        // The macro 515 that was uploaded to Rosetta is malfunctioning and appears to use two different values
+                                                                        // for VBIAS2 in the macro loop despite that this should never happen.
+                                                                        // For the pds code to be able to change the bias during every macro loop, the code has to specificly
+                                                                        // permit macro 515 to set VBIAS2 in _every_ macro loop, not just the first one.
+                                                                        // NOTE: Macro 515 is also on the list of macros that can not receive extra, external bias settings
+                                                                        // ("kommenderingar"). See WritePTabFile, "if (extra_bias_setting) ..." .
+                                                                        // NOTE: One could of course make the same exception for VBIAS1 to preserve the "symmetry between
+                                                                        // the probes" but that is unnecessary since VBIAS1 is constant throughout the macro loop as intended.
+                                                                        // /Erik P G Johansson, 2015-04-07
+                                                                        //----------------------------------------------------------------------------------------------------
+                                                                        //if(macro_id!=curr.old_macro)
+                                                                        if ((macro_id!=curr.old_macro) || macro_id==0x515)
+                                                                        {
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_VBIAS2",DNTCARE)>0) // Find voltage bias
+                                                                            {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                                if(!sscanf(property2->value,"\"%x\"",&curr.vbias2))
+                                                                                {
+                                                                                    CPrintf("    Invalid fix voltage bias p2, using default 0x7f\n");
+                                                                                    curr.vbias2=0x007f;
+                                                                                }
+                                                                                if (debug>0) {
+                                                                                    printf("    Macro: Set fix voltage bias VBIAS2 = %04x (curr.vbias2; hex TM units)\n", curr.vbias2);  // DEBUG
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            InsertTopQV(&dict,"ROSETTA:LAP_VBIAS2",curr.vbias2); // No macro change keep old bias
+                                                                        }
+                                                                        
+                                                                        
+                                                                        if(param_type!=ADC20_PARAMS)
+                                                                        { 
+                                                                            // Find duration ADC16 Density
+                                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_DENSITY_FIX_DURATION",DNTCARE)>0) {
+                                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            
+                                                            // Find LAP_P2_ADC16_FILTER
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_FILTER",DNTCARE)>0) 
+                                                            {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                sscanf(property2->value,"\"%d\"",&curr.afilter);
+                                                            }
+                                                            //  Find LAP P2_RX_OR_TX
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_RX_OR_TX",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_P2_STRATEGY_OR_RANGE
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_STRATEGY_OR_RANGE",DNTCARE)>0) 
+                                                            {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                                strncpy(curr.gain2,property2->value,16);
+                                                            }
+                                                            
+                                                            // Find LAP_P2_RANGE_DENS_BIAS "+-32" or "+-5"
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_RANGE_DENS_BIAS",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_P2_ADC16 mode
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_P2_ADC20 mode
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC20",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            // Find LAP_FEEDBACK_P2
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_FEEDBACK_P2",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                        }   // if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
+                                                        
+                                                        //===============================================================================================
+                                                        
+                                                        // If transmitter is turned on
+                                                        if(curr.transmitter==SENS_P1 || curr.transmitter==SENS_P2)
+                                                        {      
+                                                            
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_STATUS",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_AMPLITUDE",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                            
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_FREQUENCY",DNTCARE)>0) {
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            }
+                                                        }
+                                                        
+                                                        // If we are currently transmitting on P1
+                                                        if(curr.transmitter==SENS_P1)
+                                                        {
+                                                            //  Find LAP P1_RX_OR_TX
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_RX_OR_TX",DNTCARE)>0) 
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                        }
+                                                        
+                                                        // If we are currently transmitting on P2
+                                                        if(curr.transmitter==SENS_P2)
+                                                        {
+                                                            //  Find LAP P2_RX_OR_TX
+                                                            if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_RX_OR_TX",DNTCARE)>0) 
+                                                                InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                        }
+                                                        
+                                                        // Find bootstrap
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_BOOTSTRAP",DNTCARE)>0) {
+                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                        }
+                                                        
+                                                        // Find DAC Oscillator
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_OSCILLATOR",DNTCARE)>0) {
+                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                        }
+                                                        
+                                                        // Find first occurrence of TM_RATE from start, if found set it in dictionary
+                                                        if(FindP(&macros[mb][ma],&property2,"ROSETTA:LAP_TM_RATE",1,DNTCARE)>0)   // Set property2.
+                                                        {
+                                                            InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
+                                                            
+                                                            tm_rate=property2->value[1]; // First char as telemetry rate (M)inimum,(N)ormal,(B)urst skipping quote character
+                                                            if(!strcmp(property2->value,"\"NONE\""))
+                                                                tm_rate='Z';            // And (Z)ero if no telemetry rate
+                                                        }
+                                                        
+                                                        if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
+                                                        {
+                                                            CPrintf("    %d sequence starts %d aqps from start of sequence\n",meas_seq,aqps_seq);
+                                                            curr.offset_time=aqps_seq*32.0;
+                                                            curr.seq_time=rstime+curr.offset_time;      // Calculate time of current sequence
+                                                            
+                                                            Raw2OBT_Str(curr.seq_time,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
+                                                            
+                                                            SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr1,1);
+                                                            
+                                                            DecodeRawTime(curr.seq_time,tstr1,0);   // Decode raw time into PDS compliant UTC time
+                                                            CPrintf("    Current sequence start time is: %s\n",tstr1); 
+                                                            SetP(&comm,"START_TIME",tstr1,1);        // Update START_TIME in common PDS parameters
+                                                            
+                                                            
+                                                            // Create data path for current day
+                                                            tstr1[10]='\0';                 // Truncate hh:mm:ss away and keep CCYY-MM-DD
+                                                            
+                                                            StrucDir(tstr1,pds.dpathse,pds.spaths); // Test if RPCLAPYYMMDD structure exists for current time 
+                                                            // if not create necessary directories.
+                                                            
+                                                            // Replace - in CCYY-MM-DD by null terminations
+                                                            // So we can convert date from CCYY-MM-DD
+                                                            // into YYMMDD
+                                                            
+                                                            tstr1[4]='\0'; 
+                                                            tstr1[7]='\0'; 
+                                                            
+                                                            // Get higest alphanumeric value in filenames in dpathse matching pattern  "RPCLAPYYMM*_*_*S.LBL"
+                                                            // This causes the alphanum value to restart at zero everynew day..
+                                                            // (Any matching days from previous runs are not overwritten until alphanum wraps..
+                                                            //  but that means identical data are stored twice in the same data set and that should not be done)
+                                                            //
+                                                            sprintf(tstr3,"RPCLAP%s%s*_*_*S.LBL",&tstr1[2],&tstr1[5]);
+                                                            GetAlphaNum(alphanum_s,pds.spaths,tstr3); 
+                                                            IncAlphaNum(alphanum_s);         // Increment alphanumeric value
+                                                            
+                                                            
+                                                            // Put together file name
+                                                            // -----------------------------------------------------------------------------------------------------------------------------------
+                                                            // 000000000011111111112222222
+                                                            // 012345678901234567890123456.012
+                                                            // RPCLAPYYMMDD-2Z7S-RDB14NSXX.EXT 
+                                                            // This is a 27.3 file name and it's accepted in PDS3
+                                                            // Currently we have 2 unused characters..
+                                                            
+                                                            sprintf(tstr2,"RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",&tstr1[2],&tstr1[5],&tstr1[8],alphanum_s,curr.sensor,curr.afilter,tm_rate); // Compile product ID	  
+                                                            
+                                                            if(param_type==ADC20_PARAMS) { tstr2[16]='T'; } // Set to [T]wenty bit ADC:s (or [S]ixteen bit)
+                                                            if(calib)                    { tstr2[18]='C'; } // Set to [C]alibrated archive
+                                                            if(curr.bias_mode==E_FIELD)  { tstr2[19]='E'; } // Set to E-Field
+                                                            if(param_type==SWEEP_PARAMS) { tstr2[20]='S'; } // Indicate [B]ias or [S]weep
+                                                            
+                                                            strcpy(lbl_fname,tstr2);              // Save prod id as label filename
+                                                            strcpy(tab_fname,tstr2);              // Save prod id as table filename
+                                                            strcat(lbl_fname,".LBL");             // Add .LBL extension
+                                                            strcat(tab_fname,".TAB");             // Add .TAB extension
+                                                            
+                                                            sprintf(prod_id,"\"%s\"",tstr2);         // Add PDS quotes ".." 
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);     // Set PRODUCT ID in common PDS parameters
+                                                            
+                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);     // Set filename in common PDS parameters
+                                                            
+                                                            sprintf(tstr1,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"^TABLE",tstr1,1);        // Set link to table in common PDS parameters
+                                                            
+                                                            
+                                                            curr.factor=0.0; // Init
+                                                            // Compute stop time of current sequence
+                                                            if(param_type==SWEEP_PARAMS)
+                                                            {
+                                                                // (una  sensore at one time for swiping you sii!)
+                                                                curr.factor=sw_info.sweep_dur_s/SAMP_FREQ_ADC16/samples; // Factor for sweeps!
+                                                            }
+                                                            else
+                                                            {
+                                                                
+                                                                if(param_type!=ADC20_PARAMS)
+                                                                {
+                                                                    if(dsa16_p1==-1) // -1 here => Probably generic macro
+                                                                    {
+                                                                        dsa16_p1=1;
+                                                                        CPrintf("    Warning, parameter not resolved probably generic macro, using default no resampling on ADC16 P1\n");
+                                                                    }
+                                                                    
+                                                                    if(dsa16_p2==-1) // -1 here => Probably generic macro
+                                                                    {
+                                                                        dsa16_p2=1;
+                                                                        CPrintf("    Warning, parameter not resolved probably generic macro, using default no resampling on ADC16 P2\n");
+                                                                    }
+                                                                }
+                                                                
+                                                                switch(curr.sensor)
+                                                                {
+                                                                    case SENS_P1:
+                                                                        if(param_type==ADC20_PARAMS)
+                                                                            curr.factor=a20_info.resampling_factor/SAMP_FREQ_ADC20; 
+                                                                        else
+                                                                            curr.factor=dsa16_p1/SAMP_FREQ_ADC16;
+                                                                        break;
+                                                                    case SENS_P2:
+                                                                    case SENS_P1P2: // In this case dsa16_p1==dsa16_p2
+                                                                        if(param_type==ADC20_PARAMS)
+                                                                            curr.factor=a20_info.resampling_factor/SAMP_FREQ_ADC20; 
+                                                                        else
+                                                                            curr.factor=dsa16_p2/SAMP_FREQ_ADC16; 
+                                                                        break;
+                                                                    default:
+                                                                        curr.factor=1/SAMP_FREQ_ADC16; 
+                                                                        break;
+                                                                } 
+                                                            }
+                                                            curr.stop_time=curr.seq_time+(samples-1)*curr.factor; // Calculate current stop time
+                                                            
+                                                            Raw2OBT_Str(curr.stop_time,pds.SCResetCounter,tstr5); // Compile OBT string and add reset number of S/C clock
+                                                            
+                                                            SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",tstr5,1);
+                                                            
+                                                            DecodeRawTime(curr.stop_time,tstr5,0);  // Decode raw time into PDS compliant UTC time
+                                                            CPrintf("    Current sequence stop  time is: %s\n",tstr5); 
+                                                            SetP(&comm,"STOP_TIME",tstr5,1);         // Update STOP_TIME in common PDS parameters 		     
+                                                        }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
+                                                    }   // if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)
+                                                }   // if(!macro_status)
+                                                else // No macro description fits! And no anomaly overide exists! Derive all that we can without it! and send it to log file 
+                                                {  // Problematic data is stored in UnAccepted_Data directory
+                                                    CPrintf("    No macro description fits, data will be stored in the UnAccepted_Data directory\n");
+                                                    if(param_type==NO_PARAMS)
+                                                    {
+                                                        if(dsa16_p1==-1) 
+                                                        {
+                                                            dsa16_p1=1; // Conversion errors use default 1
+                                                            CPrintf("    Warning, parameter not resolved, using default no resampling on ADC16 P1\n");
+                                                        }
+                                                        
+                                                        if(dsa16_p2==-1) 
+                                                        {
+                                                            dsa16_p2=1; // Conversion errors use default 1 
+                                                            CPrintf("    Warning, parameter not resolved, using default no resampling on ADC16 P2\n");
+                                                        }
+                                                    }
+                                                    
+                                                    Raw2OBT_Str(rstime,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
+                                                    
+                                                    SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr5,1);
+                                                    CPrintf("    OBT time start of measurement cycle: %s \n",tstr5);
+                                                    
+                                                    if(param_type==NO_PARAMS) 
+                                                    {
+                                                        if(curr.sensor==SENS_P1) {
+                                                            CPrintf("    Duration P1 %d/[samples]\n",dsa16_p1*samples);
+                                                        }
+                                                        if(curr.sensor==SENS_P2) {
+                                                            CPrintf("    Duration P2 %d/[samples]\n",dsa16_p2*samples);
+                                                        }
+                                                    }
+                                                    
+                                                    if(param_type==SWEEP_PARAMS)
+                                                    {                                                            
+                                                        if(curr.sensor==SENS_P1) {
+                                                            CPrintf("    Duration P1 %d (sweep)\n",sw_info.sweep_dur_s);
+                                                        }                                                            
+                                                        if(curr.sensor==SENS_P2) {
+                                                            CPrintf("    Duration P2 %d (sweep)\n",sw_info.sweep_dur_s);
+                                                        }
+                                                    }
+                                                    
+                                                    if(param_type==ADC20_PARAMS)
+                                                    { 
+                                                        if(curr.sensor==SENS_P1) {
+                                                            CPrintf("    Duration P1\n",samples*a20_info.resampling_factor);
+                                                        }                                                            
+                                                        if(curr.sensor==SENS_P1) {
+                                                            CPrintf("    Duration P2\n",samples*a20_info.resampling_factor);
+                                                        }                                                            
+                                                        if(curr.sensor==SENS_P1P2) {
+                                                            CPrintf("    Duration P1 & P2\n",samples*a20_info.resampling_factor);
+                                                        }
+                                                    }
+                                                }   // if(!macro_status) ... else ...
+                                                
+                                                // Downsampling values should be resolved at this point so lets put them in!
+                                                // This part is always executed if we have a macro description or not.
+                                                if(param_type==NO_PARAMS || param_type==SWEEP_PARAMS)
+                                                {
+                                                    if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2) {
+                                                        InsertTopQV(&dict,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",dsa16_p1);
+                                                    }                                                        
+                                                    if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2) {
+                                                        InsertTopQV(&dict,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",dsa16_p2);
+                                                    }
+                                                }
+                                                state=S15_WRITE_PDS_FILES; // Change state
+                                                break;
+                                                
+                                                case S15_WRITE_PDS_FILES:
+                                                    DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
+                                                    
+                                                    //------------------------------------------------------------------------
+                                                    // Erik P G Johansson 2015-03-25: Added functionality for excluding data.
+                                                    // 
+                                                    // Determine whether to include/exclude entire TAB&LBL file pair.
+                                                    // Can be compared with the (CALIB) macro exclusion check.
+                                                    //------------------------------------------------------------------------
+                                                    int excludeData = 0;   // Boolean flag.
+                                                    if (dataExcludeTimes != NULL) {
+                                                        if (DecideWhetherToExcludeData(dataExcludeTimes, &comm, &excludeData)) {
+                                                            YPrintf("DecodeScience: Error when trying to determine whether to exclude data. - Keeps data by default.\n");
+                                                            printf( "DecodeScience: Error when trying to determine whether to exclude data. - Keeps data by default.\n");
+                                                        } else {
+                                                            if (excludeData) {
+                                                                CPrintf("DecodeScience: Excluding data.\n");  // Really superfluous printout since DecideWhetherToExcludeData also prints.
+                                                                ClearDictPDS(&dict);   // Clear dict     since that is what the macro CALIB macro exclusion code does.
+                                                                state=S04_GET_ID_CODE; // Set this state since that is what the macro CALIB macro exclusion code does.
                                                                 break;
-                    }
-                }   // while
-                return 0;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // ------------------------------------------------------------------------------------
+                                                    // Look for the existence of a macro ID before checking for (CALIB) macros to exclude.
+                                                    // Early macros (before the first flight software update in space) did not have macro
+                                                    // descriptions/IDs since that functionality had not been implemented yet.
+                                                    // /Erik P G Johansson summarizing Reine Gill 2015-03-26.
+                                                    // ------------------------------------------------------------------------------------
+                                                    if(!macro_status) // IF we have a macro description (macro_status==0 means we have).
+                                                    {
+                                                        if(calib)
+                                                        {
+                                                            for(i=0;i<nexcl;i++)
+                                                            {
+                                                                if(exclude[i]==macro_id) // Exclude current macro..in case of calibration macro
+                                                                {
+                                                                    CPrintf("Excluding calibration macro: 0x%04x\n",macro_id);
+                                                                    state=S04_GET_ID_CODE;
+                                                                    break;
+                                                                }
+                                                            }
+                                                            if(state==S04_GET_ID_CODE) {
+                                                                break; // Double break :)
+                                                            }
+                                                        }
+                                                        
+                                                        // WRITE TO INDEX.TAB
+                                                        //
+                                                        // Example row:
+                                                        //000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000111111111111111111111111111111111111111111111111111111
+                                                        //000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999000000000011111111112222222222333333333344444444444444
+                                                        //123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234566667777
+                                                        //"DATA/CALIBRATED/2003/JAN/D16/ ","RPCLAP030116_01NS_REB20BS.LBL","2004-04-15T12:50:22","2003-01-16T08:20:59.207","2003-01-16T08:20:59.316","MCID0x212"<CR><LF>
+                                                        
+                                                        FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);    // Get macro ID
+                                                        FindP(&comm,&property2,"PRODUCT_CREATION_TIME",1,DNTCARE); // Get product creation time
+                                                        //FindP(&comm,&property3,"START_TIME",1,DNTCARE);          // Get start time
+                                                        //FindP(&comm,&property4,"STOP_TIME",1,DNTCARE);           // Get stop time
+                                                        
+                                                        
+                                                        // Find position there the root of the PDS archive starts
+                                                        ti1=strlen(pds.apathpds); 
+                                                        
+                                                        
+                                                        if(param_type==SWEEP_PARAMS)
+                                                        {
+                                                            // Below we compensate for a well known bug during sweeping.
+                                                            // All sweeps start with two initial plateaus, with the same width as the 
+                                                            // plateaus in the sweep part itself. And at the previous bias voltage.
+                                                            // Now the first initial plateau has a corrupted length that is varying.
+                                                            // We could simply truncate it off! But instead we figure out by how
+                                                            // much it varies! Everything to get the correct current vector!
+                                                            // Further more one sample is always missing at the end of a sweep!
+                                                            
+                                                            if(curr.sensor==SENS_P1) {
+                                                                samp_plateau=sw_info.plateau_dur/dsa16_p1; // Samples on one plateau
+                                                            } else {
+                                                                samp_plateau=sw_info.plateau_dur/dsa16_p2; // Samples on one plateau
+                                                            }
+                                                            
+                                                            ini_samples=samples+1-(sw_info.steps+1)*samp_plateau; // Initial samples before sweep starts
+                                                        }
+                                                        
+                                                        // WRITE TO DATA LABEL FILE .LBL, TABLE FILE .TAB, and add to INDEX.TAB
+                                                        if(data_type!=D20 && data_type!=D20T)
+                                                        {
+                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
+                                                            ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
+                                                            
+                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,0,ini_samples,param_type)>=0)
+                                                            {
+                                                                WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,0,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                                                                
+                                                                strncpy(tstr2,lbl_fname,29);
+                                                                tstr2[25]='\0';
+                                                                
+                                                                //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
+                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
+                                                            }
+                                                        }
+                                                        else // Split interleaved 20 Bit data into two pairs of label and tab files
+                                                        {
+                                                            lbl_fname[21]='1';
+                                                            tab_fname[21]='1';
+                                                            prod_id[22]='1';
+                                                            
+                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
+                                                            ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
+                                                            
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);     // Change PRODUCT ID in common PDS parameters
+                                                            
+                                                            
+                                                            // Name changed
+                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters		  
+                                                            sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
+                                                            
+                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,1,ini_samples,param_type)>=0)
+                                                            {
+                                                                WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,1,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);  
+                                                                
+                                                                strncpy(tstr2,lbl_fname,29);
+                                                                tstr2[25]='\0';
+                                                                
+                                                                //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
+                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
+                                                            }
+                                                            lbl_fname[21]='2';
+                                                            tab_fname[21]='2';
+                                                            prod_id[22]='2';
+                                                            
+                                                            
+                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
+                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters
+                                                            
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);               // Change PRODUCT ID in common PDS parameters
+                                                            
+                                                            
+                                                            // Name changed
+                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters		  
+                                                            sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
+                                                            
+                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,2,ini_samples,param_type)>=0)
+                                                            {
+                                                                WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,2,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                                                                
+                                                                strncpy(tstr2,lbl_fname,29);
+                                                                tstr2[25]='\0';
+                                                                
+                                                                //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
+                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
+                                                            }
+                                                        }
+                                                        
+                                                        ClearDictPDS(&dict);   // Clear dictionary PDS LAP parameters, common parameters are not cleared until a new measurement cycle beginns
+                                                    }   // if(!macro_status)
+                                                    else
+                                                    {
+                                                        // At this point a macro description could not be found.
+                                                        // If finger printing was enabled it must have failed.
+                                                        // Anomally correction must also have failed at this point.
+                                                        // Data will be stored in the UnAccepted_Data directory
+                                                        // and requires manual attention.
+                                                        YPrintf("Macro description missing, data stored in UnAccepted_Data\n"); // Put a note in the system log
+                                                        CPrintf("    Dump data to %s\n",pds.uapath); // No macro description dump to unaccepted files
+                                                        
+                                                        if(pds.uaccpt_fd==NULL)
+                                                        {
+                                                            if(GetUnacceptedFName(tstr1)<0) {  // Get a unnaccepted filename
+                                                                CPrintf("    Can't create filename for unaccepted data, uses default\n");
+                                                            } else {
+                                                                CPrintf("    UnAccepted file: %s\n",tstr1);
+                                                            }
+                                                            strcpy(tstr2,pds.uapath);
+                                                            strcat(tstr2,tstr1);
+                                                            if((pds.uaccpt_fd=fopen(tstr2,"w"))==NULL) {
+                                                                CPrintf("    Couldn't open data file for unaccepted data?\n");
+                                                            }
+                                                        }
+                                                        
+                                                        if(pds.uaccpt_fd!=NULL)
+                                                        {
+                                                            val=ct->fill-1;
+                                                            if(val>0)
+                                                            {
+                                                                GetBuffer(ct,buff,val); 
+                                                                fwrite(buff,1,val,pds.uaccpt_fd);
+                                                                fflush(pds.uaccpt_fd); // Flush it!
+                                                            }
+                                                        }
+                                                    }    // if (!macro_status) ... else ...
+                                                    state=S04_GET_ID_CODE;
+                                                    break;     
+                                                    default:
+                                                        DispState(state,"STATE = UNKNOWN\n");
+                                                        break;
+        }
+    }   // while
+    return 0;
 }   // DecodeScience
 
 
@@ -3141,8 +3257,9 @@ void ExitPDS(int status)
     
     const double min_time_between_log_messages = 10.0;
     
-    if(pds.ylog_fd!=NULL)
+    if(pds.ylog_fd!=NULL) {
         YPrintf("Exiting pds, freeing memory, closing threads, closing file descriptors and compressing logs.\n");
+    }
     
     
     if(scithread>0)  
@@ -3601,7 +3718,6 @@ int GetOption(char *opt, int argc, char *argv[], char *arg)
     {
         if((argv[i] != NULL) && !strncmp(argv[i],opt,1024))   // Match option
         {
-            //printf("GetOption: argv[%i] = %s\n", i, argv[i]);   // DEBUG
             if (arg==NULL) {   // We expect an argument to exist for this option if arg is non-null.
                 argv[i] = NULL;
                 return 1;     // CASE: Found option and expected no associated extra argument.
@@ -3611,7 +3727,6 @@ int GetOption(char *opt, int argc, char *argv[], char *arg)
                 if ((i+1<argc) && (argv[i+1]!=NULL))   // If the argument list contains an (unused) argument after this option (flag)...
                 {
                     strncpy(arg,argv[i+1],1024); // Copy next entry as argument
-                    //printf("GetOption: argv[%i] = %s\n", i+1, argv[i+1]);   // DEBUG
                     argv[i] = NULL;
                     argv[i+1] = NULL;
                     return 1;     // CASE: Found option and both required and found associated extra argument.
@@ -4522,8 +4637,9 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                         TrimWN(n_tok);
                         TrimWN(v_tok);
                         sprintf(line,"ROSETTA:%s",n_tok); // New PDS standard! Add ROSETTA:
-                        if((&macs[m_bl][m_n])!=NULL)
+                        if((&macs[m_bl][m_n])!=NULL) {
                             Append(&macs[m_bl][m_n],line,v_tok);
+                        }
                         
                         break;
                 }
@@ -4843,8 +4959,8 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
         Separate(nline, sdate,              duration,           ':', 3);  // Get Duration and Date string.
         Separate(nline, m->target_name_did, m->target_id,       ':', 5);  // Get "target name for DATA_SET_ID" and "target id".
         Separate(nline, m->target_type,     m->target_name_dsn, ':', 7);  // Get "target type" and "target name for DATA_SET_NAME".
-
-
+        
+        
         sdate[10]='\0';         // Null terminate
         abbrev[4]='\0';         // Null terminate
         m->target_id[5]='\0';   // Null terminate
@@ -4867,18 +4983,11 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
             sscanf(duration,"%d",&dur);
             
             m->stop = m->start + dur*24*3600; // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) into account.
-
+            
             char* descr;
-            if(calib)
-            {
-//                 sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);
-//                 sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"CALIB",p->DataSetVersion);                
+            if(calib) {
                 descr = "CALIB";
-            }
-            else
-            {
-//                 sprintf(m->data_set_id,"\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",m->target_id,p->DPLNumber,m->abbrev,"EDITED",p->DataSetVersion);
-//                 sprintf(m->data_set_name,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"",m->target_name_dsn,p->DPLNumber,m->abbrev,"EDITED",p->DataSetVersion);
+            } else {
                 descr = "EDITED";
             }
             DeriveDSIandDSN(
@@ -4913,9 +5022,11 @@ void DeriveDSIandDSN(
 void TestDumpMacs()
 {
     int i,j;
-    for(i=0;i<10;i++)
-        for(j=0;j<8;j++)
+    for(i=0;i<10;i++) {
+        for(j=0;j<8;j++) {
             DumpPrp(&macros[i][j]);
+        }
+    }
 }
 
 
@@ -5015,47 +5126,49 @@ int ReadLabelFile(prp_type *lb_data,char *name)
         
         // Count number of " in the line
         cnt=0;
-        for(i=0;i<len1;i++)
-            if(r_tok[i]=='"')
+        for(i=0;i<len1;i++) {
+            if(r_tok[i]=='"') {
                 cnt++;
-            
-            switch(cnt)
-            {
-                case 0:
-                case 2:
-                    Append(lb_data,l_tok,r_tok);
-                    break;
-                case 1:
-                    pos1=ftell(fd);
-                    do
-                    {
-                        ch=fgetc(fd);
-                    } while(ch>=0 && ch!='"');
-                    
-                    if(ch=='"')    
-                    {
-                        pos2=ftell(fd);
-                        len2=pos2-pos1;
-                        
-                        len1=strlen(r_tok); // New length r_tok is trimmed
-                        r_tok[len1]='\n';
-                        r_tok[len1+1]='\0';
-                        len1++;
-                        bcross=(char *)malloc(len2+len1+1);
-                        if(bcross!=NULL)
-                        {
-                            fseek(fd,pos1,SEEK_SET);
-                            strncpy(bcross,r_tok,len1);
-                            fread(&bcross[len1],1,len2,fd);
-                            bcross[len1+len2]='\0';
-                            Append(lb_data,l_tok,bcross);
-                            free(bcross);
-                        }
-                    }
-                    break;
-                default:
-                    break;
             }
+        }
+        
+        switch(cnt)
+        {
+            case 0:
+            case 2:
+                Append(lb_data,l_tok,r_tok);
+                break;
+            case 1:
+                pos1=ftell(fd);
+                do
+                {
+                    ch=fgetc(fd);
+                } while(ch>=0 && ch!='"');
+                
+                if(ch=='"')    
+                {
+                    pos2=ftell(fd);
+                    len2=pos2-pos1;
+                    
+                    len1=strlen(r_tok); // New length r_tok is trimmed
+                    r_tok[len1]='\n';
+                    r_tok[len1+1]='\0';
+                    len1++;
+                    bcross=(char *)malloc(len2+len1+1);
+                    if(bcross!=NULL)
+                    {
+                        fseek(fd,pos1,SEEK_SET);
+                        strncpy(bcross,r_tok,len1);
+                        fread(&bcross[len1],1,len2,fd);
+                        bcross[len1+len2]='\0';
+                        Append(lb_data,l_tok,bcross);
+                        free(bcross);
+                    }
+                }
+                break;
+            default:
+                break;
+        }
     }
     
     if(debug>3)
@@ -5134,63 +5247,67 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
     cal->rows=nrows; // Rows
     cal->cols=ncols; // Columns
     
-    if(property2!=NULL)
+    if(property2!=NULL) {
         strcpy(cal->validt,property2->value); // Copy valid from time
-        else
-            strcpy(cal->validt,"2003-01-01T00:00:00.000");
+    } else {
+        strcpy(cal->validt,"2003-01-01T00:00:00.000");
+    }
+    
+    
+    // Interpret label file
+    for(j=0;j<ncols;j++) // Go through columns
+    {
+        FindP(lbl_data,&property5,"DATA_TYPE",j+1,DNTCARE); // What kind of column are we dealing with?
         
+        if(!strncmp(property5->value,"ASCII_INTEGER",7)) { // Integer column ?
+            format[j]=0;
+        } else {
+            if(!strncmp(property5->value,"ASCII_REAL",10)) { // Float column ?
+                format[j]=1;
+            } else {
+                return -2; // Error..we only expect integer or double for now!
+            }
+        }
         
-        // Interpret label file
-        for(j=0;j<ncols;j++) // Go through columns
+        FindP(lbl_data,&property6,"START_BYTE",j+1,DNTCARE); // Get start byte in line
+        sscanf(property6->value,"%d",&start[j]);
+    }
+    
+    // Read and parse table rows
+    i=0;
+    while(fgets(line,255,fd)!= NULL)
+    {
+        for(j=0;j<ncols;j++)
         {
-            FindP(lbl_data,&property5,"DATA_TYPE",j+1,DNTCARE); // What kind of column are we dealing with?
+            startpos=start[j]-1; // Compute start position of column
+            if(format[j]==0) // Integer
+            {
+                sscanf(&line[startpos],"%d",&tmp1);
+                tmp2=(float)tmp1;
+            }
             
-            if(!strncmp(property5->value,"ASCII_INTEGER",7)) // Integer column ?
-                format[j]=0;
-                else
-                    if(!strncmp(property5->value,"ASCII_REAL",10)) // Float column ?
-                        format[j]=1;
-                        else
-                            return -2; // Error..we only expect integer or double for now!
-                            
-                            FindP(lbl_data,&property6,"START_BYTE",j+1,DNTCARE); // Get start byte in line
-                            sscanf(property6->value,"%d",&start[j]);
+            if(format[j]==1) // Float
+                sscanf(&line[startpos],"%le",&tmp2);
+            
+            cal->C[i][j]=tmp2; // Store data in matrix
         }
-        
-        // Read and parse table rows
-        i=0;
-        while(fgets(line,255,fd)!= NULL)
+        i++; // Next row
+    } 
+    
+    
+    if(debug>2) // If debugging level is larger than 2 
+    {
+        printf("Valid from: %s\n",cal->validt);
+        for(i=0;i<nrows;i++)
         {
-            for(j=0;j<ncols;j++)
-            {
-                startpos=start[j]-1; // Compute start position of column
-                if(format[j]==0) // Integer
-                {
-                    sscanf(&line[startpos],"%d",&tmp1);
-                    tmp2=(float)tmp1;
-                }
-                
-                if(format[j]==1) // Float
-                    sscanf(&line[startpos],"%le",&tmp2);
-                
-                cal->C[i][j]=tmp2; // Store data in matrix
+            for(j=0;j<ncols;j++) {
+                printf("%e ",cal->C[i][j]);
             }
-            i++; // Next row
-        } 
-        
-        
-        if(debug>2) // If debugging level is larger than 2 
-        {
-            printf("Valid from: %s\n",cal->validt);
-            for(i=0;i<nrows;i++)
-            {
-                for(j=0;j<ncols;j++)
-                    printf("%e ",cal->C[i][j]);
-                printf("\n");
-            }
+            printf("\n");
         }
-        fclose(fd);
-        return 0; // Ok
+    }
+    fclose(fd);
+    return 0; // Ok
 }
 
 
@@ -5307,8 +5424,6 @@ int WritePTabFile(
             TimeOfDatePDS(mc->CD[i].validt,&vtime); // Convert valid time to seconds		  
             if(vtime<stime) 
             {
-                //FKJN TIME DEBUGGING.
-                //            printf("FKJN debug: valid = %i of %i  \n vtime(calfile)= %s, stime = %s \n",i,(mc->n-1),mc->CD[i].validt,tstr1);   
                 valid=i;
                 break;
             }
@@ -5532,11 +5647,13 @@ int WritePTabFile(
                         // (Likely) EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA, MAKING THE LAST 4 BITS GARBAGE.
                         val=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&val); // Convert 20 bit signed to native signed
-                        if(D20_MA_on)
+                        if(D20_MA_on) {
                             val = val & 0xFFFF0;  // Clear the last 4 bits since a moving-average bug in the flight software renders them useless.
+                        }
+                        j+=2;
+                        if(dop==1) { // Doing probe 1, skip probe 2
                             j+=2;
-                        if(dop==1) // Doing probe 1, skip probe 2
-                            j+=2;
+                        }
                         break;
                         
                     case D201:
@@ -5546,19 +5663,22 @@ int WritePTabFile(
                         //EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA, MAKING THE LAST 4 BITS GARBAGE.
                         val=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&val); // Convert 20 bit signed to native signed
-                        if(D20_MA_on)                
+                        if(D20_MA_on) {
                             val = val & 0xFFFF0;  // Clear the last 4 bits since a moving-average bug in the flight software renders them useless.
-                            j+=2;
+                        }
+                        j+=2;
                         break;
                         
                     case D20T:
                         // Put together 8+8 bits to 16 bit number
-                        if(dop==2) // Doing probe 2, skip probe 1
+                        if(dop==2) {// Doing probe 2, skip probe 1
                             j+=2;
+                        }
                         val=((short int)(buff[j]<<8 | buff[j+1]));
                         j+=2;
-                        if(dop==1) // Doing probe 1, skip probe 2
+                        if(dop==1) {// Doing probe 1, skip probe 2
                             j+=2;
+                        }
                         break;
                         
                     case D16:
@@ -5617,7 +5737,6 @@ int WritePTabFile(
                         sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
                         free(tempstr);
                         
-                        //if( macro_id == 505 || macro_id == 506 || macro_id == 604 || macro_id == 515 || macro_id == 807 )
                         if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
                         {
                             extra_bias_setting = 0;
@@ -5674,20 +5793,22 @@ int WritePTabFile(
                     current=val; // Set sampled current value in TM units
                     if(param_type==SWEEP_PARAMS) // Do we have a sweep ?...
                     {
-                        if(i<ini_samples) // Sweep started ?
+                        if(i<ini_samples) { // Sweep started ?
                             voltage=vbias; // Set initial voltage bias before sweep starts
-                            else
-                            { 
-                                voltage=ti2; // Set value used before changing the bias, prevents start bias value to be modified before used... 
-                                k++;
-                                if(!(k%samp_plateau)) // Every new step set a new bias voltage
-                                    ti2+=curr_step;     // Change bias 
-                                    if(sw_info->formatv & 0x1) // If up-down or down-up sweep, check if direction shall change
-                                    {
-                                        if(k==(sw_info->steps*samp_plateau/2)) // Time to change direction ? 
-                                            curr_step=-curr_step; // Change direction
-                                    }
+                        }
+                        else
+                        { 
+                            voltage=ti2; // Set value used before changing the bias, prevents start bias value to be modified before used... 
+                            k++;
+                            if(!(k%samp_plateau)) {   // Every new step set a new bias voltage
+                                ti2+=curr_step;     // Change bias
                             }
+                            if(sw_info->formatv & 0x1) // If up-down or down-up sweep, check if direction shall change
+                            {
+                                if(k==(sw_info->steps*samp_plateau/2)) // Time to change direction ? 
+                                    curr_step=-curr_step; // Change direction
+                            }
+                        }
                     }
                     else
                     {
@@ -5730,7 +5851,7 @@ int WritePTabFile(
                                     
                                     // Write time, current and calibrated voltage 
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][1]); 
-                                }		  
+                                }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
@@ -6179,7 +6300,9 @@ int GetHKPacket(buffer_struct_type *ch,unsigned char *buff,double *rawt)
     length=((buff[4]<<8) | buff[5])-9-2;     // Get LAP HK data length
     HPrintf("HK packet, length: %d\n",length);
     
-    if(length>LAP_HK_LEN) length=LAP_HK_LEN; // Packet to long, force standard length...add warning in the future...
+    if(length>LAP_HK_LEN) {
+        length=LAP_HK_LEN; // Packet to long, force standard length...add warning in the future...
+    }
     
     *rawt=DecodeSCTime(&buff[6]);            // Decode S/C time into raw time
     
@@ -6226,7 +6349,9 @@ int SyncAhead(buffer_struct_type *cb,int len)
         }
         len++;
         byte_sum+=ch;
-        if(len>=RIDICULUS) return -1;
+        if(len>=RIDICULUS) {
+            return -1;
+        }
     }
     
     if(byte_sum==M_HEAD || byte_sum==S_HEAD)
@@ -6285,9 +6410,10 @@ int ClearCommonPDS(prp_type *p)
 
 int ClearDictPDS(prp_type *p)
 {
-    if(FreePrp(p)>=0) // Free old stuff
+    if(FreePrp(p)>=0) {// Free old stuff
         return 0; // OK!
-        return -1; // Err
+    }
+    return -1; // Err
 }
 
 // Setup HK label
@@ -6626,7 +6752,6 @@ void WriteIndexLBL(prp_type *p,mp_type *m)
     char dline[PATH_MAX]; // Dummy line!
     if(p!=NULL)
     {
-        
         // I do not need to make this thread safe since it's called either from ExitPDS 
         // which has already canceled all threads or the main thread.
         fflush(pds.itable_fd); // Flush index table file
@@ -6634,8 +6759,9 @@ void WriteIndexLBL(prp_type *p,mp_type *m)
         
         // Count index table lines! Assume all lines are shorter than dummy line...
         // It is needed in a keyword below
-        while(fgets(dline,PATH_MAX,pds.itable_fd) != NULL)
+        while(fgets(dline,PATH_MAX,pds.itable_fd) != NULL) {
             index_cnt++;
+        }
         
         rewind(pds.ilabel_fd); // Rewind index label to start
         
@@ -6733,10 +6859,11 @@ int TotAQPs(prp_type *p,int n)
                 tot_aqps+=haqp;
             }
             // Return total number of aqps leading up to this sequence from start of sequence
-            if(tot_aqps>0)
+            if(tot_aqps>0) {
                 return (tot_aqps-sub); //OK! Subtract sub aqps since we start on an aqp pulse
-                else
-                    return -3;// Err!
+            } else {
+                return -3;// Err!
+            }
         }
         else
             return -4; //Err not found
@@ -6785,15 +6912,17 @@ void DispState(int s,char *str)
     {
         if(old_s!=s)
         {
-            if(debug>0)
+            if(debug>0) {
                 printf("%s",str);
+            }
             old_s=s;
         }
     }
     else
     {
-        if(debug>0)
+        if(debug>0) {
             printf("%s",str);
+        }
         old_s=s;
     }
 }
@@ -6830,12 +6959,14 @@ int Separate(char *str, char *left, char *right, char token, int occurs)
             
             if(occ==occurs)
             {
-                for(;lpos<(rpos-1);)
+                for(;lpos<(rpos-1);) {
                     *(left++)=*(lpos++);
+                }
                 *left='\0';
                 
-                for(;(*rpos!=token && *rpos!='\0');)
+                for(;(*rpos!=token && *rpos!='\0');) {
                     *(right++)=*(rpos++);
+                }
                 *right='\0';
                 
                 break;
@@ -6858,10 +6989,13 @@ int TrimWN(char *str)
     if((len=strlen(str))<=0) return -1;
     
     
-    for(i=0;i<len;i++)     // First make all newlines or carriage returns to whitespace.
-        if(str[i]=='\n' || str[i]=='\r') str[i]=' ';
-        
-        pos=str;
+    for(i=0;i<len;i++) {    // First make all newlines or carriage returns to whitespace.
+        if(str[i]=='\n' || str[i]=='\r') {
+            str[i]=' ';
+        }
+    }
+    
+    pos=str;
     
     nlen=len;
     for(i=0;i<len;i++)    // Remove all initial whitespace.
@@ -6903,10 +7037,13 @@ int TrimQN(char *str)
     if(str==NULL) return -1;
     if((len=strlen(str))<=0) return -1;
     
-    for(i=0;i<len;i++) // First replace all newlines and carriage returns with whitespace.
-        if(str[i]=='\n' || str[i]=='\r') str[i]=' ';
-        
-        pos=str;
+    for(i=0;i<len;i++) {   // First replace all newlines and carriage returns with whitespace.
+        if(str[i]=='\n' || str[i]=='\r') {
+            str[i]=' ';
+        }
+    }
+    
+    pos=str;
     
     nlen=len;
     for(i=0;i<len;i++) // Remove all initial quotes
@@ -6967,10 +7104,13 @@ int ExtendStr(char *dest,char *src,int elen,char ch)
 void ReplCh(char *str,char ch1,char ch2)
 {
     int i;
-    if(str!=NULL)
-        for(i=0;i<strlen(str);i++)
-            if(str[i]==ch1)
+    if(str!=NULL) {
+        for(i=0;i<strlen(str);i++) {
+            if(str[i]==ch1) {
                 str[i]=ch2;
+            }
+        }
+    }
 }
 
 
@@ -7080,9 +7220,11 @@ int IsNumber(char *str)
     int i;
     len=strlen(str);
     
-    for(i=0;i<len;i++)
-        if(!isdigit(str[i]))
+    for(i=0;i<len;i++) {
+        if(!isdigit(str[i])) {
             return 0;
+        }
+    }
         
         return 1; // String only contain numbers return true
 }
@@ -7113,9 +7255,11 @@ int  FileLen(FILE *fd)
 int  FileStatus(FILE *fs,struct stat *sp)
 {
     int fd;
-    if(sp==NULL)
-        if((sp=malloc(sizeof(struct stat)))==NULL)
+    if(sp==NULL) {
+        if((sp=malloc(sizeof(struct stat)))==NULL) {
             return -1;
+        }
+    }
         if(fs==NULL) return -2;
         if((fd=fileno(fs))<0) return -3;
         if(fstat(fd,sp)<0) return -4;
@@ -7211,22 +7355,24 @@ int StrucDir(char *date,char *ipath,char *opath)
     
     sprintf(tmp,"%s",date);                         // Year directory
     MakeDir(tmp,ipath,yeardir);                     // Make a directory for current Year, if it's not already there!
-    if(!sscanf(&date[5],"%d",&month))               // Month number
+    if(!sscanf(&date[5],"%d",&month)) {             // Month number
         return -1;                                    // Could not convert to month invalid date!
-        
-        month--;                                        // Start at 0
-        if(month>=0 && month<=11)                       // In range
-        {
-            MakeDir(months[month],yeardir,monthdir);    // Make a month directory for current month, if it's not already there!
-        }
-        else
-            return -2;                                    // Month out of range!
-            
-            sprintf(tmp,"D%s",&date[8]);                    // Day of month
-            MakeDir(tmp,monthdir,daydir);                   // Make day dir!
-            
-            strcpy(opath,daydir); // Return data directory!
-            return 0;
+    }
+    
+    month--;                                        // Start at 0
+    if(month>=0 && month<=11)                       // In range
+    {
+        MakeDir(months[month],yeardir,monthdir);    // Make a month directory for current month, if it's not already there!
+    }
+    else {
+        return -2;                                    // Month out of range!
+    }
+    
+    sprintf(tmp,"D%s",&date[8]);                    // Day of month
+    MakeDir(tmp,monthdir,daydir);                   // Make day dir!
+    
+    strcpy(opath,daydir); // Return data directory!
+    return 0;
 }
 
 // Dump archive directory, for debugging purposes! 
@@ -7325,7 +7471,7 @@ int Match(char *stra,char *strb)
     
     if((len=strlen(stra))!=strlen(strb)) return -1; // No match lengths not equal
     
-    for(i=0;i<len;i++)
+    for(i=0;i<len;i++) {
         if(stra[i]!=strb[i])
         {
             if(stra[i]=='#' && strb[i]>='0' && strb[i]<='9')
@@ -7333,6 +7479,7 @@ int Match(char *stra,char *strb)
             else
                 return -2; // Chars don't match
         }
+    }
         return 0; // All matched
 }
 
@@ -7542,10 +7689,11 @@ void AssembleHKLine(unsigned char *b,char *line,double time,char *macro_id_str)
     
     sprintf(macro_id_str,"MCID0X%02x%02x",b[6],b[7]);
     
-    if(temp)
+    if(temp) {
         t  = ((b[8]<<8 | b[9]) ^ 0x8000); // If temp is off this is just a sample from ADC20 probe 2.
-        else
+    } else {
             t  = ((b[8]<<8 | b[9]) ^ 0x8000)*T_SCALE+T_OFFSET; //CALIB values educated guesses!!
+    }
             
             sprintf(tstr,"%05.f,",t);      
         strcat(line,tstr); // Add string to table line
@@ -7753,10 +7901,11 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
     {
         correlated=raw*tcp.gradient[i]+tcp.offset[i]; // Compute UTC time using all gradient offset candidates
         
-        if(i<(tcp.netries-1))  // If we are not at the end
+        if(i<(tcp.netries-1)) {   // If we are not at the end
             tmp=tcp.SCET[i+1];   // Use next SCET to test the upper validity limit
-            else
+        } else {
                 tmp=1e100; // No next SCET ..last correlation packet valid until ground station produces new ones..
+        }
                 
                 if(correlated>=tcp.SCET[i] && correlated<tmp) // Test if in valid range
                 {
@@ -7986,47 +8135,56 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     {
         strncpy(min,&sdate[14],2);      // Copy minutes from sdate
         min[2]='\0';                   // Terminate
-        if(!sscanf(min,"%d",&(atime.tm_min)))
+        if(!sscanf(min,"%d",&(atime.tm_min))) {
             return -1;// Error couldn't resolve minutes
-            
-            strncpy(hour,&sdate[11],2);    // Copy hours from sdate
-            hour[2]='\0';                  // Terminate
-            if(!sscanf(hour,"%d",&(atime.tm_hour)))
-                return -2;// Error couldn't resolve minutes
-                
-                strncpy(sec,&sdate[17],2); // Copy seconds to sec
-                sec[2]='\0';               // Terminate
-                if(!sscanf(sec,"%d",&(atime.tm_sec)))
-                    return -3;// Error couldn't resolve seconds
+        }
+        
+        strncpy(hour,&sdate[11],2);    // Copy hours from sdate
+        hour[2]='\0';                  // Terminate
+        if(!sscanf(hour,"%d",&(atime.tm_hour))) {
+            return -2;// Error couldn't resolve minutes
+        }
+        
+        strncpy(sec,&sdate[17],2); // Copy seconds to sec
+        sec[2]='\0';               // Terminate
+        if(!sscanf(sec,"%d",&(atime.tm_sec))) {
+            return -3;// Error couldn't resolve seconds
+        }
     }
     
     
-    if(!sscanf(mday,"%d",&(atime.tm_mday))) // Put day of month in structure
+    if(!sscanf(mday,"%d",&(atime.tm_mday))) {  // Put day of month in structure
         return -4; // Error couldn't resolve day of month
-        
-        if(!sscanf(month,"%d",&(atime.tm_mon))) // Put month in structure
-            return -5; // Error couldn't resolve month
-            
-            if(!sscanf(year,"%d",&(atime.tm_year))) // Put year in structure
-                return -6; // Error couldn't resolve year
-                
-                if(atime.tm_year<1970) return -7;       // Err only do time after 1970, could be 2000..
-                
-                atime.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
-                atime.tm_mon-=1;     // Month ranges from 0 to 11 and not as usual 1 to 12
-                
-                atime.tm_wday=0;     // Day of week dosn't matter here
-                atime.tm_yday=0;     // Day in year dosn't matter here
-                atime.tm_isdst=0;    // Daylight saving unknown
-                
-                if((*t=mktime(&atime))<0) // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
-                    return -8;              // Error couldn't calculate time
-                    
-                    
-                    *t=*t-timezone; // Compensates for assuming that the input time was in the local computer timezone
-                    // timezone is defined as negative number for Sweden so thus it needs to be a minus sign.
-                    
-                    return 0; // Ok!
+    }
+    
+    if(!sscanf(month,"%d",&(atime.tm_mon))) {  // Put month in structure
+        return -5; // Error couldn't resolve month
+    }
+    
+    if(!sscanf(year,"%d",&(atime.tm_year))) {   // Put year in structure
+        return -6; // Error couldn't resolve year
+    }
+    
+    if(atime.tm_year<1970) {
+        return -7;       // Err only do time after 1970, could be 2000..
+    }
+    
+    atime.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
+    atime.tm_mon-=1;     // Month ranges from 0 to 11 and not as usual 1 to 12
+    
+    atime.tm_wday=0;     // Day of week dosn't matter here
+    atime.tm_yday=0;     // Day in year dosn't matter here
+    atime.tm_isdst=0;    // Daylight saving unknown
+    
+    if((*t=mktime(&atime))<0) { // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
+        return -8;              // Error couldn't calculate time
+    }
+    
+    
+    *t=*t-timezone; // Compensates for assuming that the input time was in the local computer timezone
+    // timezone is defined as negative number for Sweden so thus it needs to be a minus sign.
+    
+    return 0; // Ok!
 }
 
 //
@@ -8260,6 +8418,7 @@ void TraverseDDSArchive(pds_type *p)
     {
         af=fts_open(path_arrays,FTS_LOGICAL,Compare); // Get file structure
         if(af!=NULL)
+        {
             do
             {
                 fe=fts_read(af); // Get next file
@@ -8320,18 +8479,19 @@ void TraverseDDSArchive(pds_type *p)
                     fts_close(af);
                     ExitPDS(0);
                 }
-            }while(fe!=NULL);
-            
-            
-            // At this point the whole archive is traversed
-            fts_close(af); // Close file structure
-            
-            // Wait until circular TM data buffer has been processed
-            nanosleep(&coma,NULL);
-            
-            // Here we can do a gracefull exit!
-            // Index is written in ExitPDS()
-            ExitPDS(0);
+            } while(fe!=NULL);
+        } // if
+        
+        
+        // At this point the whole archive is traversed
+        fts_close(af); // Close file structure
+        
+        // Wait until circular TM data buffer has been processed
+        nanosleep(&coma,NULL);
+        
+        // Here we can do a gracefull exit!
+        // Index is written in ExitPDS()
+        ExitPDS(0);
     }
 }   // TraverseDDSArchive
 
@@ -8589,7 +8749,6 @@ time_t DDSFileStartTime(FTSENT *f)
         if(f->fts_namelen==2 && f->fts_level==2 && f->fts_pathlen>5 && IsNumber(f->fts_name))
         {
             sscanf(f->fts_name,"%02d",&at.tm_mon);
-            
             sscanf(&f->fts_path[f->fts_pathlen-5],"%02d",&at.tm_year);
             //	  printf("Year %d Month %d\n",at.tm_year+2000,at.tm_mon);
         }
