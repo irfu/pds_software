@@ -66,6 +66,7 @@
 //    CALIB/RPCLAP030101_CALIB_FRQ_D_P2.LBL
 //    CALIB/RPCLAP030101_CALIB_FRQ_E_P2.LBL
 //    NOTE: These files are specified in pds.conf.
+//    NOTE: This bug has probably been fixed now. /Erik P G Johansson 2015-12-10
 // 
 //====================================================================================================================
 
@@ -5078,7 +5079,6 @@ int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
 // NOTE: I _think_ this code can handle LBL and CAT files
 // with multiple line values. This is important for being able to modify *.CAT files
 // with long texts in the form of "values".   /Erik P G Johansson 2015-04-27.
-// 
 int ReadLabelFile(prp_type *lb_data,char *name)
 {
     FILE *fd;
@@ -5098,9 +5098,10 @@ int ReadLabelFile(prp_type *lb_data,char *name)
     
     InitP(lb_data);     // Initialize linked property/value list
     
-    bcross=NULL;
+    bcross  = NULL;
     msubone = (MAX_STR-1);
     
+
     // Open label file, for description of calibration table
     if((fd=fopen(name,"r"))==NULL)
     {
@@ -5108,26 +5109,32 @@ int ReadLabelFile(prp_type *lb_data,char *name)
         return -1;
     }
     
-    while(fgets(line,msubone,fd)!= NULL)
+    while(fgets(line,msubone,fd)!= NULL)   // Reads line into variable "line". Appears to include ending line feed.
     {
+        printf("while start: line = \"%s\"\n", line);   // DEBUG
         if(line[0] == '\n') continue;     // Empty line..
         if(line[0] == '\r') continue;
         if(line[0] == '#') continue;      // Remove comments..
         if(line[0] == '/') continue;      // Remove comments..
         
-        if(!(strcmp(line,"END") && strcmp(line,"END\r\n"))) continue; // Skip ending END not a keyword
-        
-        if(Separate(line,l_tok,r_tok,'=',1)==0) continue;
+        if(!(strcmp(line,"END") && strcmp(line,"END\r\n"))) {
+            continue; // Skip ending END not a keyword
+        }
+        if(Separate(line,l_tok,r_tok,'=',1)==0) {
+            continue;
+        }
         
         TrimWN(l_tok);
-        TrimWN(r_tok);
+        TrimWN(r_tok);   // NOTE: Also trims away CR and/or LF at the end of a string.
         
         len1=strlen(r_tok);
         len2=strlen(line);
         
-        if(len1>=MAX_STR) len1=msubone;
+        if(len1>=MAX_STR) {
+            len1=msubone;
+        }
         
-        // Count number of " in the line
+        // Count number of double-quotes ON THE LINE JUST READ.
         cnt=0;
         for(i=0;i<len1;i++) {
             if(r_tok[i]=='"') {
@@ -5142,21 +5149,28 @@ int ReadLabelFile(prp_type *lb_data,char *name)
                 Append(lb_data,l_tok,r_tok);
                 break;
             case 1:
-                pos1=ftell(fd);
+                pos1=ftell(fd);    // Get current file position.
+                
+                // Continue reading file until next double-quote character AFTER THE LINE JUST READ.
+                // NOTE: READS OVER MULTIPLE LINES IF NECESSARY.
                 do
                 {
-                    ch=fgetc(fd);
+                    ch=fgetc(fd);     // Read next character.
                 } while(ch>=0 && ch!='"');
                 
                 if(ch=='"')    
                 {
                     pos2=ftell(fd);
-                    len2=pos2-pos1;
+                    len2=pos2-pos1;    // Number of bytes read in the previous do-while loop.
                     
                     len1=strlen(r_tok); // New length r_tok is trimmed
-                    r_tok[len1]='\n';
-                    r_tok[len1+1]='\0';
-                    len1++;
+                    
+                    // Add CR+LF to the r_tok.
+                    r_tok[len1]='\r';
+                    r_tok[len1+1]='\n';
+                    r_tok[len1+2]='\0';
+                    len1 = len1 + 2;
+                    
                     bcross=(char *)malloc(len2+len1+1);
                     if(bcross!=NULL)
                     {
@@ -6982,7 +6996,9 @@ int Separate(char *str, char *left, char *right, char token, int occurs)
 }
 
 
-//Trim initial and trailing whitespace and all newlines away
+// Convert CR (carriage return) and LF (line feed) to whitespace.
+// Trim initial and trailing whitespace.
+// ==> Any sequence of CR & LF at the END OF THE STRING are removed too.
 int TrimWN(char *str)
 {
     int len,nlen,i;
@@ -8947,3 +8963,30 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
     
     return error;
 }
+
+
+
+// Alternative main function that can be temporarily used instead of the real one for testing purposes.
+// The real main function can conveniently be renamed (not commented out, not deleted) when using this function.
+int main_DISABLED(int argc, char* argv[]) {
+    printf("###################################################################################\n");
+    printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
+    printf("###################################################################################\n");
+    ProtectPlnkInit();
+
+    
+    
+    prp_type p;
+    int errorCode;
+    printf("Read file\n");
+//  int ReadLabelFile(prp_type *lb_data,char *name)
+    errorCode = ReadLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL");
+    printf("errorCode = %i\n", errorCode);
+
+    printf("Write file\n");
+    //  int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
+    errorCode = WriteUpdatedLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL_modif");
+    printf("errorCode = %i\n", errorCode);
+    return -1;
+}
+

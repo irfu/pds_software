@@ -72,6 +72,10 @@ int main()
 }
 */
 
+
+// It appears (empirically) that one has to call this function once in the application to initialize the "mutex" "protect_plnk".
+// Otherwise functions here might hang.
+// Erik P G Johansson
 void ProtectPlnkInit()
 {
   pthread_mutexattr_settype(&attr_plnk,PTHREAD_MUTEX_RECURSIVE);
@@ -105,56 +109,56 @@ int InitP(prp_type *p)
 // of whether "name" can be found in the initial list.
 int Append(prp_type *p,char *name,char *value)
 {
-  property_type *tmp;
- 
-  pthread_mutex_lock(&protect_plnk);	
- 
-  if(p->no_prop==0)
+    property_type *tmp;
+    
+    pthread_mutex_lock(&protect_plnk);
+    
+    if(p->no_prop==0)
     {
-      if((p->properties=malloc(sizeof(property_type)))==NULL) 
-	{
-	  pthread_mutex_unlock(&protect_plnk); 
-	  return -1;
-	}
-
-      if(CopyPrp(p->properties,name,value)<0) 
-	{
-	  pthread_mutex_unlock(&protect_plnk); 
-	  return -3;
-	}
-
-      p->properties->next_p=NULL;
-      p->properties->prev_p=NULL;
-      p->head=p->properties;
-      p->no_prop++; 
-      pthread_mutex_unlock(&protect_plnk);
-      return 0; //Ok
+        if((p->properties=malloc(sizeof(property_type)))==NULL) 
+        {
+            pthread_mutex_unlock(&protect_plnk); 
+            return -1;
+        }
+        
+        if(CopyPrp(p->properties,name,value)<0) 
+        {
+            pthread_mutex_unlock(&protect_plnk); 
+            return -3;
+        }
+        
+        p->properties->next_p=NULL;
+        p->properties->prev_p=NULL;
+        p->head=p->properties;
+        p->no_prop++; 
+        pthread_mutex_unlock(&protect_plnk);
+        return 0; //Ok
     }
-  else
-    if(p->no_prop>0)
-      {
-	if((tmp=malloc(sizeof(property_type)))==NULL)  
-	  {
-	    pthread_mutex_unlock(&protect_plnk);
-	    return -1;
-	  }
-
-	if(CopyPrp(tmp,name,value)<0)  
-	  {
-	    pthread_mutex_unlock(&protect_plnk); 
-	    return -3;
-	  }
-	
-	p->head->next_p=tmp;
-	tmp->prev_p=p->head;
-	tmp->next_p=NULL;
-	p->head=tmp;
-	p->no_prop++;
-	pthread_mutex_unlock(&protect_plnk);
-	return 0; //Ok
-      }  
-  pthread_mutex_unlock(&protect_plnk);
-  return -2; // Error
+    else
+        if(p->no_prop>0)
+        {
+            if((tmp=malloc(sizeof(property_type)))==NULL)  
+            {
+                pthread_mutex_unlock(&protect_plnk);
+                return -1;
+            }
+            
+            if(CopyPrp(tmp,name,value)<0)  
+            {
+                pthread_mutex_unlock(&protect_plnk); 
+                return -3;
+            }
+            
+            p->head->next_p=tmp;
+            tmp->prev_p=p->head;
+            tmp->next_p=NULL;
+            p->head=tmp;
+            p->no_prop++;
+            pthread_mutex_unlock(&protect_plnk);
+            return 0; //Ok
+        }  
+        pthread_mutex_unlock(&protect_plnk);
+        return -2; // Error
 }
 
 int InsertTopQ(prp_type *p,char *name,char *value)
@@ -388,7 +392,7 @@ int CopyPrp(property_type *dest,char *name,char *value)
 {
   int len;
     
-  pthread_mutex_lock(&protect_plnk);	
+  pthread_mutex_lock(&protect_plnk);
 
   len=strlen(name);
   if(len==0 || len > MAX_STR) 
@@ -530,35 +534,36 @@ int DumpPrp(prp_type *p)
 
 int FDumpPrp(prp_type *p,FILE *fd)
 {
-  int i;
-  property_type *tmp;
-
-  pthread_mutex_lock(&protect_plnk);	
-
-  if(p->properties!=NULL && p->head!=NULL && fd!=NULL)
+    int i;
+    property_type *tmp;
+    
+    pthread_mutex_lock(&protect_plnk);
+    
+    if(p->properties!=NULL && p->head!=NULL && fd!=NULL)
     {
-      tmp=p->properties;
-      for(i=0;i<p->no_prop;i++)
-	{
-	  if(tmp!=NULL && tmp->name!=NULL)
-	    {
-	      fprintf(fd,"%s",tmp->name);
-	      if(tmp->value!=NULL)
-		fprintf(fd," = %s",tmp->value);
-	      fprintf(fd,"\r\n");
-	    }
-	  tmp=tmp->next_p;
-	  if(tmp==NULL)
-	    {
-	      pthread_mutex_unlock(&protect_plnk);
-	      return -1; // Error
-	    }
-	}
-      pthread_mutex_unlock(&protect_plnk);
-      return 0; // Ok
+        tmp=p->properties;
+        for(i=0;i<p->no_prop;i++)
+        {
+            if(tmp!=NULL && tmp->name!=NULL)
+            {
+                fprintf(fd,"%s",tmp->name);
+                if(tmp->value!=NULL) {
+                    fprintf(fd," = %s",tmp->value);
+                }
+                fprintf(fd,"\r\n");
+            }
+            tmp=tmp->next_p;
+            if(tmp==NULL)
+            {
+                pthread_mutex_unlock(&protect_plnk);
+                return -1; // Error
+            }
+        }
+        pthread_mutex_unlock(&protect_plnk);
+        return 0; // Ok
     }
-  pthread_mutex_unlock(&protect_plnk);
-  return -1; // Error empty
+    pthread_mutex_unlock(&protect_plnk);
+    return -1; // Error empty
 }
 
 int FreePrp(prp_type *p)
