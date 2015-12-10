@@ -46,6 +46,10 @@
 #            If -o is not specified, the default is to put an executable file in a.out, the object file for source.suffix in source.o, its assembler file
 #            in source.s, a precompiled header file in source.suffix.gch, and all preprocessed C source on standard output.
 #
+# NOTE: If one adds debugging info when compiling (gcc -ggdb), then the compiled binary appears to depend on the number of rows, i.e. NOT only on the
+# logic/functionality of the code. The executable changes if one e.g. adds/removes comments.
+# This is bad if one wants to compile two different source code versions that should have the same functionality and then compare the corresponding
+# compiled executables to make sure the two underlying source code versions are really equivalent.
 #
 # Remove flags for debugging information? Might speed up execution?!
 # /Erik P G Johansson 2015-12-04
@@ -58,7 +62,8 @@ CC	= gcc
 #OBJ1    = pds_$(VER).o plnk.o cirb.o id.o OASWlib.o 
 OBJ1    = pds_$(VER).o plnk.o cirb.o id.o
 EF      = -lefence
-CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
+#CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
+CFLAGS  = -Wall -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
 # Libraries required by Fortran 
 FLIBS   = -lifport -lunwind -lcxa -lifcore #$(EF)
 # Fortran includes

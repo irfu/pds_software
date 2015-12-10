@@ -48,6 +48,9 @@
 //    Code still worked since the result was only used to compare with decimal macro ID numbers
 //    and the code (seemed to) fail well for hexadecimal string representations.
 //       Erik P G Johansson 2015-12-07
+//  * Added extra flags for overriding the MISSION_PHASE_NAME, mission phase start date & duration, and description
+//    string used in DATA_SET_ID and DATA_SET_NAME.
+//       Erik P G Johansson 2015-12-09
 //
 //
 // "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
