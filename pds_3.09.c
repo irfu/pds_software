@@ -51,6 +51,9 @@
 //  * Added extra flags for overriding the MISSION_PHASE_NAME, mission phase start date & duration, and description
 //    string used in DATA_SET_ID and DATA_SET_NAME.
 //       Erik P G Johansson 2015-12-09
+//  * Start time & duration can now be specified with higher accuracy than days using CLI parameters.
+//  * All logs now display wall time the same way ("3pds_dds_progress.log" was previously different).
+//       Erik P G Johansson 2015-12-17
 //
 //
 // "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
@@ -474,43 +477,61 @@ int main(int argc, char *argv[])
     // Will not work, since required parameter values -mp xx -vid yy -dsv zz are missing!!
     // ----------------------------------------------------------------------------------------------------
     
+    //========================================
     // Get path option for configuration file
+    //========================================
     if(!GetOption("-c",argc,argv,pds.cpath)) {
         sprintf(pds.cpath,"%s/%s",getenv("HOME"),"pds.conf");
     }
     
+    //========================================
     // Get path option for anomaly file
+    //========================================
     if(!GetOption("-a",argc,argv,pds.apath)) {
         sprintf(pds.apath,"%s/%s",getenv("HOME"),"pds.anomalies");
     }
     
+    //========================================
     // Get path option for bias file
+    //========================================
     if(!GetOption("-b",argc,argv,pds.bpath)) {
         sprintf(pds.bpath,"%s/%s",getenv("HOME"),"pds.bias");
     }
     
+    //========================================
     // Get path option for exclude file
+    //========================================
     if(!GetOption("-e",argc,argv,pds.epath)) {   // Erik P G Johansson 2015-03-24: Fixed bug. Store path in correct variable.
         sprintf(pds.epath,"%s/%s",getenv("HOME"),"pds.exclude");
     }
     
+    //===========================================
     // Get path option for mode description file
+    //===========================================
     if(!GetOption("-m",argc,argv,pds.mpath)) {    // Erik P G Johansson 2015-03-24: Fixed bug. Store path in correct variable.
         sprintf(pds.mpath,"%s/%s",getenv("HOME"),"pds.modes");
     }
     
+    //=============================================
+    // Get path option for data exclude times file
+    //=============================================
     // Erik P G Johansson 2015-03-25: Added
     if(!GetOption("-d",argc,argv,pds.depath)) {
         sprintf(pds.depath,"%s/%s",getenv("HOME"),"pds.dataexcludetimes");
     }
     
+    //=============================================
     // Get calibration option
+    //=============================================
     if(GetOption("-calib",argc,argv,NULL))
     {
         printf("Producing calibrated archive\n");
         calib=1;
     }
     
+    //=============================================
+    // Get mission phase option
+    //=============================================
     // Only process mission phase abbreviated as second column in mission calendar file.
     if(GetOption("-mp",argc,argv,tstr1))
     {
@@ -525,7 +546,9 @@ int main(int argc, char *argv[])
     }
     
     
-    // Get volume id
+    //=============================================
+    // Get volume id option
+    //=============================================
     if(GetOption("-vid",argc,argv,tstr1))
     {
         sscanf(tstr1,"%d\n",&volume_id);
@@ -544,7 +567,9 @@ int main(int argc, char *argv[])
     }
     
     
+    //=======================
     // Get data set version
+    //=======================
     if(GetOption("-dsv",argc,argv,tstr1))
     {
         sscanf(tstr1,"%f\n",&pds.DataSetVersion);
@@ -563,13 +588,17 @@ int main(int argc, char *argv[])
     }
     
     
+    //==================
     // Get debug option
+    //==================
     if(GetOption("-debug",argc,argv,tstr1))
     {
         sscanf(tstr1,"%d",&debug);
         printf("Debug level %d\n",debug);
     }
     printf("\n");
+    
+    
     
     ProtectPlnkInit();
     
@@ -594,8 +623,14 @@ int main(int argc, char *argv[])
     }
     
     
-    // Overwrite mission phase values if values can be found among (optional) command-line arguments.
-    // NOTE: Current implementation requires all or none of these extra options.
+    /*===================================================
+     * Get options for altering mission phase parameters
+     *================================================================================================
+     * Overwrite mission phase values if values can be found among (optional) command-line arguments.
+     * NOTE: Current implementation requires all or none of these extra options.
+     * NOTE: These options have to be read AFTER reading and interpreting the mission calendar
+     *       so that those values are available if they are not overwritten here.
+     *================================================================================================*/
     if (GetOption("-ds", argc, argv, tstr1))
     {
         DeriveDSIandDSN(
@@ -613,7 +648,7 @@ int main(int argc, char *argv[])
         
         if (GetOption("-ps", argc, argv, tstr1)) {
             if((status=TimeOfDatePDS(tstr1,&(mp.start))) < 0) {
-                fprintf(stderr, "Can not convert argument \"%s\" to a time.\n", tstr1);
+                fprintf(stderr, "Can not convert argument \"%s\" to a time: error code %i\n", tstr1, status);
                 exit(1);
             }
         } else {
@@ -624,9 +659,9 @@ int main(int argc, char *argv[])
         
         if (GetOption("-pd", argc, argv, tstr1))
         {
-            int dur;
-            if (!sscanf(tstr1, "%d", &dur)) {
-                fprintf(stderr, "Can not interpret argument \"%s\".\n", tstr1);
+            float dur;
+            if (!sscanf(tstr1, "%e", &dur)) {
+                fprintf(stderr, "Can not interpret argument \"%s\".\n", tstr1);    // NOTE: Periods shorter than one day are useful for debugging. Therefore permit decimal numbers.
                 exit(1);
             }
             mp.stop = mp.start + dur*24*3600;  // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) into account.            
@@ -638,9 +673,10 @@ int main(int argc, char *argv[])
         }
     }
     
-    
+    //========================================================================================
     // CHECK ASSERTION that there are no "unused" arguments left.
     // This implicitly checks for misspelled options/flags and options/flags occurring twice.
+    //========================================================================================
     if (HasMoreArguments(argc, argv))
     {
         // Extra newline since preceeding log messages (not stderr) make it difficult to visually spot the error message.
@@ -657,7 +693,7 @@ int main(int argc, char *argv[])
     strcpy(tstr1,mp.data_set_id);		// Make temporary copy
     TrimQN(tstr1);			// Remove quotes in temporary copy
     
-    // Loads second part of conconfiguration information into the PDS structure and opens some log/status files
+    // Loads second part of configuration information into the PDS structure and opens some log/status files
     if((status=LoadConfig2(&pds,tstr1))<0) 
     {
         fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
@@ -930,19 +966,22 @@ int main(int argc, char *argv[])
 
 // executable_name : <String to be displayed as command name>.
 void printUserHelpInfo(FILE *stream, char *executable_name) {
-    fprintf(stream, "Usage: %s  [-h] [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n",
-            executable_name);
-    fprintf(stream, "            [-calib] [-debug <Level>] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
-    fprintf(stream, "            [-ds <Description string>               The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
+    fprintf(stream, "Usage: %s  [-h] [-debug <Level>]\n", executable_name);
+    fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
+    fprintf(stream, "            [-calib] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
+    fprintf(stream, "\n");
+    fprintf(stream, "   Alter default values and values in the mission calendar.");
+    fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
     
-    // Values normally obtained from the mission calendar. Sorted by the column order in the mission calendar.
+    // Values normally obtained from the mission calendar.
     // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
     // since deliveries may split up mission phases.
-    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>              E.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
-    fprintf(stream, "             -ps <Period starting date>             Specific day, e.g. 2015-12-13\n");
-    fprintf(stream, "             -pd <Period duration>]                 Positive integer. Unit: days. E.g. 28\n");
+    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      E.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
+    fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34.56\".\n");
+    fprintf(stream, "                                            Characters between field values are not important, only their absolute positions.\n");
+    fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");
     fprintf(stream, "\n");
-    fprintf(stream, "NOTE: The user should NOT submit MISSION_PHASE_NAME surrounded by quotes (more than what is required by the command shell.\n");
+    fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
 
 
@@ -5111,7 +5150,6 @@ int ReadLabelFile(prp_type *lb_data,char *name)
     
     while(fgets(line,msubone,fd)!= NULL)   // Reads line into variable "line". Appears to include ending line feed.
     {
-        printf("while start: line = \"%s\"\n", line);   // DEBUG
         if(line[0] == '\n') continue;     // Empty line..
         if(line[0] == '\r') continue;
         if(line[0] == '#') continue;      // Remove comments..
@@ -6658,7 +6696,7 @@ int SetupHK(prp_type *p)
 // Create property list corresponding to INDEX.LBL file.
 // 
 // Modified by Erik P G Johansson 2015-05-12 to adjust correctly to changing length of DATA_SET_ID which in turn varies
-// one column width in INDEX.TAB/LBL.
+// one column width in INDEX.TAB/INDEX.LBL.
 int SetupIndex(prp_type *p)
 { 
     if(FreePrp(p)>=0) // Free old stuff
@@ -8109,20 +8147,18 @@ int Scet2Date_2(double raw,char *stime,int lfrac)
     return 0;
 }
 
-// Breaks down a string, of format "CCYY-MM-DD-. . . . ." 
-// thus PDS compliant, into a broken down time structure. 
-// Secs minutes hours are set to zero thus midnight 
-// and then fed into mktime.
-// mktime calculates UTC time since 1970 1 Jan 00:00:00
-// Negative return is an error.
-//
-// Fractions are ingnored since they can not be returned in the
-// time_t anyway.
-//
-// 01234567890123456789012
-// CCYY-MM-DDThh:mm:ss.fff
-
-
+/*
+ * Interprets a string, of format "YYYY-MM-DD" or "YYYY MM DD hh mm ss" and returns a time_t value.
+ * NOTE: The function ignores the characters between the number fields and can therefore be set arbitrarily (only their absolute positions are important).
+ * NOTE: The function will ignore characters after the end "ss" (two-digit seconds) and will therefore ignore decimals. Fractions can not be returned in time_t anyway.
+ * NOTE: Can handle PDS compliant time.
+ * NOTE: If no hour-minute-seconds are given, then they will take zero (i.e. midnight at beginning of day) as default value.
+ * Values are fed into mktime. mktime calculates UTC time since 1970 1 Jan 00:00:00
+ * Negative return value is an error.
+ * 
+ * 01234567890123456789012
+ * CCYY-MM-DDThh:mm:ss.fff
+ */
 int TimeOfDatePDS(char *sdate,time_t *t)
 {
     char mday[3];
@@ -8146,11 +8182,12 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     month[2]='\0'; // Terminate
     mday[2]='\0';  // Terminate  
     
+    // Set default values in case they are not supplied by the caller (sdate).
     atime.tm_sec=0;  // Choose
     atime.tm_min=0;  // time
     atime.tm_hour=0; // at midnight.
     
-    if((len=strlen(sdate))>10) // We have a full PDS time string
+    if((len=strlen(sdate))>10) // If we have a full PDS time string with more than just YYYY-MM-DD (year-month-day). Assume hour-minute-second.
     {
         strncpy(min,&sdate[14],2);      // Copy minutes from sdate
         min[2]='\0';                   // Terminate
@@ -8191,8 +8228,8 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     atime.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
     atime.tm_mon-=1;     // Month ranges from 0 to 11 and not as usual 1 to 12
     
-    atime.tm_wday=0;     // Day of week dosn't matter here
-    atime.tm_yday=0;     // Day in year dosn't matter here
+    atime.tm_wday=0;     // Day of week doesn't matter here
+    atime.tm_yday=0;     // Day in year doesn't matter here
     atime.tm_isdst=0;    // Daylight saving unknown
     
     if((*t=mktime(&atime))<0) { // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
@@ -8223,7 +8260,13 @@ int GetUTime(char *ltime)
     tsec = time(NULL);   // Get time since 1970 1 Jan 00:00:00 in seconds
     gmtime_r(&tsec,&bt); // Convert time to broken down time, use thread safe version of ctime
     
-    sprintf(ltime,"%04d-%02d-%02dT%02d:%02d:%02d",bt.tm_year+1900,bt.tm_mon+1,bt.tm_mday,bt.tm_hour,bt.tm_min,bt.tm_sec);
+    sprintf(ltime, "%04d-%02d-%02dT%02d:%02d:%02d",
+            bt.tm_year+1900,
+            bt.tm_mon+1,
+            bt.tm_mday,
+            bt.tm_hour,
+            bt.tm_min,
+            bt.tm_sec);
     
     return 0;
 }
@@ -8546,7 +8589,6 @@ int Compare(const FTSENT **af, const FTSENT **bf)
 // Decode a DDS file
 void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
 {
-    time_t tmp_t;
     char tmp_str[32];
     unsigned int length;
     unsigned short int gsid; // Ground station ID
@@ -8659,14 +8701,19 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
     }while(ibuff<endp);
     
     
-    // Add information that tells us this file has been processed
-    // @Process time:Path+Name
-    tmp_t=time(NULL);                       // Get current time
-    strncpy(tmp_str,ctime(&tmp_t),24);      //Copy time to temp string, skip \n and \0.
-    tmp_str[24]='\0';                       // Add \0
-    fprintf(pds.ddsp_fd,"@%s:%s\n",tmp_str,fe->fts_path);
-    fflush(pds.ddsp_fd);
+    // Log information that tells us this file has been processed
     
+    // OLD log format @Process time:Path+Name
+    //time_t tmp_t;
+    //tmp_t=time(NULL);                       // Get current time
+    //strncpy(tmp_str,ctime(&tmp_t),24);      // Copy time to temp string, skip \n and \0.
+    //tmp_str[24]='\0';                       // Add \0
+    //fprintf(pds.ddsp_fd,"@%s:%s\n",tmp_str,fe->fts_path);
+    
+    GetUTime(tmp_str);   // Get universal time string.
+    fprintf(pds.ddsp_fd, "%s (UTC): %s\n", tmp_str, fe->fts_path);
+    
+    fflush(pds.ddsp_fd);
 }
 
 
