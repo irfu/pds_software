@@ -48,11 +48,14 @@
 //    Code still worked since the result was only used to compare with decimal macro ID numbers
 //    and the code (seemed to) fail well for hexadecimal string representations.
 //       Erik P G Johansson 2015-12-07
-//  * Added extra flags for overriding the MISSION_PHASE_NAME, mission phase start date & duration, and description
+//  * Added extra flags for overriding the MISSION_PHASE_NAME, period start date & duration, and description
 //    string used in DATA_SET_ID and DATA_SET_NAME.
 //       Erik P G Johansson 2015-12-09
 //  * Start time & duration can now be specified with higher accuracy than days using CLI parameters.
 //  * All logs now display wall time the same way ("3pds_dds_progress.log" was previously different).
+//  * Bug fix: pds.modes can now handle colons in the description string.
+//  * Raised permitted string length for code interpreting "pds.modes". Can now (probably) handle all rows up
+//    to 1024 characters, including CR & LF.
 //       Erik P G Johansson 2015-12-17
 //
 //
@@ -151,10 +154,10 @@ int  GetOption(char *opt,int argc, char *argv[],char *arg);        // Get an inp
 int HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if argv[i] contains non-null components for i >= 1.
 
 //----------------------------------------------------------------------------------------------------------------------------------
-int  LoadConfig1(pds_type *p);					// Loads configuration information first part
-int  LoadConfig2(pds_type *p,char *data_set_id);		// Loads configuration information second part
-int  LoadAnomalies(prp_type *p,char *path);			// Load anomally file
-int  LoadModeDesc(prp_type *p,char *path);			// Load human description of macro modes into a linked list of properties.
+int  LoadConfig1(pds_type *p);                          // Loads configuration information first part
+int  LoadConfig2(pds_type *p,char *data_set_id);        // Loads configuration information second part
+int  LoadAnomalies(prp_type *p,char *path);             // Load anomaly file
+int  LoadModeDesc(prp_type *p,char *path);              // Load human description of macro modes into a linked list of properties.
 int  LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt,char *path);		// Load bias settings file
 int  LoadExclude(unsigned int **exclude,char *path);		// Load exclude file
 int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath);   // Load data exclude times file.
@@ -211,7 +214,8 @@ void DispState(int,char *);								// Display state changes for debugging
 
 // String and alpha numeric handling functions
 //----------------------------------------------------------------------------------------------------------------------------------
-int  Separate(char *,char *,char *,char,int);						// Separate into left & right token
+int  Separate(char *,char *,char *,char,int);                                   // Separate into left & right token out of many.
+int  SeparateOnce(char* str, char* strLeft, char* strRight, char separator);    // Separate into left & right tokens.
 int  TrimWN(char *);									// Trims initial and trailing whitespace and all newlines away
 int  TrimQN(char *);									// Trims initial and trailing quotes and all newlines away
 int  ExtendStr(char *dest,char *src,int elen,char ch);					// Make a new string dest using src extended with ch to elen length. 
@@ -977,8 +981,8 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
     // since deliveries may split up mission phases.
     fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      E.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
-    fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34.56\".\n");
-    fprintf(stream, "                                            Characters between field values are not important, only their absolute positions.\n");
+    fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
+    fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions.)\n");
     fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");
     fprintf(stream, "\n");
     fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
@@ -1569,8 +1573,8 @@ void *DecodeScience(void *arg)
     // Load Macro descriptions
     if(LoadModeDesc(&mdesc,pds.mpath)<0)
     {
-        YPrintf("Warning: No macro descriptions INST_MODE_DESC cant be set\n");
-        printf("Warning: No macro descriptions INST_MODE_DESC cant be set\n");
+        YPrintf("Warning: No macro descriptions INST_MODE_DESC cant be set.\n");
+        printf("Warning: No macro descriptions INST_MODE_DESC cant be set.\n");
     }
     
     //DumpPrp(&mdesc); 
@@ -4076,22 +4080,23 @@ int  LoadAnomalies(prp_type *p,char *path)
         if (line[0] == '#') continue; // Remove comments..
         Separate(line,t_tok,m_tok,'\t',1); // Separate at first occurrence of a tab character
         TrimWN(m_tok);
-        InsertTopK(p,t_tok,m_tok); // Insert into linked list of property name value pairs
+        InsertTopK(p,t_tok,m_tok); // Insert into linked list of property name value pairs.
     }
     fclose(fd);
     return 0;
 }
 
+
 // Load human mode descriptions into a linked list of properties.
 int  LoadModeDesc(prp_type *p,char *path)
 {
     FILE *fd;
-    char line[128];   // Line buffer
-    char d_tok[128];  // Description
-    char m_tok[8];    // Macro mode
+    char line[1024];   // Line buffer
+    char d_tok[1024];  // Description
+    char m_tok[1024];  // Macro mode
     
     
-    printf("Loading human description of macro modes, file: %s\n",path);
+    printf( "Loading human description of macro modes, file: %s\n",path);
     YPrintf("Loading human description of macro modes, file: %s\n",path);
     
     if((fd=fopen(path,"r"))==NULL)
@@ -4100,17 +4105,24 @@ int  LoadModeDesc(prp_type *p,char *path)
         return -1;
     }
     
-    while (fgets(line,255,fd) != NULL)
+    while (fgets(line, 1024, fd) != NULL)
     {
-        if(line[0] == '\n') continue; // Empty line..
+        if (line[0] == '\n') continue; // Empty line..
         if (line[0] == '#') continue; // Remove comments..
-        Separate(line,m_tok,d_tok,':',1); // Separate at first occurrence of a : character
+        
+        // Separate at first occurrence of a ":" character   
+        int result = SeparateOnce(line, m_tok, d_tok, ':');
+        if (result < 0) {
+            return -2;
+        }
+        
         TrimWN(d_tok);
-        InsertTopK(p,m_tok,d_tok); // Insert into linked list of property name value pairs
+        InsertTopK(p, m_tok, d_tok); // Insert into linked list of property name value pairs
     }
     fclose(fd);
     return 0;
 }
+
 
 int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt_s,char *path) // Load bias settings
 {
@@ -6986,14 +6998,18 @@ void DispState(int s,char *str)
 // String and alpha numeric handling functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Routine to separate a string into left and right substrings separated
-// by the "occurs"'th occurrence of token "token".
-// The right substring is bounded by both occurrences of token and of end-of-string.
-int Separate(char *str, char *left, char *right, char token, int occurs)
+/*
+ * Routine to separate a string into left and right substrings separated
+ * by the k_sep'th occurrence of "separator".
+ * The right substring is bounded by both occurrences of "separator" and of end-of-string.
+ * 
+ * Return value = min(occurs, <nbr of separators in str>)
+ */
+int Separate(char *str, char *left, char *right, char separator, int k_sep)
 {
     int len;
     int i;
-    int occ  = 0;
+    int i_sep = 0;
     char *lpos;
     char *rpos;
     
@@ -7005,21 +7021,21 @@ int Separate(char *str, char *left, char *right, char token, int occurs)
     {
         for(i=0;i<(len-1);i++)
         {
-            if(str[i]==token)
+            if(str[i]==separator)
             {
                 lpos=rpos;
                 rpos=&str[i+1];
-                occ++; //Increment occurrence of token.
+                i_sep++;         // Increment occurrence of separator.
             }
             
-            if(occ==occurs)
+            if(i_sep==k_sep)
             {
                 for(;lpos<(rpos-1);) {
                     *(left++)=*(lpos++);
                 }
                 *left='\0';
                 
-                for(;(*rpos!=token && *rpos!='\0');) {
+                for(;(*rpos!=separator && *rpos!='\0');) {
                     *(right++)=*(rpos++);
                 }
                 *right='\0';
@@ -7027,15 +7043,52 @@ int Separate(char *str, char *left, char *right, char token, int occurs)
                 break;
             }
         }
-        return occ;
+        return i_sep;
     }
     else
         return -1;
 }
 
 
+/*
+ * Split up string by first occurrence of character.
+ * NOTE: Function "Separate" does not ignore righthand instances of the separator.
+ * 
+ * str = String to split up.
+ * separator = Character that is not \0.
+ * 
+ * If "separator" is found in "str" (at least once):
+ *    strLeft  = Will be set to the part of "str" to the left  of the first occurrence of "separator".
+ *    strRight = Will be set to the part of "str" to the right of the first occurrence of "separator".
+ *    Return value = The position of "separator" in "str" (non-negative value).
+ * 
+ * If "separator" is NOT found in "str":
+ *    strLeft  : String not altered.
+ *    strRight : String not altered.
+ *    Return value = -1
+ * 
+ * Created by Erik P G Johansson 2015-12-17
+ */
+int SeparateOnce(char* str, char* strLeft, char* strRight, char separator)
+{
+    char* sepPos = strchr(str, separator);
+    
+    if (sepPos == NULL) {
+        return -1;
+    }
+    
+    const int strLeftLen = &sepPos[0] - &str[0];
+    
+    strcpy(strRight, &sepPos[1]);
+    strncpy(strLeft, str, strLeftLen);
+    strLeft[strLeftLen] = '\0';
+    
+    return strLeftLen;
+}
+
+
 // Convert CR (carriage return) and LF (line feed) to whitespace.
-// Trim initial and trailing whitespace.
+// Then trim initial and trailing whitespace.
 // ==> Any sequence of CR & LF at the END OF THE STRING are removed too.
 int TrimWN(char *str)
 {
@@ -7085,7 +7138,7 @@ int TrimWN(char *str)
 }
 
 
-//Trim initial and trailing quotes and all newlines away
+// Trim initial and trailing quotes and all newlines away.
 int TrimQN(char *str)
 {
     int len,nlen,i;
@@ -8451,7 +8504,7 @@ int HighestBit(unsigned int value)
 
 // Traverse through DDS archive
 // If end is reached it will wake up every 10th second
-// And look for new data.
+// and look for new data.
 
 void TraverseDDSArchive(pds_type *p)
 {
@@ -9012,9 +9065,10 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
 }
 
 
-
+//##################################################################################################################
 // Alternative main function that can be temporarily used instead of the real one for testing purposes.
 // The real main function can conveniently be renamed (not commented out, not deleted) when using this function.
+// This is useful for having test code that has access to other pds-internal functions.
 int main_DISABLED(int argc, char* argv[]) {
     printf("###################################################################################\n");
     printf("The normal main() function has been DISABLED in this executable. This is test code.\n");

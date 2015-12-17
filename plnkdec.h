@@ -5,7 +5,7 @@ extern int Append(prp_type *,char *,char *); // Append at end of list
 extern int DeleteNo(prp_type *,int);        // Delete by number in list
 extern int DeleteP(prp_type *,char *,int);  // Delete by name and occurance
 extern int InsertTopQ(prp_type *p,char *,char *); // Insert quoted string value at top of list
-extern int InsertTopK(prp_type *p,char *,char *); // Insert string keywor value at top of list
+extern int InsertTopK(prp_type *p,char *,char *); // Insert string keyword value at top of list
 extern int InsertTopQV(prp_type *,char *,unsigned int); // Insert at top as quoted value
 
 extern int InsertTopV(prp_type *p,char *,unsigned int); // Insert value at top of list

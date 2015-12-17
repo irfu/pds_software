@@ -387,8 +387,8 @@ int InsertTopQV(prp_type *p,char *name,unsigned int value)
 
 
 
-// NOTE: Copies the values of *name* and *char into its own allocated memory.
-int CopyPrp(property_type *dest,char *name,char *value)
+// NOTE: Copies the values of *name* and *char into their own allocated memory.
+int CopyPrp(property_type *dest, char *name, char *value)
 {
   int len;
     
