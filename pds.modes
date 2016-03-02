@@ -3,7 +3,7 @@
 # NOTE: There is an unknown upper limit to the length of strings. /EJ 2015-12-17
 #       Limit has been raised and pds should be able to handle string lengths (incl. CR,LF) up to 1023. /EJ 2016-01-07
 # NOTE: Older version of pds (before commit 017971e, 2015-12-17) can not handle ":" in descriptions.
-#       Yields absent quote in pds. /EJ 2015-12-16
+#       Colon yields absent quote in pds. /EJ 2015-12-16
 #       Newer versions should be able to handle ":".  /EJ 2016-01-07
 # NOTE: The quotes are the quotes that end up in the LBL files.
 #       If they are wrong, then the LBL files will be wrong. /EJ 2015-12-17
@@ -42,6 +42,7 @@
 0x0405:"16 Bit ADCs Density Mode P1 & P2 long records 4096*2 samples for Interferometry"
 0x0406:"Empty"
 0x0407:"Empty"
+0x0410:"Missing description (temporary)"
 0x0500:"Alternating Log Compressed sweeps P1 & P2,  Fix density bias on non sweeping probes"
 0x0501:"Alternating Log Compressed sweeps P1 & P2"
 0x0502:"Density Difference P1-P2"
@@ -85,12 +86,13 @@
 0x0900:"BM NN, Vb +30/-30V, lo/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0901:"BM NN, Vb +30/+30V, hi/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0902:"Empty"
-0x0912:"As MCID0X212, Density, normal mode alternating sweeps and time series."
 0x0903:"BM NN, Vb +30/+30V, lo/lo, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0904:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V as 0x0624"
 0x0905:"Density P1P2 NM lo, Vb +30/-17V, Cont. 20 Bit trunc down 128, Sweeps P1 & P2 [-17,+31]V"
 0x0906:"Normal TM,Normal LDL or mixed LDL"
 0x0907:"Empty"
+0x0912:"As MCID0X212, Density, normal mode alternating sweeps and time series."
+0x0926:"Missing description (temporary)"
 0x0A00:"Empty"
 0x0A01:"Empty"
 0x0A02:"Empty"
