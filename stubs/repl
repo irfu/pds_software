@@ -1,0 +1,10 @@
+#!/bin/sh
+echo RSDB Issue..replace Do Comp with Do FFT until RSDB is updated with Do Comp
+for i in *.mds
+do
+    j=${i/.mds/.tmp}
+    sed  \
+    -e 's/LAP_P1P2_ADC20_DOWNSAMPLE      = 0x0000/LAP_P1P2_ADC20_DOWNSAMPLE      = 0x0001/' $i > $j
+mv $j $i
+done     
+

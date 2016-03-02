@@ -1,0 +1,54 @@
+################################################
+#
+# LAP MACRO DESCRIPTION FILE
+# FILENAME : PRG_B1_M5.mds
+# GENERATED: Mon Jan 17 20:13:05 2005
+# APPLICATION: MEDS
+#
+################################################
+<START>
+00	LAP_MACRO_ID_TAG               = "0x0205"
+01	LAP_TM_RATE                    = "BURST"
+02	LAP_FEEDBACK_P1                = "DENSITY"
+02	LAP_FEEDBACK_P2                = "DENSITY"
+02	LAP_P1_ADC20                   = "DENSITY"
+02	LAP_P2_ADC20                   = "DENSITY"
+02	LAP_P1_ADC16                   = "DENSITY"
+02	LAP_P2_ADC16                   = "DENSITY"
+02	LAP_P1_RANGE_DENS_BIAS         = "+-32"
+02	LAP_P2_RANGE_DENS_BIAS         = "+-32"
+02	LAP_TEMP                       = "OFF"
+02	LAP_P1_STRATEGY_OR_RANGE       = "GAIN 1"
+02	LAP_P1_BIAS_MODE               = "DENSITY"
+02	LAP_P1_RX_OR_TX                = "ANALOG INPUT"
+02	LAP_P2_STRATEGY_OR_RANGE       = "GAIN 1"
+02	LAP_P2_BIAS_MODE               = "DENSITY"
+02	LAP_P2_RX_OR_TX                = "ANALOG INPUT"
+02	LAP_BOOTSTRAP                  = "ON"
+02	LAP_PROBE_USER_MIP_LAP         = "LAP"
+03	LAP_ADC20_CALIBRATION          = "0x0001"
+03	LAP_ADC20_CONVERSION           = "0x0001"
+03	LAP_ADC20_UNIPOLAR_BIPOLAR     = "BIPOLAR"
+03	LAP_P1_ADC16_FILTER            = "8 KHz"
+03	LAP_P2_ADC16_FILTER            = "8 KHz"
+03	LAP_P1_ADC16_UNI_BI_POLAR      = "BIPOLAR"
+03	LAP_P2_ADC16_UNI_BI_POLAR      = "BIPOLAR"
+03	LAP_ADC16_RESET_AND_CALIB      = "0x0001"
+03	LAP_ADC16_RUNNING              = "0x0001"
+03	LAP_ADC16_SAMPLE_HOLD          = "0x0001"
+03	LAP_DAC_OSCILLATOR             = "OBSOLETE"
+04	LAP_VBIAS2                     = "0x007f"
+04	LAP_VBIAS1                     = "0x007f"
+04	LAP_P1_DENSITY_FIX_DURATION    = "0x0001"
+04	LAP_P2_DENSITY_FIX_DURATION    = "0x0001"
+05	LAP_P1P2_ADC20_DOWNSAMPLE      = "0x0001"
+05	LAP_P1P2_ADC20_RECORD_LENGTH   = "0x06fd"
+05	LAP_P1P2_ADC20_MA_LENGTH       = "0x0001"
+05	LAP_P1P2_ADC20_STATUS          = "P1F & P2F"
+06	LAP_HOLD_N_AQPS                = "0x0001"
+06	LAP_HOLD_AQP_TYPE              = "NORMAL AQPS"
+06	LAP_SAMPLE_DURING_HOLD         = "ALLOW SAMPLING"
+10	LAP_SET_SUBHEADER              = "0x0006"
+12	LAP_TRANSFER_DATA_TO_OUT_FROM  = "TEMPORARY BUFFER"
+14	LAP_GO_BACK_N_STEPS            = "0x0008"
+<END>

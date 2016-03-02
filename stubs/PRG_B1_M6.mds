@@ -1,0 +1,21 @@
+################################################
+#
+# LAP MACRO DESCRIPTION FILE
+# FILENAME : PRG_B1_M6.mds
+# GENERATED: Mon Jan 17 20:13:27 2005
+# APPLICATION: MEDS
+#
+################################################
+<START>
+00	LAP_MACRO_ID_TAG               = "0x0206"
+01	LAP_HOLD_N_AQPS                = "0x0001"
+01	LAP_HOLD_AQP_TYPE              = "LDL AQPS"
+01	LAP_SAMPLE_DURING_HOLD         = "ALLOW SAMPLING"
+04	LAP_SET_SUBHEADER              = "0x002c"
+05	LAP_TRANSFER_DATA_TO_OUT_FROM  = "P1 BUFFER"
+06	LAP_SET_SUBHEADER              = "0x002d"
+07	LAP_TRANSFER_DATA_TO_OUT_FROM  = "P2 BUFFER"
+10	LAP_SET_SUBHEADER              = "0x002e"
+11	LAP_TRANSFER_DATA_TO_OUT_FROM  = "TEMPORARY BUFFER"
+13	LAP_GO_BACK_N_STEPS            = "0x000c"
+<END>

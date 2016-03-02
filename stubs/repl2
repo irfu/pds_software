@@ -1,0 +1,10 @@
+#!/bin/sh
+echo Wrong keyword replace
+for i in *.mds
+do
+    j=${i/.mds/.tmp}
+    sed  \
+    -e 's/LAP_P1_E-FIELD_FIX_DURATION/LAP_P1_EFIELD_FIX_DURATION/' $i > $j
+mv $j $i
+done     
+
