@@ -182,7 +182,7 @@ int ReadLabelFile(prp_type *pds,char *name);			// Read a label file
 int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);	// Read table file
 
 // Write data to data product table file .tab
-int WritePTabFile(unsigned char *buff,char *fname,int data_type,int samples,int id_code,int length,sweep_type *sw_info,curr_type *curr,int param_type,int dsa16_p1,int dsa16_p2,int dop,m_type *m_conv,unsigned int **bias,int nbias,unsigned int **mode,int nmode,int ini_samples,int samp_plateau);
+int WritePTABFile(unsigned char *buff,char *fname,int data_type,int samples,int id_code,int length,sweep_type *sw_info,curr_type *curr,int param_type,int dsa16_p1,int dsa16_p2,int dop,m_type *m_conv,unsigned int **bias,int nbias,unsigned int **mode,int nmode,int ini_samples,int samp_plateau);
 
 // Write to data product label file .lbl
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type);
@@ -541,7 +541,7 @@ int main(int argc, char *argv[])
     {
         strncpy(mp.abbrev,tstr1,4);
         mp.abbrev[4]='\0';
-        printf("Processing mission phase with id %s\n",mp.abbrev);
+        printf("Processing mission phase with ID %s\n",mp.abbrev);
     }
     else
     {
@@ -2205,7 +2205,7 @@ void *DecodeScience(void *arg)
                                                 
                                                 if(length>RIDICULUS) // If length is ridiculously long
                                                 {
-                                                    CPrintf("    Ridicuously long length in science data, trying to resync\n");
+                                                    CPrintf("    Ridiculously long length in science data, trying to resync\n");
                                                     in_sync=0; // Indicate not in sync
                                                     state=S01_GET_MAINH; //Resync
                                                 }
@@ -2252,7 +2252,7 @@ void *DecodeScience(void *arg)
                                                 // All macros in flash contain the macro ID in the science data stream.
                                                 if(macro_status) // If no macro description
                                                 {
-                                                    CPrintf("    WARNING: Finger printing macro id.\n");
+                                                    CPrintf("    WARNING: Fingerprinting macro ID.\n");
                                                     finger_printing=1;
                                                     if(length==40 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
                                                     {
@@ -2747,7 +2747,7 @@ void *DecodeScience(void *arg)
                                                                         // For the pds code to be able to change the bias during every macro loop, the code has to specificly
                                                                         // permit macro 515 to set VBIAS2 in _every_ macro loop, not just the first one.
                                                                         // NOTE: Macro 515 is also on the list of macros that can not receive extra, external bias settings
-                                                                        // ("kommenderingar"). See WritePTabFile, "if (extra_bias_setting) ..." .
+                                                                        // ("kommenderingar"). See WritePTABFile, "if (extra_bias_setting) ..." .
                                                                         // NOTE: One could of course make the same exception for VBIAS1 to preserve the "symmetry between
                                                                         // the probes" but that is unnecessary since VBIAS1 is constant throughout the macro loop as intended.
                                                                         // /Erik P G Johansson, 2015-04-07
@@ -3177,7 +3177,7 @@ void *DecodeScience(void *arg)
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,0,ini_samples,param_type)>=0)
                                                             {
-                                                                WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,0,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                                                                WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,0,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
@@ -3207,7 +3207,7 @@ void *DecodeScience(void *arg)
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,1,ini_samples,param_type)>=0)
                                                             {
-                                                                WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,1,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);  
+                                                                WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,1,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);  
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
@@ -3235,7 +3235,7 @@ void *DecodeScience(void *arg)
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,2,ini_samples,param_type)>=0)
                                                             {
-                                                                WritePTabFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,2,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                                                                WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,2,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
@@ -5429,7 +5429,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
  *    QUESTION: IF guesses are correct, then why do if statements also refer to curr->sensor? Is that non unnecessary?
  *       Ex: if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1)
  */
-int WritePTabFile(
+int WritePTABFile(
     unsigned char *buff,
     char *fname,
     int data_type,
@@ -6111,14 +6111,14 @@ int WritePTabFile(
     }
     
     return 0;
-}   // WritePTabFile
+}   // WritePTABFile
 
 
 
 /* WRITE TO DATA LABEL FILE .LBL
  * 
  * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is.
- * NOTE: This function only has very little dependence on "dop". Compare "WritePTabFile".
+ * NOTE: This function only has very little dependence on "dop". Compare "WritePTABFile".
  */
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type)
 {
@@ -8063,7 +8063,7 @@ int DecodeRawTimeEst(double raw,char *stime)
 // 1) Can do this since it's the only user
 // 2) It only reads! no thread conflicts..
 //
-// NOTE: The function and its input value is used by WritePTabFile to produce the first two columns in (science data) TAB files: 
+// NOTE: The function and its input value is used by WritePTABFile to produce the first two columns in (science data) TAB files: 
 //    stime: UTC_TIME (DESCRIPTION = "UTC TIME")
 //    raw:   OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)")
 
