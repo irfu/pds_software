@@ -1,8 +1,18 @@
 #!/bin/bash
 #
-# Used to generate "id.c" from "id.h" in Makefile.
+# Script used to generate "id.c" from "id.h" in Makefile.
+# 
+# NOTE: Script requires input on stdin.
+# NOTE: The script puts some constraints on what can go into "id.c".
+# 
+# sed options:
+#        -n, --quiet, --silent
+#               suppress automatic printing of pattern space
 #
-sed -n 	-e 's/#define ID_H/char IDList[][33]={/p' \
+#        -e script, --expression=script
+#               add the script to the commands to be executed
+#
+sed -n -e 's/#define ID_H/char IDList[][33]={/p' \
 	-e 's/#endif/"END_OF_LIST                     "};/p' \
 	-e 's/#define /"/' \
 	-e 's/0x.. \/\//", \/\/&/' \

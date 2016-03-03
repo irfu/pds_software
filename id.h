@@ -1,4 +1,7 @@
-/* id.h */
+/* id.h
+ This code is meant to be used by doid to automatically generate "id.c" which means it can not be edited arbitrarily.
+ NOTE: The macro variable names here end up in IDList in "id.c" which are then parsed to some extent in "pds_X.XX.c"!
+ */
 
 #ifndef ID_H
 #define ID_H
@@ -9,7 +12,7 @@
 #define D_P1P2INTRL_TRNC_20BIT_RAW_BIP  0x03 // DENSITY P1 & P2 INTERLEAVED TRUNCATED 20 BIT ADCS RAW BIPOLAR
 #define D_P1_TRNC_20_BIT_RAW_BIP        0x04 // DENSITY P1 TRUNCATED 20 BIT ADCS RAW BIPOLAR
 #define D_P2_TRNC_20_BIT_RAW_BIP        0x05 // DENSITY P2 TRUNCATED 20 BIT ADCS RAW BIPOLAR
-#define D_P1P2INTRL_20BIT_RAW_BIP       0x06 // DENSITY P1 & P2 INTERLEAVED20 BIT ADCS RAW BIPOLAR
+#define D_P1P2INTRL_20BIT_RAW_BIP       0x06 // DENSITY P1 & P2 INTERLEAVED 20 BIT ADCS RAW BIPOLAR
 #define D_P1_20_BIT_RAW_BIP             0x07 // DENSITY P1 20 BIT ADCS RAW BIPOLAR
 #define D_P2_20_BIT_RAW_BIP             0x08 // DENSITY P2 20 BIT ADCS RAW BIPOLAR
 #define D_SWEEP_P1_RAW_16BIT_BIP        0x09 // DENSITY SWEEP P1 RAW 16 BIT BIPOLAR
@@ -29,7 +32,7 @@
 #define E_P1P2INTRL_TRNC_20BIT_RAW_BIP  0x17 // E-FIELD P1 & P2 INTERLEAVED TRUNCATED 20 BIT ADCS RAW BIPOLAR
 #define E_P1_TRNC_20_BIT_RAW_BIP        0x18 // E-FIELD P1 TRUNCATED 20 BIT ADCS RAW BIPOLAR
 #define E_P2_TRNC_20_BIT_RAW_BIP        0x19 // E-FIELD P2 TRUNCATED 20 BIT ADCS RAW BIPOLAR
-#define E_P1P2INTRL_20BIT_RAW_BIP       0x1a // E-FIELD P1 & P2 INTERLEAVED20 BIT ADCS RAW BIPOLAR
+#define E_P1P2INTRL_20BIT_RAW_BIP       0x1a // E-FIELD P1 & P2 INTERLEAVED 20 BIT ADCS RAW BIPOLAR
 #define E_P1_20_BIT_RAW_BIP             0x1b // E-FIELD P1 20 BIT ADCS RAW BIPOLAR
 #define E_P2_20_BIT_RAW_BIP             0x1c // E-FIELD P2 20 BIT ADCS RAW BIPOLAR
 #define UNDEFINED_0x1d                  0x1d // UNDEFINED                           
@@ -44,7 +47,7 @@
 #define D_P2_RAW_16BIT_D16              0x26 // DENSITY P1 RAW 16 BIT DOWNSAMPLED 16 TIMES
 #define UNDEFINED_0x27                  0x27 // UNDEFINED
 #define UNDEFINED_0x28                  0x28 // UNDEFINED
-#define GENERIC_ID_P1                   0x29 // GENERIC => DATA P1 IS NOT FULLY TRANSPARENT.
+#define GENERIC_ID_P1                   0x29 // GENERIC => DATA P1 IS NOT FULLY TRANSPARENT
 #define GENERIC_ID_P2                   0x2a // GENERIC => DATA P2, NOT FULLY TRANSPARENT 
 #define GENERIC_ID_20BIT                0x2b // GENERIC => DATA 20 BIT NOT FULLY TRANSPARENT 
 #define GENERIC_LDL_P1                  0x2c // GENERIC => DATA LDL P1 NOT FULLY TRANSPARENT 

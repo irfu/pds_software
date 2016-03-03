@@ -15,7 +15,7 @@ Then do       $> make
 
 See "CONFIGURING PDS" below for more details.
 
-COMMANDLINE: 
+COMMAND LINE: 
 
  pds  [-h] [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-calib] [-debug level] -mp mission_phase_abbreviation
 

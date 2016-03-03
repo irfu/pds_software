@@ -435,13 +435,13 @@ int ComparePrp(property_type *p1,property_type *p2)
     if(strcmp(p1->name,p2->name)) 
     {
         pthread_mutex_unlock(&protect_plnk);
-        return -1;   // Property name dosn't match
+        return -1;   // Property name doesn't match
     }
     
     if(strcmp(p1->value,p2->value)) 
     {
         pthread_mutex_unlock(&protect_plnk);
-        return -2; // Property value dosn't match
+        return -2; // Property value doesn't match
     }
     
     pthread_mutex_unlock(&protect_plnk);
@@ -681,7 +681,15 @@ int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
 
 //
 // Find name backwards (->prev_p direction) starting with *prop1.
-// Thus prop1 must(!) be in the linked property list!!
+// 
+// *prop1 : Pointer to the property where the search begins. Must be in the linked property list.
+// *prop2 : Pointer to the property that was found (if any).
+// *name : Property name to search for.
+// 
+// Return result:
+// -1 = Error
+//  0 = Found nothing
+//  1 = Found it
 //
 int FindB(prp_type *p, property_type **prop1, property_type **prop2, char *name, char check)
 {

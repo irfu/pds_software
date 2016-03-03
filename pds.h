@@ -125,7 +125,7 @@
 // NOTE: Current (2015-06-04) calibration values were obtained using HIGH-GAIN ("G1") so values are strictly speaking
 //       ONLY VALID FOR HIGH-GAIN data.
 //       Lacking low-gain values, the high-gain values might or might not be used also for low-gain data in the actual
-//       implementation that uses these values. See the actual use of these constants in pds_x.xx.c:WritePTabFile.
+//       implementation that uses these values. See the actual use of these constants in pds_x.xx.c:WritePTABFile.
 //
 // NOTE: DELTA values (as defined here) are to be multipled with the ADC16 conversion factors (LAP_CURRENT_CAL_16B_G1), not ADC20 factors.
 //
@@ -230,20 +230,20 @@ typedef struct adc20_type_def
 // Current settings for various parameters
 typedef struct curr_type_def
 {
-  unsigned int sensor;     // LAP sensor currently in use
-  unsigned int transmitter;// LAP currently transmitting sensor
-  double       seq_time;   // Current time of a mesurment sequence in a macro cycle
-  double       stop_time;  // Current stop time of a mesurment sequence in a macro cycle
-  double       offset_time;// Time since raw start time
-  double       old_time;   // Used to test if we have extra bias settings
-  unsigned int old_macro;  // Used to test if we have a new macro
-  double       factor;     // Current conversion factor (Not physical current..but the factor currently used for time computations)
-  unsigned int afilter;    // Current analog filter (if data from both sensors(i.e. correlation) we assume the same filter on both)
+  unsigned int sensor;      // LAP sensor currently in use
+  unsigned int transmitter; // LAP currently transmitting sensor
+  double       seq_time;    // Current time of a mesurment sequence in a macro cycle
+  double       stop_time;   // Current stop time of a mesurment sequence in a macro cycle
+  double       offset_time; // Time since raw start time
+  double       old_time;    // Used to test if we have extra bias settings
+  unsigned int old_macro;   // Used to test if we have a new macro
+  double       factor;      // Current conversion factor (Not physical current..but the factor currently used for time computations)
+  unsigned int afilter;     // Current analog filter (if data from both sensors(i.e. correlation) we assume the same filter on both)
   int ibias1;               // Fix current bias p1
   int vbias1;               // Fix voltage bias p1
   int ibias2;               // Fix current bias p2
   int vbias2;               // Fix voltage bias p2
-  char bias_mode;          // Current bias mode 
+  char bias_mode;           // Current bias mode (according to ID code)
   char gain1[16];           // Current gain p1
   char gain2[16];           // Current gain p2
 } curr_type;

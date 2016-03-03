@@ -148,7 +148,7 @@ int  AddPathsToSystemLog(pds_type *pds);			// Adds paths to system log
 // Program option functions
 //----------------------------------------------------------------------------------------------------------------------------------
 int  GetOption(char *opt,int argc, char *argv[],char *arg);        // Get an input option
-// pointer to file desc pointer pfd is needed and an error stream
+// Pointer to file desc pointer pfd is needed and an error stream
 // Functions to load and test external information 
 
 int HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if argv[i] contains non-null components for i >= 1.
@@ -159,13 +159,13 @@ int  LoadConfig2(pds_type *p,char *data_set_id);        // Loads configuration i
 int  LoadAnomalies(prp_type *p,char *path);             // Load anomaly file
 int  LoadModeDesc(prp_type *p,char *path);              // Load human description of macro modes into a linked list of properties.
 int  LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt,char *path);		// Load bias settings file
-int  LoadExclude(unsigned int **exclude,char *path);		// Load exclude file
+int  LoadExclude(unsigned int **exclude,char *path);                                   // Load exclude file
 int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath);   // Load data exclude times file.
 int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData);
-int  LoadTimeCorr(pds_type *pds,tc_type *tcp);			// Load time correlation packets
-int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);	// Loads all macro descriptions
-int  GetMCFiles(char *rpath,char *fpath,m_type *m);		// Get measured data calibration files 
-int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp,pds_type *pds);			// Given a path, data set version and mission abbreviation (in mp) 
+int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
+int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
+int  GetMCFiles(char *rpath,char *fpath,m_type *m);                             // Get measured data calibration files 
+int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp,pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp) 
 
 // Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
 void DeriveDSIandDSN(
@@ -205,8 +205,8 @@ int  SetupIndex(prp_type *p);								// Setup index label parameters
 void WriteIndexLBL(prp_type *p,mp_type *m);						// Write index label file
 void WriteToIndexTAB(char* relative_LBL_file_path, char* product_ID, char* prod_creation_time); // Write one line in index label file.
 int  TotAQPs(prp_type *p,int n);							// Return tot num of aqps since start for sequence n
-int  FindIDCode(prp_type *p,int n);							// Find id code in macro overriding id code in data 
-// if anomally correction is applicable
+int  FindIDCode(prp_type *p,int n);							// Find ID code in macro overriding ID code in data 
+// if anomaly correction is applicable
 
 // Program state handler functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -325,11 +325,11 @@ static volatile sig_atomic_t exit_gracefully=0; // Used to cleanly exit then Ctr
 unsigned int sec_epoch;    // Seconds from 1970 epoch to epoch "epoch"
 int debug=0;               // Turn on/off debugging
 
-int  macro_priority=0;     // Priority of macros (Trust more or less than info in data)
+int macro_priority=0;      // Priority of macros (Trust more or less than info in data). 0=Trust data, 1=Trust macro info
 
 int calib=0;               // Indicate if we are doing a calibrated (1) or edited (0) archive.
 
-extern char IDList[][33];  // ID array, string with short name of ID code
+extern char IDList[][33];  // ID array, string with short name of ID code. Defined in "id.c".
 
 pthread_t sctmthread = 0;  // S/C TM thread
 pthread_t scithread  = 0;  // Science thread
@@ -551,7 +551,7 @@ int main(int argc, char *argv[])
     
     
     //=============================================
-    // Get volume id option
+    // Get volume ID option
     //=============================================
     if(GetOption("-vid",argc,argv,tstr1))
     {
@@ -693,7 +693,7 @@ int main(int argc, char *argv[])
     YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     printf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     
-    // Create unquoted data set id
+    // Create unquoted data set ID
     strcpy(tstr1,mp.data_set_id);		// Make temporary copy
     TrimQN(tstr1);			// Remove quotes in temporary copy
     
@@ -998,7 +998,7 @@ void *SCDecodeTM(void *arg)
 {
     char tstr[64];
     unsigned int length;           // Length of data
-    unsigned char packet_id;       // S/C packet id, low byte
+    unsigned char packet_id;       // S/C packet ID, low byte
     double rawt;                   // Raw time
     buffer_struct_type *cs;        // Pointer to circular buffer structure type, for S/C TM decoding
     unsigned char buff[RIDICULUS];  // Temporary in buffer
@@ -1312,7 +1312,7 @@ void *DecodeHK(void *arg)
         
         
         AssembleHKLine(buff,line,time,inst_mode_id);		// Assemble first HK line (HK_NUM_LINES per TAB file)
-        SetP(&hkl,"INSTRUMENT_MODE_ID",inst_mode_id,1);		// Set mode id to macro id
+        SetP(&hkl,"INSTRUMENT_MODE_ID",inst_mode_id,1);		// Set mode ID to macro ID
         
         HPrintf("LINE=%s",line);
         
@@ -1430,20 +1430,20 @@ void *DecodeScience(void *arg)
     char alphanum_s[4]="000";       // Default starting alpha numeric value for unique sience data file name and product ID
     
     unsigned int state;             // Current state of state machine
-    unsigned char buff[RIDICULUS];  // Temporary in buffer using a ridiculusly large size...thus whole buffer shall never be needed.
+    unsigned char buff[RIDICULUS];  // Temporary in buffer using a ridiculously large size...thus whole buffer shall never be needed.
     unsigned char tbuff[8];         // Temporary buffer
     unsigned int main_h_sum=0;      // Main header sum
     unsigned int byte_sum=0;        // Byte sum scanning for header
     
     int in_sync;                    // Indicates if we are in sync or not
-    int id_code=0;                  // Temporary id code variable
+    int id_code=0;                  // Temporary ID code variable
     int params=0;                   // Parameter flag, indicates if parameters exists in science stream
     int param_type=0;               // Indicate type of parameters
     unsigned int length=0;          // Length of science data,
     unsigned int hb=0;              // high
     unsigned int lb=0;              // and low byte.
     unsigned int samples  = 0;      // Number of samples in science data (Not same as length!)
-    int macro_status=0;             // Indicates whether we found a matching macro description for the macro id. 0=found (!).
+    int macro_status=0;             // Indicates whether we found a matching macro description for the macro ID. 0=found (!).
     
     
     unsigned int meas_seq = 0;      // Measurement sequence. Specifies one of the LAP_SET_SUBHEADER/LAP_TRANSFER_DATA_TO_OUT_FROM in macro description (.mds file).
@@ -1459,7 +1459,7 @@ void *DecodeScience(void *arg)
     // Structure with current settings for various parameters
     curr_type curr={0,0,0,0,0,0,0,0,0,0x7f,0x7f,0}; 
     
-    int          finger_printing=0; // Are we doing finger printing ?
+    int          finger_printing=0; // Are we doing fingerprinting ?
     sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ....
     adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
     
@@ -1495,7 +1495,7 @@ void *DecodeScience(void *arg)
     char lbl_fname[32];             // Data Science label file name complies to 27.3 file name standard
     char tab_fname[32];             // Data Science table file name complies to 27.3 file name standard
     
-    char prod_id[32];               // Product id
+    char prod_id[32];               // Product ID
     
     int  data_type=0;               // Type of data 16 or 20 bit ADC:s
     
@@ -1526,7 +1526,7 @@ void *DecodeScience(void *arg)
     InitP(&anom);  // Initialize linked property/value list for anomalies
     InitP(&mdesc); // Initialize linked property/value list for macro descriptions
     
-    // Load anomalies from anomally file
+    // Load anomalies from anomaly file
     if(LoadAnomalies(&anom,pds.apath)<0)
     {
         YPrintf("Warning: anomaly correction can not be done\n");
@@ -1656,7 +1656,7 @@ void *DecodeScience(void *arg)
                 sprintf(tstr2, "\"%s\"", pds.LabelRevNote);        // Modified to not include current time. /Erik P G Johansson 2015-04-10
                 SetP(&comm,"LABEL_REVISION_NOTE",tstr2,1);         // Set LABEL Revision note
                 
-                curr.old_macro=macro_id; // Remember old macro id at this point
+                curr.old_macro=macro_id; // Remember old macro ID at this point
                 
                 // Do we correct for anomalies ?
                 if(FindP(&anom,&property1,stime,1,DNTCARE)>0)
@@ -1687,29 +1687,29 @@ void *DecodeScience(void *arg)
                     { 
                         GetBuffer(cb,buff,1); // Get a byte from circular science buffer
                         
-                        id_code=buff[0];        // Remember id code
+                        id_code=buff[0];        // Remember ID code
                         
                         params=0;               // Assume no parameters in science stream
                         param_type=NO_PARAMS;   // Default type of parameters, none
                         state=S11_GET_LENGTH;   // Assume next state is this one
                         
-                        curr.sensor=SENS_NONE;  // Set current sensor to 0 thus none 1=Sens 1, 2=Sens 2 and  3=Sens 1 & 2 
-                        curr.transmitter=SENS_NONE; // Set current transmitter to none
+                        curr.sensor=SENS_NONE;      // Set current sensor to 0=none. (1=Sens 1, 2=Sens 2, and 3=Sens 1 & 2)
+                        curr.transmitter=SENS_NONE; // Set current transmitter to none.
                         CPrintf("----------------------------------------------------------------------------\n");
                         
                         // !macro_status = macro desc found
                         // At this point:
                         // If anomaly found in pds.anomalies
-                        // 1) If macro id was provided in pds.anomalies it is already set at this point!
+                        // 1) If macro ID was provided in pds.anomalies it is already set at this point!
                         // 2) if it wasn't it will be determined by:
                         // 2.1) Finding a macro ID tag below and returning here!
-                        // 2.2) Finding it at a later stage by finger printing and not posssible to return here
+                        // 2.2) Finding it at a later stage by fingerprinting and not posssible to return here
                         //
-                        // Thus we can not fix ID code problems in data, if we do not directly provide a macro id
-                        // in the anomally file..this we can easily do!
+                        // Thus we can not fix ID code problems in data, if we do not directly provide a macro ID
+                        // in the anomaly file..this we can easily do!
                         
                         // Macro information has high priority and a macro description has been found!
-                        // Thus we want to overide id code in data!
+                        // Thus we want to overide ID code in data!
                         if(macro_priority && !macro_status) 
                         {
                             if((val=FindIDCode(&macros[mb][ma],meas_seq+1))<0)
@@ -1730,7 +1730,7 @@ void *DecodeScience(void *arg)
                                 break;
                             case SECOND_ID_01: // Second sub ID to be expected
                                 state=S04_GET_ID_CODE; // Get second sub ID 
-                                // Set a flag indicating second sub id list 
+                                // Set a flag indicating second sub ID list 
                                 // currently not existing!, but for contingency!
                                 break;
                             case P2_TRANSMITTER: // Transmitting on P2! no data on P2 but probably on P1
@@ -1745,13 +1745,12 @@ void *DecodeScience(void *arg)
                                 state=S04_GET_ID_CODE;
                                 break;
                                 
-                                // This is a dirty workaround for the generic macros
-                                // we can accept a low! probability 0.002 % for the 
-                                // workaround to do harm, currently we do not use generic
-                                // macros.
-                                
+                                // This is a dirty workaround for the generic macros.
+                                // We can accept a low probability 0.002 % for the 
+                                // workaround to do harm. Currently we do not use generic
+                                // macros.                                
                             case GENERIC_ID_P1:
-                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                LookBuffer(cb,buff,2);     // Look ahead two bytes
                                 
                                 if(buff[0]==0xCC && buff[1]==GENERIC_ID_P2)
                                 {
@@ -1767,12 +1766,12 @@ void *DecodeScience(void *arg)
                                 }
                                 break;
                                 
-                                // This is a dirty workaround for the generic macros
-                                // we can accept a low! probability 0.002% for the
-                                // workaround to do harm, currently we do not use generic
+                                // This is a dirty workaround for the generic macros.
+                                // We can accept a low probability 0.002 % for the 
+                                // workaround to do harm. Currently we do not use generic
                                 // macros.
                             case GENERIC_ID_P2:
-                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                LookBuffer(cb,buff,2);     // Look ahead two bytes
                                 
                                 if(buff[0]==0xCC && buff[1]==GENERIC_ID_20BIT)
                                 {
@@ -1788,13 +1787,12 @@ void *DecodeScience(void *arg)
                                 } 
                                 break;
                                 
-                                // This is a dirty workaround for the generic macros
-                                // we can accept a low! probability 0.002 % for the 
-                                // workaround to do harm, however we do not use generic
+                                // This is a dirty workaround for the generic macros.
+                                // We can accept a low probability 0.002 % for the 
+                                // workaround to do harm. Currently we do not use generic
                                 // macros.
-                                
                             case GENERIC_LDL_P1:
-                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                LookBuffer(cb,buff,2);     // Look ahead two bytes
                                 
                                 if(buff[0]==0xCC && buff[1]==GENERIC_LDL_P2)
                                 {
@@ -1811,7 +1809,7 @@ void *DecodeScience(void *arg)
                                 break;
                                 
                             case GENERIC_LDL_P2:
-                                LookBuffer(cb,buff,2);     // Look ahed two bytes
+                                LookBuffer(cb,buff,2);     // Look ahead two bytes
                                 
                                 if(buff[0]==0xCC && buff[1]==GENERIC_LDL_20BIT)
                                 {
@@ -1829,38 +1827,44 @@ void *DecodeScience(void *arg)
                                 
                             case D_SWEEP_P2_RAW_16BIT_BIP:
                             case D_SWEEP_P2_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!! 
-                                curr.sensor++;              // Increment current sensor, (Set to 0 at top of switch)    
+                                curr.sensor++;              // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)    
                             case D_SWEEP_P1_RAW_16BIT_BIP:
                             case D_SWEEP_P1_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!!
-                                curr.sensor++;              // Increment current sensor, (Set to 0 at top of switch)
+                                curr.sensor++;              // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
                                 params=6;
                                 meas_seq++;                 // Increase number of measurement sequences
                                 CPrintf("    Found sweep science data, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 param_type=SWEEP_PARAMS;
                                 state=S07_GET_PARAMS;
                                 break;
-                            case D_P1P2INTRL_TRNC_20BIT_RAW_BIP:
-                                
-                            /* Case (macro variable) is defined in id.h but the exact desired response/behaviour/code for this case
+
+                            /* Case (macro variable) E_P1_D_P2_INTRL_20_BIT_RAW_BIP is defined in id.h but the exact desired
+                             * response/behaviour/code for this case
                              * is presently unknown. The case should probably be inserted somewhere around here according to
                              * Anders Eriksson. /Erik P G Johansson 2016-03-03
                              */
-                            //case E_P1_D_P2_INTRL_20_BIT_RAW_BIP: 
+                            //case E_P1_D_P2_INTRL_20_BIT_RAW_BIP:
                                 
+                            case D_P1P2INTRL_TRNC_20BIT_RAW_BIP:
                             case D_P1P2INTRL_20BIT_RAW_BIP:
                             case E_P1P2INTRL_TRNC_20BIT_RAW_BIP:
                             case E_P1P2INTRL_20BIT_RAW_BIP:
-                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                // Effectively curr.sensor = 3 (SENS_P1P2)
+                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                // NOTE: No break!
                             case D_P2_TRNC_20_BIT_RAW_BIP:
                             case E_P2_TRNC_20_BIT_RAW_BIP:
                             case D_P2_20_BIT_RAW_BIP:
                             case E_P2_20_BIT_RAW_BIP:    
-                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                // Effectively curr.sensor = 2 (SENS_P2)
+                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                // NOTE: No break!                                
                             case D_P1_TRNC_20_BIT_RAW_BIP:
                             case D_P1_20_BIT_RAW_BIP:
                             case E_P1_TRNC_20_BIT_RAW_BIP:
                             case E_P1_20_BIT_RAW_BIP:
-                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                // Effectively curr.sensor = 1 (SENS_P1)
+                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
                                 params=2;
                                 meas_seq++; // Increase number of measurement sequences
                                 CPrintf("    Found science data, ID CODE: 0x%.2x Sequence %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
@@ -1870,7 +1874,7 @@ void *DecodeScience(void *arg)
                                 
                             case D_DIFF_P1P2:
                             case E_DIFF_P1P2:
-                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
                             case D_P2_RAW_16BIT:
                             case E_P2_16BIT_RAW:
                             case D_P2_RAW_16BIT_D2:
@@ -1881,7 +1885,7 @@ void *DecodeScience(void *arg)
                             case E_P2_RAW_16BIT_D8:
                             case D_P2_RAW_16BIT_D16:
                             case D_P2_RAW_16BIT_D8:
-                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
                             case D_P1_RAW_16BIT:
                             case E_P1_16BIT_RAW:
                             case D_P1_RAW_16BIT_D4:
@@ -1892,7 +1896,7 @@ void *DecodeScience(void *arg)
                             case E_P1_RAW_16BIT_D4:
                             case E_P1_RAW_16BIT_D8:
                             case E_P1_RAW_16BIT_D16:
-                                curr.sensor++; // Increment current sensor, (Set to 0 at top of switch() )
+                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
                                 meas_seq++;    // Increase number of measurement sequences
                                 CPrintf("    Found science data, no parameters, ID CODE: 0x%.2x Sequence: %d Sensor: %d \n",id_code,meas_seq,curr.sensor);
                                 state=S11_GET_LENGTH;
@@ -1926,7 +1930,7 @@ void *DecodeScience(void *arg)
                                 DispState(state,"STATE = S06_GET_MACRO_DESC\n");
                                 
                                 sprintf(tstr1,"MCID0X%04x",macro_id);
-                                SetP(&comm,"INSTRUMENT_MODE_ID",tstr1,1);         // Set mode id in common PDS parameter
+                                SetP(&comm,"INSTRUMENT_MODE_ID",tstr1,1);         // Set mode ID in common PDS parameter
                                 SetP(&comm,"DATA_SET_ID",mp.data_set_id,1);       // Set DATA SET ID in common PDS parameters
                                 SetP(&comm,"DATA_SET_NAME",mp.data_set_name,1);   // Set DATA SET NAME in common PDS parameters
                                 
@@ -1939,9 +1943,9 @@ void *DecodeScience(void *arg)
                                 
                                 sprintf(tstr1,"\"%d\"",pds.DPLNumber);
                                 
-                                SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level id...
+                                SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level ID...
                                 
-                                // Search for macro with right macro id in macs matrix
+                                // Search for macro with right macro ID in macs matrix
                                 macro_status=1; // Indicate that we haven't found the macro 
                                 for(mb=0;macro_status && mb<MAX_MACRO_BLCKS;mb++)
                                     for(ma=0;macro_status && ma<MAX_MACROS_INBL;ma++)
@@ -1953,7 +1957,7 @@ void *DecodeScience(void *arg)
                                             {
                                                 CPrintf("    MACRO ID corrupt in macro description\n");
                                                 
-                                                if(finger_printing) // Are we finger printing ?
+                                                if(finger_printing) // Are we fingerprinting ?
                                                 {
                                                     finger_printing=0;
                                                     state=S09_COMPARE_PARAMS;
@@ -1967,9 +1971,9 @@ void *DecodeScience(void *arg)
                                                 if(val==macro_id)
                                                 {
                                                     // Move temporary buffer to it's end, This buffer will be used to dump
-                                                    // science data that dosn't contain macro id's to special files that
+                                                    // science data that doesn't contain macro ID's to special files that
                                                     // should be manually checked and then resubmitted to this pds program
-                                                    // using the correct macro id on the commandline.
+                                                    // using the correct macro ID on the command line.
                                                     Forward(ct,ct->fill); 
                                                     CPrintf("    Macro description found, Block %d, Macro num %d\n",mb,ma);
                                                     macro_status=0; // We found macro description!
@@ -1990,7 +1994,7 @@ void *DecodeScience(void *arg)
                                     else
                                         mb--; // mb is one step to much here since break above only breaks out of inner loop!
                                         
-                                        if(finger_printing) // Are we finger printing ?
+                                        if(finger_printing) // Are we fingerprinting ?
                                         {
                                             finger_printing=0;
                                             state=S09_COMPARE_PARAMS;
@@ -2058,7 +2062,7 @@ void *DecodeScience(void *arg)
                                             
                                             sw_info.p1_fine_offs = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
                                             sw_info.p2_fine_offs = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
-                                            sw_info.plateau_dur   = 1<<(GetBitF(W1,4,0)+1);// LAP_SWEEP_PLATEAU_DURATION
+                                            sw_info.plateau_dur  = 1<<(GetBitF(W1,4,0)+1); // LAP_SWEEP_PLATEAU_DURATION
                                             sw_info.steps        = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
                                             sw_info.height       = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
                                             sw_info.start_bias   = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
@@ -2125,7 +2129,7 @@ void *DecodeScience(void *arg)
                                             InsertTopQ( &dict,"ROSETTA:LAP_P1P2_ADC20_STATUS",    a20status[a20_info.adc20_control & 0xf]);
                                             
                                             if((a20_info.adc20_control & 0x3)==0x02) { curr.sensor=SENS_P1; }// Modify current sensor from both P1 and P2 to P1 only
-                                            if((a20_info.adc20_control& 0x3 )==0x01) { curr.sensor=SENS_P2; }// Modify current sensor from both P1 and P2 to P2 only
+                                            if((a20_info.adc20_control & 0x3)==0x01) { curr.sensor=SENS_P2; }// Modify current sensor from both P1 and P2 to P2 only
                                             // Above: I don't treat the combination there only the lowest bits are used for the 20 bit ADC:s
                                             //        cause we never will use it..it's not scientific!
                                         }
@@ -2243,9 +2247,9 @@ void *DecodeScience(void *arg)
                                                 DispState(state,"STATE = S14_RESOLVE_MACRO_PARAMETERS\n");
                                                 
                                                 
-                                                // Fingerprinting for the right macro description, this is a bit dirty. 
-                                                // But we need to do it on the prom macros (8 of them). All macros in flash
-                                                // contain the macro id in the science data stream. 
+                                                // FINGERPRINTING for the right macro description.
+                                                // This is a bit dirty, but we need to do it on the prom macros (8 of them).
+                                                // All macros in flash contain the macro ID in the science data stream.
                                                 if(macro_status) // If no macro description
                                                 {
                                                     CPrintf("    WARNING: Finger printing macro id.\n");
@@ -2253,26 +2257,26 @@ void *DecodeScience(void *arg)
                                                     if(length==40 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
                                                     {
                                                         // Brute force macro settings!
-                                                        macro_id=0x201; // Set macro id
+                                                        macro_id=0x201; // Set macro ID
                                                         state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                         break;
                                                     }
                                                     
                                                     if(400<=length && length<=512 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
                                                     {
-                                                        LookBuffer(cb,tbuff,2);     // Look ahed two bytes
+                                                        LookBuffer(cb,tbuff,2);     // Look ahead two bytes
                                                         
                                                         if(tbuff[0]==0xCC)
                                                         {
                                                             if(tbuff[1]==D_P2_RAW_16BIT)
                                                             {
-                                                                macro_id=0x202; // Set macro id
+                                                                macro_id=0x202; // Set macro ID
                                                                 state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                             }
                                                             
                                                             if(tbuff[1]==E_P2_TRNC_20_BIT_RAW_BIP)
                                                             {
-                                                                macro_id=0x203; // Set macro id
+                                                                macro_id=0x203; // Set macro ID
                                                                 state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                             }
                                                         }
@@ -2281,13 +2285,13 @@ void *DecodeScience(void *arg)
                                                     
                                                     if(1930<=length && length<=1950 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
                                                     {
-                                                        LookBuffer(cb,tbuff,2);     // Look ahed two bytes
+                                                        LookBuffer(cb,tbuff,2);     // Look ahead two bytes
                                                         
                                                         if(tbuff[0]==0xCC)
                                                         {
                                                             if(tbuff[1]==D_P2_RAW_16BIT)
                                                             {
-                                                                macro_id=0x204; // Set macro id
+                                                                macro_id=0x204; // Set macro ID
                                                                 state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                                 break;
                                                             }
@@ -2297,7 +2301,7 @@ void *DecodeScience(void *arg)
                                                     if(length==8950 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
                                                     {
                                                         // Brute force macro settings!
-                                                        macro_id=0x205; // Set macro id
+                                                        macro_id=0x205; // Set macro ID
                                                         state=S06_GET_MACRO_DESC;  // Break out of switch, and get macro description
                                                         break;
                                                     }
@@ -2305,7 +2309,7 @@ void *DecodeScience(void *arg)
                                                     if(length==1024 && id_code==E_P1_RAW_16BIT_D4)
                                                     {
                                                         // Brute force macro settings!
-                                                        macro_id=0x207; // Set macro id
+                                                        macro_id=0x207; // Set macro ID
                                                         state=S06_GET_MACRO_DESC;  // Break out of switch, and get macro description
                                                         break;
                                                     }
@@ -2316,9 +2320,9 @@ void *DecodeScience(void *arg)
                                                 // We are in a position of choices here!
                                                 //--------------------------------------
                                                 // The normal operation of the instrument is by running
-                                                // a macro that returns a macro id. But we can also run
+                                                // a macro that returns a macro ID. But we can also run
                                                 // the instrument from the old prom macros that don't
-                                                // return a macro id. In the first case we can derive a
+                                                // return a macro ID. In the first case we can derive a
                                                 // lot of information from the macro description stored
                                                 // here on earth. In the second case we have to derive
                                                 // everything from the parameters in the science stream 
@@ -2333,12 +2337,12 @@ void *DecodeScience(void *arg)
                                                 
                                                 CPrintf("    Parsing ID Code: %s\n",IDList[id_code]); 
                                                 
-                                                // To keep the information coming as close to the  source as possible 
-                                                // we derive info from the ID code string directly. 
+                                                // To keep the information coming as close to the source as possible 
+                                                // WE DERIVE INFO FROM THE ID CODE STRING DIRECTLY BY SEARCHING FOR SUBSTRINGS!!
                                                 // We do not compile information in a secondary file..
                                                 // that would give two sources of info and consistency problems could occur.
-                                                // Note: The ID strings are at this moment fixed and will not change
-                                                //       the amount of id strings may however increase!
+                                                // Note: The ID strings are at this moment fixed (permanent) and will not change.
+                                                //       The number of ID strings may however increase!
                                                 
                                                 dsa16_p1 = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
                                                 dsa16_p2 = -1;   // Indicate that "down sampl 16 bit sensor 2" value is not resolved
@@ -2396,7 +2400,7 @@ void *DecodeScience(void *arg)
                                                 {
                                                     switch(curr.sensor)
                                                     {
-                                                        case SENS_P1:	
+                                                        case SENS_P1:
                                                             if(a20_info.adc20_control & 0x08)
                                                             {
                                                                 samples=length*2/5; // Sensor P1 only full 20 Bit ADC
@@ -2422,7 +2426,7 @@ void *DecodeScience(void *arg)
                                                                 samples=length/2;   
                                                             }
                                                             break;
-                                                        case SENS_P1P2: 
+                                                        case SENS_P1P2:
                                                             if((a20_info.adc20_control & 0x0C)==0x0C) 
                                                             {
                                                                 samples=length/5; // Full 20 Bit ADC:s P1 and P2
@@ -2457,8 +2461,12 @@ void *DecodeScience(void *arg)
                                                 sprintf(tstr2,"\"%s\"",tstr1);      // Add PDS quotes ".." 
                                                 SetP(&comm,"DESCRIPTION",tstr2,1); // Update DESCRIPTION in common PDS parameters
                                                 
-                                                if(!macro_status) // If a macro description exists
+                                                if(!macro_status)
                                                 {
+                                                    //===================================
+                                                    // CASE: A macro description exists.
+                                                    //===================================
+                                                    
                                                     //Find subheader for measurement sequence meas_seq
                                                     if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)   // Set property1. Read many times afterwards with FindB(..).
                                                     {
@@ -2466,7 +2474,7 @@ void *DecodeScience(void *arg)
                                                             printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);   // DEBUG
                                                         }
                                                         
-                                                        // Find downsampling value probe 1 in macro and if no id value exists use macro desc. value
+                                                        // Find downsampling value probe 1 in macro and if no ID value exists use macro desc. value
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",0)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
@@ -2480,7 +2488,7 @@ void *DecodeScience(void *arg)
                                                             //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p1);
                                                         }
                                                         
-                                                        // Find downsampling value probe 2 in macro and if no id value exists use macro desc. value
+                                                        // Find downsampling value probe 2 in macro and if no ID value exists use macro desc. value
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",DNTCARE)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
@@ -2529,12 +2537,14 @@ void *DecodeScience(void *arg)
                                                         }
                                                         curr.afilter=0; // Assume no analog filter
                                                         
-                                                        //===============================================================================================
-                                                        // Code referring to P1.
-                                                        //===============================================================================================
+                                                        
                                                         
                                                         if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
                                                         {
+                                                            //========================
+                                                            // CASE: Dependence on P1
+                                                            //========================
+                                                            
                                                             // If no sweeping and current sensor is sensor 1 or sensor 1 and 2 check the bias mode for sensor 1
                                                             if(param_type!=SWEEP_PARAMS)
                                                             {
@@ -2544,7 +2554,7 @@ void *DecodeScience(void *arg)
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, Lets set it
+                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, Let's set it
                                                                         } else {
                                                                             InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
                                                                         }
@@ -2659,10 +2669,8 @@ void *DecodeScience(void *arg)
                                                             }
                                                             
                                                         }   // if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
+
                                                         
-                                                        //===============================================================================================
-                                                        // Code referring to P2.
-                                                        //===============================================================================================
                                                         
                                                         if (debug>0) {   // DEBUG
                                                             printf("    property1: %s = \"%s\"\n", property1->name, property1->value);
@@ -2670,6 +2678,10 @@ void *DecodeScience(void *arg)
                                                         }
                                                         if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
                                                         {
+                                                            //========================
+                                                            // CASE: Dependence on P2
+                                                            //========================
+                                                            
                                                             if(param_type!=SWEEP_PARAMS)
                                                             {
                                                                 if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_BIAS_MODE",DNTCARE)>0)
@@ -2816,8 +2828,7 @@ void *DecodeScience(void *arg)
                                                         
                                                         // If transmitter is turned on
                                                         if(curr.transmitter==SENS_P1 || curr.transmitter==SENS_P2)
-                                                        {      
-                                                            
+                                                        {
                                                             if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_TRANSMITTER_STATUS",DNTCARE)>0) {
                                                                 InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
                                                             }
@@ -2905,34 +2916,36 @@ void *DecodeScience(void *arg)
                                                             IncAlphaNum(alphanum_s);         // Increment alphanumeric value
                                                             
                                                             
-                                                            // Put together file name
-                                                            // -----------------------------------------------------------------------------------------------------------------------------------
+                                                            //==================================
+                                                            // Construct (tentative) file names
+                                                            //================================== -----------------------------------------------------------------------------------------------------------------------------------
                                                             // 000000000011111111112222222
                                                             // 012345678901234567890123456.012
                                                             // RPCLAPYYMMDD-2Z7S-RDB14NSXX.EXT 
                                                             // This is a 27.3 file name and it's accepted in PDS3
                                                             // Currently we have 2 unused characters..
                                                             
-                                                            sprintf(tstr2,"RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",&tstr1[2],&tstr1[5],&tstr1[8],alphanum_s,curr.sensor,curr.afilter,tm_rate); // Compile product ID	  
+                                                            sprintf(tstr2,"RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",&tstr1[2],&tstr1[5],&tstr1[8],
+                                                                    alphanum_s,curr.sensor,curr.afilter,tm_rate); // Compile product ID
                                                             
-                                                            if(param_type==ADC20_PARAMS) { tstr2[16]='T'; } // Set to [T]wenty bit ADC:s (or [S]ixteen bit)
-                                                            if(calib)                    { tstr2[18]='C'; } // Set to [C]alibrated archive
-                                                            if(curr.bias_mode==E_FIELD)  { tstr2[19]='E'; } // Set to E-Field
-                                                            if(param_type==SWEEP_PARAMS) { tstr2[20]='S'; } // Indicate [B]ias or [S]weep
+                                                            if(param_type==ADC20_PARAMS) { tstr2[16]='T'; } // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
+                                                            if(calib)                    { tstr2[18]='C'; } // Set to [C]alibrated or keep Calibrated [R]aw.
+                                                            if(curr.bias_mode==E_FIELD)  { tstr2[19]='E'; } // Set to [E]-Field or keep [D]ensity.
+                                                            if(param_type==SWEEP_PARAMS) { tstr2[20]='S'; } // Set to [S]weep or keep [B]ias
                                                             
-                                                            strcpy(lbl_fname,tstr2);              // Save prod id as label filename
-                                                            strcpy(tab_fname,tstr2);              // Save prod id as table filename
+                                                            strcpy(lbl_fname,tstr2);              // Save prod ID as label filename
+                                                            strcpy(tab_fname,tstr2);              // Save prod ID as table filename
                                                             strcat(lbl_fname,".LBL");             // Add .LBL extension
                                                             strcat(tab_fname,".TAB");             // Add .TAB extension
                                                             
-                                                            sprintf(prod_id,"\"%s\"",tstr2);         // Add PDS quotes ".." 
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);     // Set PRODUCT ID in common PDS parameters
+                                                            sprintf(prod_id,"\"%s\"",tstr2);      // Add PDS quotes ".." 
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Set PRODUCT ID in common PDS parameters
                                                             
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);     // Set filename in common PDS parameters
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
                                                             
                                                             sprintf(tstr1,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"^TABLE",tstr1,1);        // Set link to table in common PDS parameters
+                                                            SetP(&comm,"^TABLE",tstr1,1);         // Set link to table in common PDS parameters
                                                             
                                                             
                                                             curr.factor=0.0; // Init
@@ -2992,8 +3005,14 @@ void *DecodeScience(void *arg)
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                     }   // if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)
                                                 }   // if(!macro_status)
-                                                else // No macro description fits! And no anomaly overide exists! Derive all that we can without it! and send it to log file 
-                                                {  // Problematic data is stored in UnAccepted_Data directory
+                                                else 
+                                                {
+                                                    //================================================================
+                                                    // CASE: No macro description fits and no anomaly overide exists.
+                                                    //================================================================
+                                                    // Derive all that we can without anomaly override and send it to log file 
+                                                    // Problematic data is stored in UnAccepted_Data directory
+                                                    
                                                     CPrintf("    No macro description fits, data will be stored in the UnAccepted_Data directory\n");
                                                     if(param_type==NO_PARAMS)
                                                     {
@@ -3148,7 +3167,9 @@ void *DecodeScience(void *arg)
                                                             ini_samples=samples+1-(sw_info.steps+1)*samp_plateau; // Initial samples before sweep starts
                                                         }
                                                         
-                                                        // WRITE TO DATA LABEL FILE .LBL, TABLE FILE .TAB, and add to INDEX.TAB
+                                                        //##########################################################################
+                                                        // WRITE TO DATA LABEL FILE (.LBL), TABLE FILE (.TAB), and add to INDEX.TAB
+                                                        //##########################################################################
                                                         if(data_type!=D20 && data_type!=D20T)
                                                         {
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
@@ -3167,6 +3188,7 @@ void *DecodeScience(void *arg)
                                                         }
                                                         else // Split interleaved 20 Bit data into two pairs of label and tab files
                                                         {
+                                                            // Modify filename and product ID.
                                                             lbl_fname[21]='1';
                                                             tab_fname[21]='1';
                                                             prod_id[22]='1';
@@ -3193,10 +3215,11 @@ void *DecodeScience(void *arg)
                                                                 //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
                                                             }
+                                                            
+                                                            // Modify filename and product ID.
                                                             lbl_fname[21]='2';
                                                             tab_fname[21]='2';
-                                                            prod_id[22]='2';
-                                                            
+                                                            prod_id[22]='2';                                                            
                                                             
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
                                                             ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters
@@ -3206,7 +3229,7 @@ void *DecodeScience(void *arg)
                                                             
                                                             // Name changed
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters		  
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
                                                             
@@ -3227,8 +3250,8 @@ void *DecodeScience(void *arg)
                                                     else
                                                     {
                                                         // At this point a macro description could not be found.
-                                                        // If finger printing was enabled it must have failed.
-                                                        // Anomally correction must also have failed at this point.
+                                                        // If fingerprinting was enabled it must have failed.
+                                                        // Anomaly correction must also have failed at this point.
                                                         // Data will be stored in the UnAccepted_Data directory
                                                         // and requires manual attention.
                                                         YPrintf("Macro description missing, data stored in UnAccepted_Data\n"); // Put a note in the system log
@@ -5385,14 +5408,27 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
 }
 
 
-// Write TAB file, CALIB or EDITED.
-// Convert from TM units to physical units (i.e. calibrate) in CALIB.
-// 
-//  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ....
-//  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
-//
-// We use the mode information from command logs here since it also contain off information
-// 
+
+/*
+ * Write TAB file, CALIB or EDITED.
+ * Convert from TM units to physical units (i.e. calibrate) in CALIB.
+ *
+ *  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ....
+ *  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
+ *
+ * We use the mode information from command logs here since it also contain off information
+ *
+ * Uncertain what "dop" means, and compared to curr->sensor. Compare "dop" in WritePLBL_File.
+ *    NOTE: Check how dop is set in calls to WritePTAB_File and WritePLBL_File. It is always a literal.
+ *    NOTE: Check how dop is used in WritePLBL_File (very little).
+ *    GUESS: curr-->sensor refers to the probe(s) for which there is data.
+ *    GUESS: dop refers to the data which is written to the file.
+ *       dop=0 : P3 (difference P2-P1; NOT two different parallel measurements)
+ *       dop=1 : P1
+ *       dop=2 : P2
+ *    QUESTION: IF guesses are correct, then why do if statements also refer to curr->sensor? Is that non unnecessary?
+ *       Ex: if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1)
+ */
 int WritePTabFile(
     unsigned char *buff,
     char *fname,
@@ -5493,6 +5529,12 @@ int WritePTabFile(
     
     if(calib)
     {
+        //=======
+        // CALIB
+        //=======
+        
+        
+        
         for(i=mc->n-1;i>=0;i--)
         {
             TimeOfDatePDS(mc->CD[i].validt,&vtime); // Convert valid time to seconds		  
@@ -5505,33 +5547,35 @@ int WritePTabFile(
         
         
         
-        //======================================================================================
+        //######################################################################################
+        //######################################################################################
         // Find the correct calibration factors depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20
-        //======================================================================================
+        //######################################################################################
+        //######################################################################################
         calib_nonsweep_TM_delta = 0.0;   // Valid value until set to be non-zero for some cases.
         const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);  // BUGFIX: Now always reads 8 instead of 6 characters. /Erik P G Johansson 2015-06-03.
         const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);  // BUGFIX: Now always reads 8 instead of 6 characters. /Erik P G Johansson 2015-06-03.
-        if(curr->bias_mode==DENSITY) // Check if current data origins from a density mode measurement
+        if(curr->bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
-            //==============
-            // DENSITY MODE
-            //==============
+            //====================
+            // CASE: DENSITY MODE
+            //====================
             if(data_type==D16)
             {
-                //===========
-                //   ADC16
-                //===========
+                //=================
+                //   CASE: ADC16
+                //=================
                 
                 // NOTE: We have the same calibration factor for both P1 and P2 for now!
-                if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1) 
+                if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1)
                 {
-                    if (is_high_gain_P1)
-                    {
+                    //============
+                    //  CASE: P1
+                    //============
+                    if (is_high_gain_P1) {
                         //printf("GAIN 1 16 Bit P1\n");
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
-                    }
-                    else
-                    {
+                    } else {
                         //printf("GAIN 0.05 16 Bit P1\n");
                         ccalf=mc->CF[valid].c_cal_16b_lg;
                     }
@@ -5539,13 +5583,13 @@ int WritePTabFile(
                 
                 if(curr->sensor==SENS_P2 || dop==2)
                 {
-                    if (is_high_gain_P2)
-                    {
+                    //============
+                    //  CASE: P2
+                    //============
+                    if (is_high_gain_P2) {
                         //printf("GAIN 1 16 Bit P2\n");
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
-                    }
-                    else
-                    {
+                    } else {
                         //printf("GAIN 0.05 16 Bit P2\n");
                         ccalf=mc->CF[valid].c_cal_16b_lg;
                     }
@@ -5555,25 +5599,25 @@ int WritePTabFile(
             }   // if(data_type==D16)
             else
             {
-                //========================
-                //   ADC20 (Density mode)
-                //========================
+                //==============================
+                //  CASE: ADC20 (Density mode)
+                //==============================
                 // NOTE: No initialization for the combination ADC20+Density mode+(P1-P2) (SENS_P1P2)
                 // since this case is not physically interesting (although possible to use).
                 
                 if(curr->sensor==SENS_P1 || dop==1)
                 {
+                    //============
+                    //  CASE: P1
+                    //============
                     // Seĺect ADC20 calibration "delta" constant. This should ideally depend on high/low gain
                     // but we use the high-gain value for now. /Erik P G Johansson 2015-06-03.
                     calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1;
-                    if (is_high_gain_P1)
-                    {
+                    if (is_high_gain_P1) {
                         //printf("GAIN 1 20 Bit P1\n");
                         ccalf       = mc->CF[valid].c_cal_20b_hg1;
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
-                    }
-                    else
-                    {
+                    } else {
                         //printf("GAIN 0.05 20 Bit P1\n");
                         ccalf       = mc->CF[valid].c_cal_20b_lg;
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
@@ -5587,17 +5631,17 @@ int WritePTabFile(
                 
                 if(curr->sensor==SENS_P2 || dop==2)
                 {
+                    //============
+                    //  CASE: P2
+                    //============
                     // Seĺect ADC20 calibration "delta" constant. This should ideally depend on high/low gain but
                     // we use the high-gain value for now. /Erik P G Johansson 2015-06-03.
                     calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P2;
-                    if (is_high_gain_P2)    
-                    {
+                    if (is_high_gain_P2) {
                         //printf("GAIN 1 20 Bit P2\n");
                         ccalf       = mc->CF[valid].c_cal_20b_hg1;
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
-                    }
-                    else
-                    {
+                    } else {
                         //printf("GAIN 0.05 20 Bit P2\n");
                         ccalf       = mc->CF[valid].c_cal_20b_lg;
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
@@ -5614,21 +5658,21 @@ int WritePTabFile(
         }   // if(curr->bias_mode==DENSITY)
         else
         {
-            //==============
-            // E-FIELD MODE
-            //==============
+            //====================
+            // CASE: E-FIELD MODE
+            //====================
             if(data_type==D16) {
-                //===========
-                //   ADC16
-                //===========
+                //=================
+                //   CASE: ADC16
+                //=================
                 vcalf=mc->CF[valid].v_cal_16b;
                 vcalf_ADC16 = vcalf;
             }
             else
             {
-                //===========
-                //   ADC20
-                //===========
+                //=================
+                //   CASE: ADC20
+                //=================
                 vcalf       = mc->CF[valid].v_cal_20b;
                 vcalf_ADC16 = mc->CF[valid].v_cal_16b / 16;   // Should always be ADC16 value.
                 if (data_type==D20T || data_type==D201T || data_type==D202T) {
@@ -5645,9 +5689,11 @@ int WritePTabFile(
     
     
     
-    //===============================
+    //###############################
+    //###############################
     // START WRITING DATA TABLE FILE
-    //===============================
+    //###############################
+    //###############################
     
     strcpy(tstr2,pds.spaths);  // Copy data path
     strcat(tstr2,fname);       // For now put in root path, so add file name!
@@ -5798,7 +5844,7 @@ int WritePTabFile(
                     // FKJN 2014-10-31 added macro 515 & 807
                     if(extra_bias_setting)
                     {
-                        FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	 //tstr4 is now macro id on form "MCID0X%04x" we need the 4 numerals.
+                        FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	 //tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
                         
                         /* BUG FIX: Old code interpreted string as a decimal number when it should be a hexadecimal number.
                          * Old code should not have been a problem as long as
@@ -5853,17 +5899,18 @@ int WritePTabFile(
                     }
                 }
                 
-                //EDIT FKJN 27/8 2014 ADC ZERO POINT OFFSET ERROR 
-                if(data_type==D16)
-                {
-                    if(val>=0)
-                    { 
-                        val = val +2; //this value jumps when adc is set to 0, it would be nice to set it to 2.5 or something, but edited can't handle that.
+                // EDIT FKJN 27/8 2014 ADC ZERO POINT OFFSET ERROR 
+                if(data_type==D16) {
+                    if(val>=0) {
+                        val = val +2; // This value jumps when adc is set to 0, it would be nice to set it to 2.5 or something, but edited can't handle that.
                     }
                 }
                 
-                if(curr->bias_mode==DENSITY) // Check if current data origins from a density mode measurement
+                if(curr->bias_mode==DENSITY)
                 {
+                    //====================
+                    // CASE: DENSITY MODE
+                    //====================
                     current=val; // Set sampled current value in TM units
                     if(param_type==SWEEP_PARAMS) // Do we have a sweep ?...
                     {
@@ -5879,8 +5926,9 @@ int WritePTabFile(
                             }
                             if(sw_info->formatv & 0x1) // If up-down or down-up sweep, check if direction shall change
                             {
-                                if(k==(sw_info->steps*samp_plateau/2)) // Time to change direction ? 
+                                if(k==(sw_info->steps*samp_plateau/2)) { // Time to change direction ? 
                                     curr_step=-curr_step; // Change direction
+                                }
                             }
                         }
                     }
@@ -5889,8 +5937,11 @@ int WritePTabFile(
                         voltage=vbias; // Set FIX Density bias in TM unit
                     }
                 }
-                else // We assume E-FIELD was set!
+                else
                 {
+                    //====================
+                    // CASE: E-FIELD MODE
+                    //====================
                     current=ibias; // Set FIX Current bias in TM units
                     voltage=val;   // Set sampled voltage value in TM units
                 }
@@ -5904,32 +5955,31 @@ int WritePTabFile(
                     //##################
                     if(curr->bias_mode==DENSITY)
                     {
-                        //==============
-                        // DENSITY MODE
-                        //==============
+                        //====================
+                        // CASE: DENSITY MODE
+                        //====================
                         
                         if(param_type==SWEEP_PARAMS)
                         {
-                            //===============
-                            // SWEEP (ADC16)
-                            //===============
+                            //=====================
+                            // CASE: SWEEP (ADC16)
+                            //=====================
+                            // NOTE: No occurrence of SENS_P1P2.
                             if(strcmp(sw_info->resolution,"FINE")) // If it's NOT a fine sweep...
                             {
+                                // FKJN 2014-09-02
+                                // if 20bit data (non-truncated ADC20), ocalf = 16, otherwise 1.
+                                // ccurrent=ccalf*((double)(current-16*mc->CD[valid].C[voltage][1]));
                                 if(curr->sensor==SENS_P1)
-                                {
-                                    //  FKJN  2014-09-02
-                                    // if 20bit data (non-truncated ADC20), ocalf = 16, otherwise 1.
-                                    // ccurrent=ccalf*((double)(current-16*mc->CD[valid].C[voltage][1]));
-                                    
+                                {                                    
                                     ccurrent = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1])); // Offset and factor calibration
-                                    
                                     // Write time, current and calibrated voltage 
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][1]); 
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
-                                    ccurrent = ccalf*((double)(current  - ocalf * mc->CD[valid].C[voltage][2])); // Offset and factor calibration
+                                    ccurrent = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2])); // Offset and factor calibration
                                     // Write time, current and calibrated voltage 
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][2]); 
                                 }
@@ -5942,7 +5992,7 @@ int WritePTabFile(
                                     // We should perhaps have a calibration mode for fine sweeps in space
                                     // but it would be rather many 4096..
                                     
-                                    // edit FKJN 02/09 2014. Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
+                                    // Edit FKJN 02/09 2014. Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
                                     // to a number from 0-255 if we want to use the same offset calibration file
                                     
                                     ccurrent=ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][1])); 
@@ -5965,9 +6015,9 @@ int WritePTabFile(
                         }   // if(param_type==SWEEP_PARAMS)
                         else
                         {
-                            //=========================
-                            // NOT SWEEP (ADC16/ADC20)
-                            //=========================
+                            //===============================
+                            // CASE: NOT SWEEP (ADC16/ADC20)
+                            //===============================
                             
                             if(curr->sensor==SENS_P1P2 && dop==0)
                             {
@@ -5976,7 +6026,7 @@ int WritePTabFile(
                                 ccurrent -= ccalf_ADC16 * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
                                 
-                                // Write time, current and calibrated voltage
+                                // Write time, current (one difference) and calibrated voltages (two)
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1],v_conv.C[vbias2][2]); 
                             }
                             
@@ -6006,9 +6056,9 @@ int WritePTabFile(
                     }   // if(curr->bias_mode==DENSITY)
                     else // Assume bias mode is E_FIELD no other possible
                     {
-                        //==============
-                        // E FIELD MODE
-                        //==============
+                        //====================
+                        // CASE: E-FIELD MODE
+                        //====================
                         
                         // NOTE: calib_nonsweep_TM_delta == 0 for ADC16 data.
                         //cvoltage = vcalf * ((double)voltage - calib_nonsweep_TM_delta); // Voltage offset and factor calibration
@@ -6016,7 +6066,8 @@ int WritePTabFile(
                         cvoltage -= vcalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
                         
                         if(curr->sensor==SENS_P1P2 && dop==0) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],i_conv.C[ibias2][2],cvoltage); // Write time, calibrated current and voltage
+                            // Write time, calibrated currents (two) and voltage (one).
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],i_conv.C[ibias2][2],cvoltage); 
                         }
                         
                         if(curr->sensor==SENS_P1 || dop==1) {
@@ -6064,7 +6115,11 @@ int WritePTabFile(
 
 
 
-// WRITE TO DATA LABEL FILE .LBL
+/* WRITE TO DATA LABEL FILE .LBL
+ * 
+ * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is.
+ * NOTE: This function only has very little dependence on "dop". Compare "WritePTabFile".
+ */
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type)
 {
     char fullname[PATH_MAX];
@@ -6945,11 +7000,17 @@ int TotAQPs(prp_type *p,int n)
     return -5; // Err empty
 }
 
-// Find id code in macro overriding id code in data if anomaly correction is
-// set for the current SCET, on error -1 is returned.
+
+
+// Find ID code in macro overriding ID code in data if anomaly correction is
+// set for the current SCET, or error -1 is returned.
 // If not the id_code for the measurement sequence n in the current data set
-// is returned.	
-int FindIDCode(prp_type *p,int n)
+// is returned.
+// 
+// Return value:
+// -1 : Could not find any value, or it could not be parsed.
+// >=0 : Value of the first ROSETTA:LAP_SET_SUBHEADER to be found when searching backwards from the n'th ROSETTA:LAP_TRANSFER_DATA_TO_OUT_FROM.
+int FindIDCode(prp_type *p, int n)
 {
     property_type *property1;
     property_type *property2;
@@ -6964,14 +7025,17 @@ int FindIDCode(prp_type *p,int n)
             {
                 if(FindB(p,&property1,&property2,"ROSETTA:LAP_SET_SUBHEADER",DNTCARE)>0)
                 {
-                    if(sscanf(property2->value,"\"%x\"",&subh))
-                        return subh; 
+                    if(sscanf(property2->value,"\"%x\"",&subh)) {
+                        return subh;
+                    }
                 }
             }
         }
     }
     return -1; // Err empty
 }
+
+
 
 // Program state handler functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -7000,6 +7064,7 @@ void DispState(int s,char *str)
         old_s=s;
     }
 }
+
 
 
 // String and alpha numeric handling functions
@@ -7057,6 +7122,7 @@ int Separate(char *str, char *left, char *right, char separator, int k_sep)
 }
 
 
+
 /*
  * Split up string by first occurrence of character.
  * NOTE: Function "Separate" does not ignore righthand instances of the separator.
@@ -7092,6 +7158,7 @@ int SeparateOnce(char* str, char* strLeft, char* strRight, char separator)
     
     return strLeftLen;
 }
+
 
 
 // Convert CR (carriage return) and LF (line feed) to whitespace.
@@ -7143,6 +7210,7 @@ int TrimWN(char *str)
     
     return 0;
 }
+
 
 
 // Trim initial and trailing quotes and all newlines away.
@@ -7887,8 +7955,8 @@ unsigned int E2Epoch(char *rtime)
     at.tm_mon--;      // Month ranges from 0 to 11 and not as usual 1 to 12
     at.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
     
-    at.tm_wday=0;     // Day of week dosn't matter here
-    at.tm_yday=0;     // Day in year dosn't matter here
+    at.tm_wday=0;     // Day of week doesn't matter here
+    at.tm_yday=0;     // Day in year doesn't matter here
     at.tm_isdst=0;    // Daylight saving unknown
     
     t=mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
@@ -7978,7 +8046,7 @@ int DecodeRawTimeEst(double raw,char *stime)
     }
     
     // Compile PDS compliant time string
-    // Note: if gmtime does anything funny(It dosn't look like it) relative time should be okay.
+    // Note: if gmtime does anything funny(It doesn't look like it) relative time should be okay.
     sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%06.3f",bt.tm_year+1900,bt.tm_mon+1,bt.tm_mday,bt.tm_hour,bt.tm_min,((double)bt.tm_sec)+frac_s);
     return 0; // Ok!
 }
@@ -8910,8 +8978,8 @@ time_t DDSFileStartTime(FTSENT *f)
     at.tm_mon--;      // Month ranges from 0 to 11 and not as usual 1 to 12
     at.tm_year+=100;  // Get number of years since 1900, that's what mktime wants 
     
-    at.tm_wday=0;     // Day of week dosn't matter here
-    at.tm_yday=0;     // Day in year dosn't matter here
+    at.tm_wday=0;     // Day of week doesn't matter here
+    at.tm_yday=0;     // Day in year doesn't matter here
     at.tm_isdst=0;    // Daylight saving unknown
     
     t=mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
