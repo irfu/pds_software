@@ -1838,12 +1838,13 @@ void *DecodeScience(void *arg)
                                 state=S07_GET_PARAMS;
                                 break;
 
-                            /* Case (macro variable) E_P1_D_P2_INTRL_20_BIT_RAW_BIP is defined in id.h but the exact desired
-                             * response/behaviour/code for this case
-                             * is presently unknown. The case should probably be inserted somewhere around here according to
-                             * Anders Eriksson. /Erik P G Johansson 2016-03-03
+                            /* Case (macro variable) E_P1_D_P2_INTRL_20_BIT_RAW_BIP is defined in id.h.
+                             * 
+                             * The exact desired response/behaviour/code for this case is presently unknown.
+                             * The case should probably be inserted somewhere around here according to Anders Eriksson.
+                             * /Erik P G Johansson 2016-03-03
                              */
-                            //case E_P1_D_P2_INTRL_20_BIT_RAW_BIP:
+                            case E_P1_D_P2_INTRL_20_BIT_RAW_BIP:
                                 
                             case D_P1P2INTRL_TRNC_20BIT_RAW_BIP:
                             case D_P1P2INTRL_20BIT_RAW_BIP:
