@@ -1,12 +1,13 @@
 # INSTRUMENT_MODE_ID INSTRUMENT_MODE_DESC
 #
-# NOTE: There is an unknown upper limit to the length of strings. /EJ 2015-12-17
-#       Limit has been raised and pds should be able to handle string lengths (incl. CR,LF) up to 1023. /EJ 2016-01-07
+# NOTE: There is an unknown upper limit to the length of strings. /Erik P G Johansson 2015-12-17
+#       The limit has been raised and pds should be able to handle string lengths (incl. CR,LF) up to 1023 bytes. /Erik P G Johansson 2016-01-07
+#       Not sure, but my memory tells me that the string lengths referred to is the entire length of each row in this file. /Erik P G Johansson 2016-03-08
 # NOTE: Older version of pds (before commit 017971e, 2015-12-17) can not handle ":" in descriptions.
-#       Colon yields absent quote in pds. /EJ 2015-12-16
-#       Newer versions should be able to handle ":".  /EJ 2016-01-07
+#       Colon yields absent quote in pds. /Erik P G Johansson 2015-12-16
+#       Updated pds should be able to handle ":".  /Erik P G Johansson 2016-01-07
 # NOTE: The quotes are the quotes that end up in the LBL files.
-#       If they are wrong, then the LBL files will be wrong. /EJ 2015-12-17
+#       If they are wrong, then the LBL files will be wrong. /Erik P G Johansson 2015-12-17
 #
 0x0000:"Instrument not running any mode"
 0x0100:"Transmitting Probe 1 5 KHz"
@@ -42,7 +43,7 @@
 0x0405:"16 Bit ADCs Density Mode P1 & P2 long records 4096*2 samples for Interferometry"
 0x0406:"Empty"
 0x0407:"Empty"
-0x0410:"Missing description (temporary)"
+0x0410:"EN P1P2 Burst Mode, P1 float, Fix Bias P2 -30V, Cont. 20 bit no down, Sweeps P2 +-30V"
 0x0500:"Alternating Log Compressed sweeps P1 & P2,  Fix density bias on non sweeping probes"
 0x0501:"Alternating Log Compressed sweeps P1 & P2"
 0x0502:"Density Difference P1-P2"
@@ -83,6 +84,7 @@
 0x0806:"Minimum TM,Normal LDL or mixed LDL"
 0x0807:"Density,Cont. 20 bit trun, LDL BM, 16 bit and Sweep P1"
 0x0817:"Density,Cont. 20 bit trun, LDL BM, 16 bit and Sweep P1, Vb +30V"
+0x0827:"Density,Cont. 20 bit trun, LDL BM, 16 bit and Sweep P1, Vb -30V"
 0x0900:"BM NN, Vb +30/-30V, lo/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0901:"BM NN, Vb +30/+30V, hi/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0902:"Empty"
@@ -92,7 +94,8 @@
 0x0906:"Normal TM,Normal LDL or mixed LDL"
 0x0907:"Empty"
 0x0912:"As MCID0X212, Density, normal mode alternating sweeps and time series."
-0x0926:"Missing description (temporary)"
+0x0914:"Density P1P2 Burst Mode, Fix Bias -30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V"
+0x0926:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V up-down"
 0x0A00:"Empty"
 0x0A01:"Empty"
 0x0A02:"Empty"
