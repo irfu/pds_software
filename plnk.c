@@ -105,8 +105,9 @@ int InitP(prp_type *p)
     return 0; // Ok
 }
 
-// Append name-value pair to end of property list, regardless
-// of whether "name" can be found in the initial list.
+// Append property to end of property list, regardless
+// of whether or not "name" can be found in the initial list.
+// The new property is UNCHECKED (through CopyPrp).
 int Append(prp_type *p,char *name,char *value)
 {
     property_type *tmp;
@@ -115,6 +116,7 @@ int Append(prp_type *p,char *name,char *value)
     
     if(p->no_prop==0)
     {
+        // CASE: The linked list is empty.
         if((p->properties=malloc(sizeof(property_type)))==NULL) 
         {
             pthread_mutex_unlock(&protect_plnk); 
@@ -134,9 +136,10 @@ int Append(prp_type *p,char *name,char *value)
         pthread_mutex_unlock(&protect_plnk);
         return 0; //Ok
     }
-    else
+    else {
         if(p->no_prop>0)
         {
+            // CASE: The linked list is non-empty.
             if((tmp=malloc(sizeof(property_type)))==NULL)  
             {
                 pthread_mutex_unlock(&protect_plnk);
@@ -157,8 +160,11 @@ int Append(prp_type *p,char *name,char *value)
             pthread_mutex_unlock(&protect_plnk);
             return 0; //Ok
         }  
+        
+        // CASE: p->no_prop < 0
         pthread_mutex_unlock(&protect_plnk);
         return -2; // Error
+    }
 }
 
 int InsertTopQ(prp_type *p,char *name,char *value)
@@ -387,7 +393,9 @@ int InsertTopQV(prp_type *p,char *name,unsigned int value)
 
 
 
-// NOTE: Copies the values of *name* and *char into their own allocated memory.
+// Sets "name", "value" and "checked" of a (preallocated) property.
+// NOTE: Copies the values of "name" and "value" into their own newly allocated memory.
+// NOTE: Sets checked := UNCHECKED.
 int CopyPrp(property_type *dest, char *name, char *value)
 {
     int len;
@@ -566,13 +574,14 @@ int FDumpPrp(prp_type *p,FILE *fd)
     return -1; // Error empty
 }
 
+// Clear the property list (clear the linked list and all its allocated memory, incl. name+value) and set it to length zero.
 int FreePrp(prp_type *p)
 {
     int i;
     property_type *tmp1;
     property_type *tmp2;
     
-    pthread_mutex_lock(&protect_plnk);	
+    pthread_mutex_lock(&protect_plnk);
     
     if(p->properties!=NULL && p->head!=NULL && p->no_prop!=0)
     {
@@ -940,13 +949,15 @@ int SetPT(prp_type *p,property_type *prop,int occ)
     return -4; // Error! empty
 }
 
+// Set the "occ'th" entry with the name "name" in the property list to (1) be UNCHECKED, and (2) point to a newly allocated copy of "value".
+// NOTE: If there is no "occ'th" entry named "name", then error.
 int SetP(prp_type *p,char *name,char *value,int occ)
 {
     int i,len;
-    int oc=0; // Occurrence
+    int oc=0;   // Occurrence
     property_type *tmp;
     
-    pthread_mutex_lock(&protect_plnk);	
+    pthread_mutex_lock(&protect_plnk);
     
     if(p->properties!=NULL && p->head!=NULL && name!=NULL && value!=NULL)
     {
@@ -956,7 +967,7 @@ int SetP(prp_type *p,char *name,char *value,int occ)
             if(tmp==NULL) 
             {
                 pthread_mutex_unlock(&protect_plnk); 
-                return -1; //Err not found
+                return -1; // Err not found
             }
             
             if(!strcmp(tmp->name,name))
@@ -967,7 +978,7 @@ int SetP(prp_type *p,char *name,char *value,int occ)
                     len=strlen(value); // Get length of string
                     if(len>0 && len<MAX_STR) // Accepted length?
                     {
-                        //Reallocate string size
+                        // Reallocate string size
                         if((tmp->value=realloc(tmp->value,strlen(value)+1))==NULL)
                         {
                             pthread_mutex_unlock(&protect_plnk); 
@@ -975,7 +986,7 @@ int SetP(prp_type *p,char *name,char *value,int occ)
                         }
                         
                         strcpy(tmp->value,value); // Set new value
-                        tmp->checked=UNCHECKED; // Set unchecked as default
+                        tmp->checked=UNCHECKED;   // Set unchecked as default
                         pthread_mutex_unlock(&protect_plnk); 
                         return 1; // Ok! found it
                     }
@@ -992,7 +1003,7 @@ int SetP(prp_type *p,char *name,char *value,int occ)
         return 0; // Ok! But didn't find it
     }
     pthread_mutex_unlock(&protect_plnk); 
-    return -4; // Error! empty
+    return -4; // Error! Empty argument.
 }
 
 // Insert (iname,value) after occ occurrence of name

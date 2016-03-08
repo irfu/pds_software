@@ -1,6 +1,9 @@
 /* id.h
- This code is meant to be used by doid to automatically generate "id.c" which means it can not be edited arbitrarily.
- NOTE: The macro variable names here end up in IDList in "id.c" which are then parsed to some extent in "pds_X.XX.c"!
+ * 
+ * NOTE: This code is meant to be used by shell script "doid" to automatically generate "id.c" which means it can not be edited arbitrarily.
+ * 
+ * NOTE: Through "doid", the macro variable NAMES here are used to set the strings in "IDList" in "id.c" which values are then to some extent
+ * parsed/interpreted(!) in "pds_X.XX.c", despite that they are "human-readable"! One should therefore NOT arbitrarily change the variable names here.
  */
 
 #ifndef ID_H
@@ -78,7 +81,3 @@
 #define MACRO_ID_TAG                    0x45 // A MACRO ID TAG IS PRESENT IN THE DATA STREAM
 #define SECOND_ID_01                    0x46 // EXPECT A SECOND SUBHEADER AND A SECOND ID AFTER THIS
 #endif /* ID_H */
-  
-
-
-

@@ -1230,7 +1230,7 @@ void *SCDecodeTM(void *arg)
             }
         }
     }   // while
-}
+}   // SCDecodeTM
 
 
 // -= THREAD TO DECODE HK =-
@@ -1317,7 +1317,7 @@ void *DecodeHK(void *arg)
         HPrintf("LINE=%s",line);
         
         strncpy(tstr2,hk_info.utc_time_str,20);			// Truncate raw time and store fractions of a seconds  
-        tstr2[19]='\0';						// Add null termination  
+        tstr2[19]='\0';						// Add null terminator
         
         // Create data path for current day
         hk_info.utc_time_str[10]='\0';                            // Truncate hh:mm:ss away and keep CCYY-MM-DD
@@ -1328,7 +1328,7 @@ void *DecodeHK(void *arg)
         tstr2[7]='\0'; 
         tstr2[10]='\0';
         
-        // Get higest alphanumeric value in filenames in dpathh matching pattern  "RPCLAPYYMM*_*_H.LBL"
+        // Get highest alphanumeric value in filenames in dpathh matching pattern  "RPCLAPYYMM*_*_H.LBL"
         // This causes the alphanum value to restart at zero every new day..
         // (Any matching days from previous runs are not overwritten until alphanum wraps..
         //
@@ -1358,7 +1358,6 @@ void *DecodeHK(void *arg)
         sprintf(tstr2,"%s%s",&pds.spathh[ti],lbl_fname);	        // Set path and file name together
         ExtendStr(tstr3,tstr2,58,' ');		   	        // Make a new string extended with whitespace to 58 characters
         ExtendStr(tstr2,stub_fname,25,' ');			// Make a new string extended with whitespace to 25 characters
-        //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr3,tstr2,prod_creat_time,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
         WriteToIndexTAB(tstr3, tstr2, prod_creat_time);
         
         // Open label file and tab file for writing
@@ -1443,7 +1442,7 @@ void *DecodeScience(void *arg)
     unsigned int hb=0;              // high
     unsigned int lb=0;              // and low byte.
     unsigned int samples  = 0;      // Number of samples in science data (Not same as length!)
-    int macro_status=0;             // Indicates whether we found a matching macro description for the macro ID. 0=found (!).
+    int macro_descr_NOT_found=0;    // Indicates that we have NOT found a matching macro description for the macro ID. 0==Found, 1==Not found (!).
     
     
     unsigned int meas_seq = 0;      // Measurement sequence. Specifies one of the LAP_SET_SUBHEADER/LAP_TRANSFER_DATA_TO_OUT_FROM in macro description (.mds file).
@@ -1589,8 +1588,8 @@ void *DecodeScience(void *arg)
             case S01_GET_MAINH: 
                 DispState(state,"STATE = S01_GET_MAINH\n");
                 
-                macro_status=1;   // Assume initially that no macro description is found
-                macro_priority=0; // Assume we do not trust macro info more than parameters inside the data
+                macro_descr_NOT_found=1;   // Assume initially that no macro description is found
+                macro_priority=0;          // Assume we do not trust macro info more than parameters inside the data
                 
                 GetBuffer(cb,buff,1);      // Get a byte from circular science buffer
                 
@@ -1697,7 +1696,7 @@ void *DecodeScience(void *arg)
                         curr.transmitter=SENS_NONE; // Set current transmitter to none.
                         CPrintf("----------------------------------------------------------------------------\n");
                         
-                        // !macro_status = macro desc found
+                        // !macro_descr_NOT_found = macro desc found
                         // At this point:
                         // If anomaly found in pds.anomalies
                         // 1) If macro ID was provided in pds.anomalies it is already set at this point!
@@ -1710,7 +1709,7 @@ void *DecodeScience(void *arg)
                         
                         // Macro information has high priority and a macro description has been found!
                         // Thus we want to overide ID code in data!
-                        if(macro_priority && !macro_status) 
+                        if(macro_priority && !macro_descr_NOT_found) 
                         {
                             if((val=FindIDCode(&macros[mb][ma],meas_seq+1))<0)
                             {
@@ -1853,19 +1852,22 @@ void *DecodeScience(void *arg)
                                 // Effectively curr.sensor = 3 (SENS_P1P2)
                                 curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
                                 // NOTE: No break!
+                                
                             case D_P2_TRNC_20_BIT_RAW_BIP:
                             case E_P2_TRNC_20_BIT_RAW_BIP:
                             case D_P2_20_BIT_RAW_BIP:
                             case E_P2_20_BIT_RAW_BIP:    
                                 // Effectively curr.sensor = 2 (SENS_P2)
                                 curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
-                                // NOTE: No break!                                
+                                // NOTE: No break!
+                                
                             case D_P1_TRNC_20_BIT_RAW_BIP:
                             case D_P1_20_BIT_RAW_BIP:
                             case E_P1_TRNC_20_BIT_RAW_BIP:
                             case E_P1_20_BIT_RAW_BIP:
                                 // Effectively curr.sensor = 1 (SENS_P1)
                                 curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                
                                 params=2;
                                 meas_seq++; // Increase number of measurement sequences
                                 CPrintf("    Found science data, ID CODE: 0x%.2x Sequence %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
@@ -1947,9 +1949,9 @@ void *DecodeScience(void *arg)
                                 SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level ID...
                                 
                                 // Search for macro with right macro ID in macs matrix
-                                macro_status=1; // Indicate that we haven't found the macro 
-                                for(mb=0;macro_status && mb<MAX_MACRO_BLCKS;mb++)
-                                    for(ma=0;macro_status && ma<MAX_MACROS_INBL;ma++)
+                                macro_descr_NOT_found=1; // Indicate that we haven't found the macro 
+                                for(mb=0;macro_descr_NOT_found && mb<MAX_MACRO_BLCKS;mb++)
+                                    for(ma=0;macro_descr_NOT_found && ma<MAX_MACROS_INBL;ma++)
                                     {
                                         if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_MACRO_ID_TAG",1,0)>0)
                                         {
@@ -1969,6 +1971,7 @@ void *DecodeScience(void *arg)
                                                 }
                                             }
                                             else
+                                            {
                                                 if(val==macro_id)
                                                 {
                                                     // Move temporary buffer to it's end, This buffer will be used to dump
@@ -1977,7 +1980,7 @@ void *DecodeScience(void *arg)
                                                     // using the correct macro ID on the command line.
                                                     Forward(ct,ct->fill); 
                                                     CPrintf("    Macro description found, Block %d, Macro num %d\n",mb,ma);
-                                                    macro_status=0; // We found macro description!
+                                                    macro_descr_NOT_found=0; // We found macro description!
                                                     if(pds.uaccpt_fd!=NULL) 
                                                     {
                                                         fclose(pds.uaccpt_fd);
@@ -1985,10 +1988,11 @@ void *DecodeScience(void *arg)
                                                     }
                                                     break;
                                                 }
+                                            }
                                         }
                                     }      
                                     
-                                    if(macro_status) 
+                                    if(macro_descr_NOT_found) 
                                     {
                                         CPrintf("    Error Couldn't find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
                                     }
@@ -2140,7 +2144,7 @@ void *DecodeScience(void *arg)
                                         
                                         case S09_COMPARE_PARAMS:
                                             DispState(state,"STATE = S09_COMPARE_PARAMS\n");
-                                            if(!macro_status && !macro_priority) // If a macro description exists and macro description has lowest priority over data parameters
+                                            if(!macro_descr_NOT_found && !macro_priority) // If a macro description exists and macro description has lowest priority over data parameters
                                             {
                                                 // Go through all property/value pairs in dictionary and compare to macro description
                                                 for(i=0;i<dict.no_prop;i++) 
@@ -2239,19 +2243,19 @@ void *DecodeScience(void *arg)
                                                     state=S09_COMPARE_PARAMS;           // Check data parameters macro consistency
                                                 }
                                                 break;
-                                                
+
                                             case S13_RECONNECT:
                                                 DispState(state,"STATE = S13_RECONNECT\n");
                                                 break;
-                                                
-                                            case S14_RESOLVE_MACRO_PARAMETERS: 
+
+                                            case S14_RESOLVE_MACRO_PARAMETERS:
                                                 DispState(state,"STATE = S14_RESOLVE_MACRO_PARAMETERS\n");
                                                 
                                                 
                                                 // FINGERPRINTING for the right macro description.
                                                 // This is a bit dirty, but we need to do it on the prom macros (8 of them).
                                                 // All macros in flash contain the macro ID in the science data stream.
-                                                if(macro_status) // If no macro description
+                                                if(macro_descr_NOT_found) // If no macro description
                                                 {
                                                     CPrintf("    WARNING: Fingerprinting macro ID.\n");
                                                     finger_printing=1;
@@ -2316,7 +2320,7 @@ void *DecodeScience(void *arg)
                                                     }
                                                     
                                                     finger_printing=0;
-                                                }   // if (macro_status) 
+                                                }   // if (macro_descr_NOT_found) 
                                                 
                                                 // We are in a position of choices here!
                                                 //--------------------------------------
@@ -2338,11 +2342,11 @@ void *DecodeScience(void *arg)
                                                 
                                                 CPrintf("    Parsing ID Code: %s\n",IDList[id_code]); 
                                                 
-                                                // To keep the information coming as close to the source as possible 
+                                                // To keep the information coming as close to the source as possible
                                                 // WE DERIVE INFO FROM THE ID CODE STRING DIRECTLY BY SEARCHING FOR SUBSTRINGS!!
-                                                // We do not compile information in a secondary file..
-                                                // that would give two sources of info and consistency problems could occur.
-                                                // Note: The ID strings are at this moment fixed (permanent) and will not change.
+                                                // We do not compile information in a secondary file.
+                                                // That would give two sources of info and consistency problems could occur.
+                                                // NOTE: The ID strings are at this moment fixed (permanent) and will not change.
                                                 //       The number of ID strings may however increase!
                                                 
                                                 dsa16_p1 = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
@@ -2460,9 +2464,9 @@ void *DecodeScience(void *arg)
                                                 strcpy(tstr1,IDList[id_code]);      // Get ID code name
                                                 TrimWN(tstr1);                      // Remove trailing whitespace
                                                 sprintf(tstr2,"\"%s\"",tstr1);      // Add PDS quotes ".." 
-                                                SetP(&comm,"DESCRIPTION",tstr2,1); // Update DESCRIPTION in common PDS parameters
+                                                SetP(&comm,"DESCRIPTION",tstr2,1);  // Update DESCRIPTION in common PDS parameters
                                                 
-                                                if(!macro_status)
+                                                if(!macro_descr_NOT_found)
                                                 {
                                                     //===================================
                                                     // CASE: A macro description exists.
@@ -2476,7 +2480,7 @@ void *DecodeScience(void *arg)
                                                         }
                                                         
                                                         // Find downsampling value probe 1 in macro and if no ID value exists use macro desc. value
-                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",0)>0)
+                                                        if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",DNTCARE)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
                                                             if(dsa16_p1==-1 || macro_priority) { // Value not resolved from ID or macro has high priority use macro value instead
@@ -2510,10 +2514,10 @@ void *DecodeScience(void *arg)
                                                             {
                                                                 if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
                                                                 {
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_CUTOFF",0)>0) {
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_CUTOFF",DNTCARE)>0) {
                                                                         InsertTopK(&dict,property2->name,property2->value);
                                                                     }
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",0)>0) {
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",DNTCARE)>0) {
                                                                         InsertTopK(&dict,property2->name,property2->value);
                                                                     }
                                                                 }
@@ -2527,10 +2531,10 @@ void *DecodeScience(void *arg)
                                                             {
                                                                 if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
                                                                 {
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_CUTOFF",0)>0) {
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_CUTOFF",DNTCARE)>0) {
                                                                         InsertTopK(&dict,property2->name,property2->value);
                                                                     }
-                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_STATUS",0)>0) {
+                                                                    if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DIG_FILT_STATUS",DNTCARE)>0) {
                                                                         InsertTopK(&dict,property2->name,property2->value);
                                                                     }
                                                                 }
@@ -2555,7 +2559,7 @@ void *DecodeScience(void *arg)
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, Let's set it
+                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, let's set it
                                                                         } else {
                                                                             InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
                                                                         }
@@ -2592,7 +2596,7 @@ void *DecodeScience(void *arg)
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority) {
-                                                                            InsertTopK(&dict,property2->name,property2->value);// Yes, Lets set it
+                                                                            InsertTopK(&dict,property2->name,property2->value);// Yes, let's set it
                                                                         } else {
                                                                             InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
                                                                         }
@@ -2691,7 +2695,7 @@ void *DecodeScience(void *arg)
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
-                                                                            InsertTopK(&dict,property2->name,property2->value); // Yes, Lets set it
+                                                                            InsertTopK(&dict,property2->name,property2->value);   // Yes, let's set it
                                                                         }
                                                                         else
                                                                         {
@@ -2733,7 +2737,7 @@ void *DecodeScience(void *arg)
                                                                         }
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority) {                                                                                        
-                                                                            InsertTopK(&dict,property2->name,property2->value);// Yes, Lets set it
+                                                                            InsertTopK(&dict,property2->name,property2->value);   // Yes, let's set it
                                                                         }
                                                                         else {
                                                                             InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
@@ -2891,51 +2895,57 @@ void *DecodeScience(void *arg)
                                                             
                                                             DecodeRawTime(curr.seq_time,tstr1,0);   // Decode raw time into PDS compliant UTC time
                                                             CPrintf("    Current sequence start time is: %s\n",tstr1); 
-                                                            SetP(&comm,"START_TIME",tstr1,1);        // Update START_TIME in common PDS parameters
+                                                            SetP(&comm,"START_TIME",tstr1,1);
                                                             
                                                             
                                                             // Create data path for current day
                                                             tstr1[10]='\0';                 // Truncate hh:mm:ss away and keep CCYY-MM-DD
+
+                                                            // Test if RPCLAPYYMMDD structure exists for current time, if not, create necessary directories.
+                                                            StrucDir(tstr1, pds.dpathse, pds.spaths);
                                                             
-                                                            StrucDir(tstr1,pds.dpathse,pds.spaths); // Test if RPCLAPYYMMDD structure exists for current time 
-                                                            // if not create necessary directories.
+                                                            // Replace "-" in CCYY-MM-DD by null terminators
+                                                            // so we can convert date from CCYY-MM-DD into YYMMDD.
+                                                            tstr1[4]='\0';
+                                                            tstr1[7]='\0';
                                                             
-                                                            // Replace - in CCYY-MM-DD by null terminations
-                                                            // So we can convert date from CCYY-MM-DD
-                                                            // into YYMMDD
-                                                            
-                                                            tstr1[4]='\0'; 
-                                                            tstr1[7]='\0'; 
-                                                            
-                                                            // Get higest alphanumeric value in filenames in dpathse matching pattern  "RPCLAPYYMM*_*_*S.LBL"
-                                                            // This causes the alphanum value to restart at zero everynew day..
-                                                            // (Any matching days from previous runs are not overwritten until alphanum wraps..
-                                                            //  but that means identical data are stored twice in the same data set and that should not be done)
+                                                            // Get highest alphanumeric value in filenames in dpathse matching pattern "RPCLAPYYMM*_*_*S.LBL".
+                                                            // This causes the alphanum value to restart at zero every new day.
+                                                            // (Any matching days from previous runs are not overwritten until alphanum wraps
+                                                            // but that means identical data are stored twice in the same data set and that should not be done.)
                                                             //
                                                             sprintf(tstr3,"RPCLAP%s%s*_*_*S.LBL",&tstr1[2],&tstr1[5]);
-                                                            GetAlphaNum(alphanum_s,pds.spaths,tstr3); 
+                                                            GetAlphaNum(alphanum_s, pds.spaths, tstr3); 
                                                             IncAlphaNum(alphanum_s);         // Increment alphanumeric value
-                                                            
-                                                            
-                                                            //==================================
-                                                            // Construct (tentative) file names
-                                                            //================================== -----------------------------------------------------------------------------------------------------------------------------------
-                                                            // 000000000011111111112222222
-                                                            // 012345678901234567890123456.012
+
+
+                                                            //=======================================================
+                                                            // Construct (tentative) file names (SCI) and product ID
+                                                            //=======================================================
+                                                            // 0000000000111111111122222222223
+                                                            // 012345678901234567890123456.890
                                                             // RPCLAPYYMMDD-2Z7S-RDB14NSXX.EXT 
-                                                            // This is a 27.3 file name and it's accepted in PDS3
-                                                            // Currently we have 2 unused characters..
-                                                            
-                                                            sprintf(tstr2,"RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",&tstr1[2],&tstr1[5],&tstr1[8],
-                                                                    alphanum_s,curr.sensor,curr.afilter,tm_rate); // Compile product ID
-                                                            
-                                                            if(param_type==ADC20_PARAMS) { tstr2[16]='T'; } // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
-                                                            if(calib)                    { tstr2[18]='C'; } // Set to [C]alibrated or keep Calibrated [R]aw.
-                                                            if(curr.bias_mode==E_FIELD)  { tstr2[19]='E'; } // Set to [E]-Field or keep [D]ensity.
-                                                            if(param_type==SWEEP_PARAMS) { tstr2[20]='S'; } // Set to [S]weep or keep [B]ias
-                                                            
-                                                            strcpy(lbl_fname,tstr2);              // Save prod ID as label filename
-                                                            strcpy(tab_fname,tstr2);              // Save prod ID as table filename
+                                                            // 
+                                                            // This is a 27.3 file name and it's accepted in PDS3.
+                                                            // Currently we have 2 unused characters.
+                                                            // See the EAICD (document) for details on file naming convention.
+                                                            // 16 : T=20 bit, S=16 bit
+                                                            // 18 : [C]alibrated or Calibrated [R]aw
+                                                            // 19 : [E]-Field or [D]ensity
+                                                            // 20 : [S]weep or [B]ias.
+                                                            // 21 : P[1], P[2], P[3].
+
+                                                            sprintf(tstr2, "RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",
+                                                                    &tstr1[2], &tstr1[5], &tstr1[8],
+                                                                    alphanum_s, curr.sensor, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
+
+                                                            if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
+                                                            if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
+                                                            if(curr.bias_mode==E_FIELD)     { tstr2[19]='E'; } // Set to [E]-Field or keep [D]ensity.
+                                                            if(param_type==SWEEP_PARAMS)    { tstr2[20]='S'; }  // Set to [S]weep or keep [B]ias.
+
+                                                            strcpy(lbl_fname,tstr2);              // Save product ID as label filename.
+                                                            strcpy(tab_fname,tstr2);              // Save product ID as table filename.
                                                             strcat(lbl_fname,".LBL");             // Add .LBL extension
                                                             strcat(tab_fname,".TAB");             // Add .TAB extension
                                                             
@@ -2953,7 +2963,7 @@ void *DecodeScience(void *arg)
                                                             // Compute stop time of current sequence
                                                             if(param_type==SWEEP_PARAMS)
                                                             {
-                                                                // (una  sensore at one time for swiping you sii!)
+                                                                // (una sensore at one time for swiping you sii!)
                                                                 curr.factor=sw_info.sweep_dur_s/SAMP_FREQ_ADC16/samples; // Factor for sweeps!
                                                             }
                                                             else
@@ -2994,25 +3004,25 @@ void *DecodeScience(void *arg)
                                                                         break;
                                                                 } 
                                                             }
-                                                            curr.stop_time=curr.seq_time+(samples-1)*curr.factor; // Calculate current stop time
+                                                            curr.stop_time=curr.seq_time+(samples-1)*curr.factor;   // Calculate current stop time.
                                                             
-                                                            Raw2OBT_Str(curr.stop_time,pds.SCResetCounter,tstr5); // Compile OBT string and add reset number of S/C clock
+                                                            Raw2OBT_Str(curr.stop_time, pds.SCResetCounter, tstr5);   // Compile OBT string and add reset number of S/C clock.
                                                             
                                                             SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",tstr5,1);
                                                             
-                                                            DecodeRawTime(curr.stop_time,tstr5,0);  // Decode raw time into PDS compliant UTC time
-                                                            CPrintf("    Current sequence stop  time is: %s\n",tstr5); 
-                                                            SetP(&comm,"STOP_TIME",tstr5,1);         // Update STOP_TIME in common PDS parameters 		     
+                                                            DecodeRawTime(curr.stop_time, tstr5, 0);  // Decode raw time into PDS compliant UTC time.
+                                                            CPrintf("    Current sequence stop  time is: %s\n",tstr5);
+                                                            SetP(&comm,"STOP_TIME",tstr5,1);         // Update STOP_TIME in common PDS parameters.
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                     }   // if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)
-                                                }   // if(!macro_status)
-                                                else 
+                                                }   // if(!macro_descr_NOT_found)
+                                                else
                                                 {
                                                     //================================================================
                                                     // CASE: No macro description fits and no anomaly overide exists.
                                                     //================================================================
-                                                    // Derive all that we can without anomaly override and send it to log file 
-                                                    // Problematic data is stored in UnAccepted_Data directory
+                                                    // Derive all that we can without anomaly override and send it to log file.
+                                                    // Problematic data are stored in the UnAccepted_Data directory.
                                                     
                                                     CPrintf("    No macro description fits, data will be stored in the UnAccepted_Data directory\n");
                                                     if(param_type==NO_PARAMS)
@@ -3067,9 +3077,9 @@ void *DecodeScience(void *arg)
                                                             CPrintf("    Duration P1 & P2\n",samples*a20_info.resampling_factor);
                                                         }
                                                     }
-                                                }   // if(!macro_status) ... else ...
+                                                }   // if(!macro_descr_NOT_found) ... else ...
                                                 
-                                                // Downsampling values should be resolved at this point so lets put them in!
+                                                // Downsampling values should be resolved at this point so let's put them in!
                                                 // This part is always executed if we have a macro description or not.
                                                 if(param_type==NO_PARAMS || param_type==SWEEP_PARAMS)
                                                 {
@@ -3091,6 +3101,7 @@ void *DecodeScience(void *arg)
                                                     // 
                                                     // Determine whether to include/exclude entire TAB&LBL file pair.
                                                     // Can be compared with the (CALIB) macro exclusion check.
+                                                    // NOTE: DecideWhetherToExcludeData requires SPACECRAFT_CLOCK_START_COUNT, SPACECRAFT_CLOCK_STOP_COUNT to have been set.
                                                     //------------------------------------------------------------------------
                                                     int excludeData = 0;   // Boolean flag.
                                                     if (dataExcludeTimes != NULL) {
@@ -3113,7 +3124,7 @@ void *DecodeScience(void *arg)
                                                     // descriptions/IDs since that functionality had not been implemented yet.
                                                     // /Erik P G Johansson summarizing Reine Gill 2015-03-26.
                                                     // ------------------------------------------------------------------------------------
-                                                    if(!macro_status) // IF we have a macro description (macro_status==0 means we have).
+                                                    if(!macro_descr_NOT_found) // IF we have a macro description (macro_descr_NOT_found==0 means we have).
                                                     {
                                                         if(calib)
                                                         {
@@ -3157,7 +3168,7 @@ void *DecodeScience(void *arg)
                                                             // Now the first initial plateau has a corrupted length that is varying.
                                                             // We could simply truncate it off! But instead we figure out by how
                                                             // much it varies! Everything to get the correct current vector!
-                                                            // Further more one sample is always missing at the end of a sweep!
+                                                            // Furthermore, one sample is always missing at the end of a sweep!
                                                             
                                                             if(curr.sensor==SENS_P1) {
                                                                 samp_plateau=sw_info.plateau_dur/dsa16_p1; // Samples on one plateau
@@ -3183,12 +3194,18 @@ void *DecodeScience(void *arg)
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
                                                                 
-                                                                //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
                                                             }
                                                         }
                                                         else // Split interleaved 20 Bit data into two pairs of label and tab files
                                                         {
+                                                            // QUESTION: How does the code know that there is data for the respective probes,
+                                                            // when it could just as well be that only one of them (or none) has?
+                                                                
+                                                            //====================
+                                                            // Handle P1 (dop==1)
+                                                            //====================
+                                                            
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='1';
                                                             tab_fname[21]='1';
@@ -3202,21 +3219,23 @@ void *DecodeScience(void *arg)
                                                             
                                                             // Name changed
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters		  
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
                                                             
-                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,1,ini_samples,param_type)>=0)
+                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 1, ini_samples,param_type)>=0)
                                                             {
                                                                 WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,1,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);  
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
                                                                 
-                                                                //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
                                                             }
                                                             
+                                                            //===================
+                                                            // Handle P2 (dop=2)
+                                                            //===================
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='2';
                                                             tab_fname[21]='2';
@@ -3234,20 +3253,19 @@ void *DecodeScience(void *arg)
                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
                                                             
-                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,2,ini_samples,param_type)>=0)
+                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 2, ini_samples,param_type)>=0)
                                                             {
                                                                 WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,2,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
                                                                 
-                                                                //fprintf(pds.itable_fd,"\"%s\",\"%s\",%s,%s,\"%04d\",\"%04d\"\r\n",tstr4,tstr2,property2->value,mp.data_set_id,(unsigned int)pds.DataSetVersion,0);   // Replaced with WriteToIndexTAB by Erik P G Johansson 2015-05-12
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
                                                             }
                                                         }
                                                         
                                                         ClearDictPDS(&dict);   // Clear dictionary PDS LAP parameters, common parameters are not cleared until a new measurement cycle beginns
-                                                    }   // if(!macro_status)
+                                                    }   // if(!macro_descr_NOT_found)
                                                     else
                                                     {
                                                         // At this point a macro description could not be found.
@@ -3282,7 +3300,7 @@ void *DecodeScience(void *arg)
                                                                 fflush(pds.uaccpt_fd); // Flush it!
                                                             }
                                                         }
-                                                    }    // if (!macro_status) ... else ...
+                                                    }    // if (!macro_descr_NOT_found) ... else ...
                                                     state=S04_GET_ID_CODE;
                                                     break;     
                                                     default:
@@ -3566,15 +3584,13 @@ void ExitPDS(int status)
 }
 
 
-// As printf but everything goes into PDS_LOG0
-// If it can't open errors are printed to stderr
+// Like printf but everything goes into PDS_LOG0.
+// If it can't open, then messages are printed to stderr.
 int YPrintf(const char *fmt, ...) 
 {
     int status;
     va_list args;
-    char  strp[32];
-    
-    
+    char strp[32];
     int oldstate;
     
     // We do not want to cancel on default cancel points in fprintf,vfprintf
@@ -3601,7 +3617,7 @@ int YPrintf(const char *fmt, ...)
     return(status);
 }
 
-// As printf but everything goes into dds packet filter log 
+// As printf but everything goes into dds packet filter log.
 int DPrintf(const char *fmt, ...) 
 {
     int status;
@@ -3635,7 +3651,7 @@ int DPrintf(const char *fmt, ...)
     return(status);
 }
 
-// As printf but everything goes into rpc filter packet log 
+// As printf but everything goes into rpc filter packet log.
 int PPrintf(const char *fmt, ...) 
 {
     int status;
@@ -3669,7 +3685,7 @@ int PPrintf(const char *fmt, ...)
     return(status);
 }                  
 
-// As printf but everything goes into Science decoding log 
+// As printf but everything goes into Science decoding log.
 int CPrintf(const char *fmt, ...) 
 {
     int status;
@@ -3702,7 +3718,7 @@ int CPrintf(const char *fmt, ...)
     return(status);
 }       
 
-// As printf but everything goes into HK decoding log
+// As printf but everything goes into HK decoding log.
 int HPrintf(const char *fmt, ...) 
 {
     int status;
@@ -4414,22 +4430,27 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
 
 
 
-//--------------------------------------------------------------------------------------------
-// Erik P G Johansson 2015-03-25: Created function.
-// Checks whether a LBL/TAB file pair should be created at all depending on the data (time).
-// 
-// Value assigned to *excludeData:
-//      false: do not exclude data.
-//      true:  exclude data.
-//
-// IMPLEMENTATION NOTE: The code determines SPACECRAFT_CLOCK_START_COUNT and SPACECRAFT_CLOCK_STOP_COUNT
-// from property list used for writing LBL file(s). This means that the values are parsed from strings.
-// This may seem suboptimal but has the advantage of being largely independent of how the rest of
-// DecodeScience (a huge, complicated function) works.
-// NOTE: Uncertain whether to only look at checked or unchecked properties, or both, in property list.
-// Appears that SPACECRAFT_CLOCK_START/STOP_COUNT are set using UNCHECKED (default for SetP).
-// NOTE: Uncertain whether to assume exactly one occurrence of SPACECRAFT_CLOCK_START/STOP_COUNT in property list.
-//--------------------------------------------------------------------------------------------
+/*--------------------------------------------------------------------------------------------
+ * Erik P G Johansson 2015-03-25: Created function.
+ * 
+ * Checks whether a LBL/TAB file pair should be created at all depending on the data (time).
+ * 
+ * Value assigned to *excludeData:
+ *      false: do not exclude data.
+ *      true:  exclude data.
+ *      
+ * Return value: 0 (no error), -1 (error).
+ *
+ * NOTE: Requires SPACECRAFT_CLOCK_START_COUNT, SPACECRAFT_CLOCK_STOP_COUNT, START_TIME, STOP_TIME to already have been set.
+ * 
+ * IMPLEMENTATION NOTE: The code determines SPACECRAFT_CLOCK_START_COUNT and SPACECRAFT_CLOCK_STOP_COUNT
+ * from property list used for writing LBL file(s). This means that the values are parsed from strings.
+ * This may seem suboptimal but has the advantage of being largely independent of how the rest of
+ * DecodeScience (a huge, complicated function) works.
+ * NOTE: Uncertain whether to only look at checked or unchecked properties, or both, in property list.
+ * Appears that SPACECRAFT_CLOCK_START/STOP_COUNT are set using UNCHECKED (default for SetP).
+ * NOTE: Uncertain whether to assume exactly one occurrence of SPACECRAFT_CLOCK_START/STOP_COUNT in property list.
+ *--------------------------------------------------------------------------------------------*/
 int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData) {
     // PROPOSAL: Reverse exclude/include return result?
     // PROPOSAL: Boolean parameter-by-reference for include/exclude and separate error/no-error return value.
@@ -5422,6 +5443,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
  * Uncertain what "dop" means, and compared to curr->sensor. Compare "dop" in WritePLBL_File.
  *    NOTE: Check how dop is set in calls to WritePTAB_File and WritePLBL_File. It is always a literal.
  *    NOTE: Check how dop is used in WritePLBL_File (very little).
+ *    NOTE: "dop" seems different from curr_type_def#sensor. sensor==0 has different meaning at the very least.
  *    GUESS: curr-->sensor refers to the probe(s) for which there is data.
  *    GUESS: dop refers to the data which is written to the file.
  *       dop=0 : P3 (difference P2-P1; NOT two different parallel measurements)
@@ -5530,9 +5552,9 @@ int WritePTABFile(
     
     if(calib)
     {
-        //=======
-        // CALIB
-        //=======
+        //=============
+        // CASE: CALIB
+        //=============
         
         
         
@@ -5948,11 +5970,18 @@ int WritePTABFile(
                 }
                 
                 pthread_testcancel();
+
                 
+
+                //###############
+                //###############
+                // Write to disk
+                //###############
+                //###############
                 if(calib)
                 {
                     //##################
-                    // Write CALIB data
+                    // CASE: CALIB data
                     //##################
                     if(curr->bias_mode==DENSITY)
                     {
@@ -6082,9 +6111,9 @@ int WritePTABFile(
                 }   // if(calib)
                 else
                 {
-                    //###################################
-                    // Write raw EDITED data (not CALIB)
-                    //###################################
+                    //###################
+                    // CASE: EDITED data
+                    //###################
                     if(curr->sensor==SENS_P1P2 && dop==0)
                     {                  
                         // For difference data P1-P2 we need to add two bias vectors..they can be different!
@@ -6119,9 +6148,17 @@ int WritePTABFile(
 /* WRITE TO DATA LABEL FILE .LBL
  * 
  * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is.
- * NOTE: This function only has very little dependence on "dop". Compare "WritePTABFile".
+ * NOTE: This function only has very little dependence on "dop". Compare "WritePTAB_File".
  */
-int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type)
+int WritePLBL_File(
+    char *path,
+    char *fname,
+    curr_type *curr,
+    int samples,
+    int id_code,
+    int dop,
+    int ini_samples,
+    int param_type)
 {
     char fullname[PATH_MAX];
     char tstr1[256];
@@ -6171,7 +6208,7 @@ int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_cod
         
         if(calib) // If we do calibration
         {
-            row_bytes+=16; // Calibrated data has wider columns..
+            row_bytes+=16; // Calibrated data has wider columns.
             
             if(diff) // Any 16 bit difference data ?
             {
@@ -6493,7 +6530,7 @@ int SyncAhead(buffer_struct_type *cb,int len)
 // Functions handling/working with linked lists of property/value pairs
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Clear all common pds parameter value pairs
+// Removes all properties and adds them again with default values.
 int ClearCommonPDS(prp_type *p)
 { 
     if(FreePrp(p)>=0) // Free old stuff
@@ -6943,12 +6980,12 @@ void WriteToIndexTAB(char* relative_LBL_file_path, char* product_ID, char* prod_
 
 
 
-// Returns the total number of aqps leading up to 
+// Returns the total number of AQPs leading up to 
 // the sequence numbered n (in a macro) 
 // starting at the beginning of the sequence.
 //
 // Returns a negative number on error.
-//	
+//
 int TotAQPs(prp_type *p,int n)
 {
     property_type *property1;
@@ -7504,11 +7541,11 @@ int TestFile(char *name)
     return 0;
 }
 
-// Make a directory with name in path.
+
+// Make a directory with name "name" in "path".
 // 
 // Return path to new directory 
-// in npath assuming it has space enough!!!
-
+// in "npath" assuming it has enough space.
 int MakeDir(char *name,char *path,char *npath)
 {
     int err;
@@ -7525,6 +7562,8 @@ int MakeDir(char *name,char *path,char *npath)
 }
 
 // Make DATA directory structure
+// 
+// NOTE: Alters "date".
 int StrucDir(char *date,char *ipath,char *opath)
 {
     char months[12][4]={"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
@@ -7534,17 +7573,20 @@ int StrucDir(char *date,char *ipath,char *opath)
     char tmp[PATH_MAX];
     int month;
     
-    // Date is CCYY-MM-DD 
+    // Date is CCYY-MM-DD.
+    // NOTE: Alters the ARGUMENT "date".
     date[4]='\0';
     date[7]='\0';
     date[10]='\0';
-    
-    sprintf(tmp,"%s",date);                         // Year directory
+
+    // Make sure there is a YEAR directory.
+    sprintf(tmp,"%s",date);
     MakeDir(tmp,ipath,yeardir);                     // Make a directory for current Year, if it's not already there!
+    
+    // Make sure there is a MONTH directory.
     if(!sscanf(&date[5],"%d",&month)) {             // Month number
         return -1;                                    // Could not convert to month invalid date!
-    }
-    
+    }    
     month--;                                        // Start at 0
     if(month>=0 && month<=11)                       // In range
     {
@@ -7554,6 +7596,7 @@ int StrucDir(char *date,char *ipath,char *opath)
         return -2;                                    // Month out of range!
     }
     
+    // Make sure there is a DAY-OF-MONTH directory.
     sprintf(tmp,"D%s",&date[8]);                    // Day of month
     MakeDir(tmp,monthdir,daydir);                   // Make day dir!
     
