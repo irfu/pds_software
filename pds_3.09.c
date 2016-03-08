@@ -182,7 +182,7 @@ int ReadLabelFile(prp_type *pds,char *name);			// Read a label file
 int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);	// Read table file
 
 // Write data to data product table file .tab
-int WritePTABFile(unsigned char *buff,char *fname,int data_type,int samples,int id_code,int length,sweep_type *sw_info,curr_type *curr,int param_type,int dsa16_p1,int dsa16_p2,int dop,m_type *m_conv,unsigned int **bias,int nbias,unsigned int **mode,int nmode,int ini_samples,int samp_plateau);
+int WritePTAB_File(unsigned char *buff,char *fname,int data_type,int samples,int id_code,int length,sweep_type *sw_info,curr_type *curr,int param_type,int dsa16_p1,int dsa16_p2,int dop,m_type *m_conv,unsigned int **bias,int nbias,unsigned int **mode,int nmode,int ini_samples,int samp_plateau);
 
 // Write to data product label file .lbl
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type);
@@ -974,7 +974,7 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
     fprintf(stream, "            [-calib] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
     fprintf(stream, "\n");
-    fprintf(stream, "   Alter default values and values in the mission calendar.");
+    fprintf(stream, "   Alter default values and values in the mission calendar.\n");
     fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
     
     // Values normally obtained from the mission calendar.
@@ -1994,7 +1994,7 @@ void *DecodeScience(void *arg)
                                     
                                     if(macro_descr_NOT_found) 
                                     {
-                                        CPrintf("    Error Couldn't find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
+                                        CPrintf("    Error: Could not find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
                                     }
                                     else
                                         mb--; // mb is one step to much here since break above only breaks out of inner loop!
@@ -2752,7 +2752,7 @@ void *DecodeScience(void *arg)
                                                                         // For the pds code to be able to change the bias during every macro loop, the code has to specificly
                                                                         // permit macro 515 to set VBIAS2 in _every_ macro loop, not just the first one.
                                                                         // NOTE: Macro 515 is also on the list of macros that can not receive extra, external bias settings
-                                                                        // ("kommenderingar"). See WritePTABFile, "if (extra_bias_setting) ..." .
+                                                                        // ("kommenderingar"). See WritePTAB_File, "if (extra_bias_setting) ..." .
                                                                         // NOTE: One could of course make the same exception for VBIAS1 to preserve the "symmetry between
                                                                         // the probes" but that is unnecessary since VBIAS1 is constant throughout the macro loop as intended.
                                                                         // /Erik P G Johansson, 2015-04-07
@@ -3187,9 +3187,11 @@ void *DecodeScience(void *arg)
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
                                                             ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
                                                             
-                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code,0,ini_samples,param_type)>=0)
+                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 0, ini_samples,param_type)>=0)
                                                             {
-                                                                WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,0,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                                                                WritePTAB_File(
+                                                                    buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, 0,
+                                                                    &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
@@ -3209,15 +3211,13 @@ void *DecodeScience(void *arg)
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='1';
                                                             tab_fname[21]='1';
-                                                            prod_id[22]='1';
+                                                            prod_id[21+1]='1';
                                                             
-                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                            ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
-                                                            
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);     // Change PRODUCT ID in common PDS parameters
-                                                            
+                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
+                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
                                                             
                                                             // Name changed
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
@@ -3225,7 +3225,9 @@ void *DecodeScience(void *arg)
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 1, ini_samples,param_type)>=0)
                                                             {
-                                                                WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,1,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);  
+                                                                WritePTAB_File(
+                                                                    buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, 1,
+                                                                    &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
@@ -3239,15 +3241,13 @@ void *DecodeScience(void *arg)
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='2';
                                                             tab_fname[21]='2';
-                                                            prod_id[22]='2';                                                            
+                                                            prod_id[21+1]='2';
                                                             
-                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters
-                                                            
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);               // Change PRODUCT ID in common PDS parameters
-                                                            
+                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
+                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
                                                             
                                                             // Name changed
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
@@ -3255,7 +3255,8 @@ void *DecodeScience(void *arg)
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 2, ini_samples,param_type)>=0)
                                                             {
-                                                                WritePTABFile(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2,2,&m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                                                                WritePTAB_File(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, 2,
+                                                                    &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
                                                                 
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
@@ -5452,7 +5453,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
  *    QUESTION: IF guesses are correct, then why do if statements also refer to curr->sensor? Is that non unnecessary?
  *       Ex: if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1)
  */
-int WritePTABFile(
+int WritePTAB_File(
     unsigned char *buff,
     char *fname,
     int data_type,
@@ -6141,7 +6142,7 @@ int WritePTABFile(
     }
     
     return 0;
-}   // WritePTABFile
+}   // WritePTAB_File
 
 
 
@@ -8107,7 +8108,7 @@ int DecodeRawTimeEst(double raw,char *stime)
 // 1) Can do this since it's the only user
 // 2) It only reads! no thread conflicts..
 //
-// NOTE: The function and its input value is used by WritePTABFile to produce the first two columns in (science data) TAB files: 
+// NOTE: The function and its input value is used by WritePTAB_File to produce the first two columns in (science data) TAB files: 
 //    stime: UTC_TIME (DESCRIPTION = "UTC TIME")
 //    raw:   OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)")
 
