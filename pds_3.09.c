@@ -3212,8 +3212,10 @@ void *DecodeScience(void *arg)
                                                             //=======================
                                                             // QUESTION: How does the code know that it is P3?!! The if-condition seems insufficient.
                                                             // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.                                                            
-                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
-                                                            ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
+                                                            CPrintf("Creating file pair for dop=0 (P3?!).\n");    // DEBUG
+ 
+                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
+                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 0, ini_samples,param_type)>=0)
                                                             {
@@ -3235,6 +3237,7 @@ void *DecodeScience(void *arg)
                                                             //====================
                                                             // Handle dop==1 (P1)
                                                             //====================
+                                                            CPrintf("Creating file pair for dop=1 (P1).\n");    // DEBUG
                                                             
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='1';
@@ -3266,6 +3269,7 @@ void *DecodeScience(void *arg)
                                                             //====================
                                                             // Handle dop==2 (P2)
                                                             //====================
+                                                            CPrintf("Creating file pair for dop=2 (P2).\n");    // DEBUG
                                                             
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='2';
@@ -6269,7 +6273,9 @@ int WritePLBL_File(
             }
         }
         sprintf(tstr2,"%02d",row_bytes);
+
         
+        // if-else looks unnecessary...
         if(calib) {
             SetP(&comm,"RECORD_BYTES",tstr2,1); // Set number of bytes in a column of a record
         } else {
