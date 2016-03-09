@@ -245,7 +245,8 @@ typedef struct curr_type_def
   int vbias1;               // Fix voltage bias p1
   int ibias2;               // Fix current bias p2
   int vbias2;               // Fix voltage bias p2
-  char bias_mode;           // Current bias mode (according to ID code)
+  char bias_mode1;          // Current bias mode for P1 (according to ID code), or P1 & P2 if difference is measured.
+  char bias_mode2;          // Current bias mode for P2 (according to ID code)
   char gain1[16];           // Current gain p1
   char gain2[16];           // Current gain p2
 } curr_type;

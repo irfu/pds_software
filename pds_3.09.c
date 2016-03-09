@@ -184,6 +184,8 @@ int WriteUpdatedLabelFile(prp_type *pds,char *name);		// Write label file
 int ReadLabelFile(prp_type *pds,char *name);			// Read a label file 
 int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);	// Read table file
 
+char getBiasMode(curr_type *curr, int dop);
+
 // Write data to data product table file .tab
 int WritePTAB_File(unsigned char *buff,char *fname,int data_type,int samples,int id_code,int length,sweep_type *sw_info,curr_type *curr,int param_type,int dsa16_p1,int dsa16_p2,int dop,m_type *m_conv,unsigned int **bias,int nbias,unsigned int **mode,int nmode,int ini_samples,int samp_plateau);
 
@@ -2385,10 +2387,19 @@ void *DecodeScience(void *arg)
                                                     }
                                                 }
                                                 
-                                                curr.bias_mode=DENSITY; // Assume density mode
-                                                if((tp=strstr(IDList[id_code],"E_"))!=NULL) // Check if E-FIELD mode
+                                                curr.bias_mode1=DENSITY;   // Assume density mode unless there is a reason not to.
+                                                curr.bias_mode2=DENSITY;
+                                                if((tp=strstr(IDList[id_code],"E_"))!=NULL)     // Check if IDList[id_code] (human-readable string!!) indicates E-FIELD mode.
                                                 {
-                                                    curr.bias_mode=E_FIELD;
+                                                    curr.bias_mode1=E_FIELD;
+                                                    curr.bias_mode2=E_FIELD;                                                    
+                                                }
+                                                
+                                                // NOTE: Special case for id_code==E_P1_D_P2_INTRL_20_BIT_RAW_BIP since it does not fit in with any other rule,
+                                                // and can not be easily fitted into the switch(id_code) segment.
+                                                if (id_code==E_P1_D_P2_INTRL_20_BIT_RAW_BIP) {
+                                                    curr.bias_mode1=E_FIELD;
+                                                    curr.bias_mode2=DENSITY;                                                    
                                                 }
                                                 
                                                 
@@ -2572,7 +2583,7 @@ void *DecodeScience(void *arg)
                                                             {
                                                                 if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_BIAS_MODE",DNTCARE)>0)
                                                                 {
-                                                                    if(curr.bias_mode==E_FIELD) // Current mode according to ID is E-FIELD
+                                                                    if(curr.bias_mode1==E_FIELD) // Current mode according to ID is E-FIELD
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
@@ -2609,7 +2620,7 @@ void *DecodeScience(void *arg)
                                                                         }
                                                                     }
                                                                     
-                                                                    if(curr.bias_mode==DENSITY)   // Current mode according to ID is DENSITY
+                                                                    if(curr.bias_mode1==DENSITY)   // Current mode according to ID is DENSITY
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority) {
@@ -2708,7 +2719,7 @@ void *DecodeScience(void *arg)
                                                             {
                                                                 if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_BIAS_MODE",DNTCARE)>0)
                                                                 {
-                                                                    if(curr.bias_mode==E_FIELD) // Current mode according to ID is E-FIELD
+                                                                    if(curr.bias_mode2==E_FIELD) // Current mode according to ID is E-FIELD
                                                                     {
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
@@ -2746,7 +2757,7 @@ void *DecodeScience(void *arg)
                                                                         }
                                                                     }
                                                                     
-                                                                    if(curr.bias_mode==DENSITY)   // Current mode according to ID is DENSITY
+                                                                    if(curr.bias_mode2==DENSITY)   // Current mode according to ID is DENSITY
                                                                     {
                                                                         if (debug>0) {   // DEBUG
                                                                             printf("    property2: %s = \"%s\"\n", property2->name, property2->value);
@@ -2950,19 +2961,23 @@ void *DecodeScience(void *arg)
                                                             // This is a 27.3 file name and it's accepted in PDS3.
                                                             // Currently we have 2 unused characters.
                                                             // See the EAICD (document) for details on file naming convention.
-                                                            // 16 : T=20 bit, S=16 bit
-                                                            // 18 : [C]alibrated or Calibrated [R]aw
-                                                            // 19 : [E]-Field or [D]ensity
-                                                            // 20 : [S]weep or [B]ias.
-                                                            // 21 : P[1], P[2], P[3].
+                                                            // [16] : T=20 bit, S=16 bit
+                                                            // [18] : [C]alibrated or Calibrated [R]aw
+                                                            // [19] : [E]-Field or [D]ensity
+                                                            // [20] : [S]weep or [B]ias.
+                                                            // [21] : P[1], P[2], P[3].
+                                                            // Note: [i] : i=byte index in string (i=0: first character)
 
                                                             sprintf(tstr2, "RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",
                                                                     &tstr1[2], &tstr1[5], &tstr1[8],
                                                                     alphanum_s, curr.sensor, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
+                                                                    
+                                                            CPrintf("Tentative basis for filename (sometimes later modified): tstr2=\"%s\"\n", tstr2);    // DEBUG
 
                                                             if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
                                                             if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
-                                                            if(curr.bias_mode==E_FIELD)     { tstr2[19]='E'; } // Set to [E]-Field or keep [D]ensity.
+                                                            //if(curr.bias_mode==E_FIELD)     { tstr2[19]='E'; }  // Set to [E]-Field or keep [D]ensity.
+                                                            //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX    // Intentionally trigger compilation error
                                                             if(param_type==SWEEP_PARAMS)    { tstr2[20]='S'; }  // Set to [S]weep or keep [B]ias.
 
                                                             strcpy(lbl_fname,tstr2);              // Save product ID as label filename.
@@ -3212,12 +3227,40 @@ void *DecodeScience(void *arg)
                                                             //=======================
                                                             // QUESTION: How does the code know that it is P3?!! The if-condition seems insufficient.
                                                             // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.                                                            
+                                                            
 //                                                             if (debug >=1) {
                                                                 CPrintf("Creating file pair for dop=0 (P3?!).\n");    // DEBUG
 //                                                             }
- 
+                                                            
+                                                            // This code should be added _IF_ one wants to make the P3 code analogous to the P1+P2 code.
+                                                            // Not entirely sure if one should at this point. /Erik P G Johansson 2016-03-09
+//                                                             {
+//                                                                 // Set to [E]-Field or keep [D]ensity.
+//                                                                 char tempChar;
+//                                                                 if(getBiasMode(&curr, 0)==E_FIELD) {
+//                                                                     tempChar = 'E';
+//                                                                 } else {
+//                                                                     tempChar = 'D';
+//                                                                 }
+//                                                                 lbl_fname[19]=tempChar;
+//                                                                 tab_fname[19]=tempChar;
+//                                                                 prod_id[19+1]=tempChar;
+//                                                             }
+//                                                             lbl_fname[21]='3';
+//                                                             tab_fname[21]='3';
+//                                                             prod_id[21+1]='3';
+
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
                                                             ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
+                                                            
+                                                            // This code should be added _IF_ one wants to make the P3 code analogous to the P1P2 case.
+                                                            // Not entirely sure if one should at this point. /Erik P G Johansson 2016-03-09
+//                                                             // Name changed
+//                                                             SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
+//                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+//                                                             SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
+//                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+//                                                             SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 0, ini_samples,param_type)>=0)
                                                             {
@@ -3244,6 +3287,18 @@ void *DecodeScience(void *arg)
 //                                                             }
                                                             
                                                             // Modify filename and product ID.
+                                                            {
+                                                                // Set to [E]-Field or keep [D]ensity.
+                                                                char tempChar;
+                                                                if(getBiasMode(&curr, 1)==E_FIELD) {
+                                                                    tempChar = 'E';
+                                                                } else {
+                                                                    tempChar = 'D';
+                                                                }
+                                                                lbl_fname[19]=tempChar;
+                                                                tab_fname[19]=tempChar;
+                                                                prod_id[19+1]=tempChar;
+                                                            }
                                                             lbl_fname[21]='1';
                                                             tab_fname[21]='1';
                                                             prod_id[21+1]='1';
@@ -3278,6 +3333,18 @@ void *DecodeScience(void *arg)
 //                                                             }
                                                             
                                                             // Modify filename and product ID.
+                                                            {
+                                                                // Set to [E]-Field or keep [D]ensity.
+                                                                char tempChar;
+                                                                if(getBiasMode(&curr, 2)==E_FIELD) {
+                                                                    tempChar = 'E';
+                                                                } else {
+                                                                    tempChar = 'D';
+                                                                }
+                                                                lbl_fname[19]=tempChar;
+                                                                tab_fname[19]=tempChar;
+                                                                prod_id[19+1]=tempChar;
+                                                            }
                                                             lbl_fname[21]='2';
                                                             tab_fname[21]='2';
                                                             prod_id[21+1]='2';
@@ -5472,6 +5539,27 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
 
 
 
+// Return the bias mode for a given "dop" value as it used for when writing to file.
+// dop : 0=P3, 1=P1, 2=P2.
+// NOTE: The return type is chosen to agree with pds.h:curr_type_def#bias_mode1/2.
+char getBiasMode(curr_type *curr, int dop) {
+    switch(dop) {
+        case 0: 
+            if (curr->bias_mode1 != curr->bias_mode2) {
+                CPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+                YPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+            }
+            return curr->bias_mode1;    // curr.bias_mode1/curr.bias_mode2 should be identical for this case.
+        case 1: return curr->bias_mode1;
+        case 2: return curr->bias_mode2;
+    }
+    
+    CPrintf("Error: getBiasMode: Can not determine bias mode (curr->sensor=%i).\n", curr->sensor);
+    return -1;
+}
+
+
+
 /*
  * Write TAB file, CALIB or EDITED.
  * Convert from TM units to physical units (i.e. calibrate) in CALIB.
@@ -5540,6 +5628,9 @@ int WritePTAB_File(
     int vbias1;                      // Temporary voltage variable
     int ibias2;                      // Temporary current variable
     int vbias2;                      // Temporary voltage variable
+    
+    char bias_mode = getBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
+    
     //  double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
     
     // FKJN: Offset for 20 bit data needs to be taken into account.
@@ -5619,7 +5710,7 @@ int WritePTAB_File(
         calib_nonsweep_TM_delta = 0.0;   // Valid value until set to be non-zero for some cases.
         const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);  // BUGFIX: Now always reads 8 instead of 6 characters. /Erik P G Johansson 2015-06-03.
         const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);  // BUGFIX: Now always reads 8 instead of 6 characters. /Erik P G Johansson 2015-06-03.
-        if(curr->bias_mode==DENSITY) // Check if current data originates from a density mode measurement
+        if(bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
             //====================
             // CASE: DENSITY MODE
@@ -5719,7 +5810,7 @@ int WritePTAB_File(
                 // Other alternative than above shouldn't be possible..if so keep default ccalf
             }
             
-        }   // if(curr->bias_mode==DENSITY)
+        }   // if(bias_mode==DENSITY)
         else
         {
             //====================
@@ -5988,7 +6079,7 @@ int WritePTAB_File(
                 // Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
                 // Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
                 //=====================================================================
-                if(curr->bias_mode==DENSITY)
+                if(bias_mode==DENSITY)
                 {
                     //====================
                     // CASE: DENSITY MODE
@@ -6042,7 +6133,7 @@ int WritePTAB_File(
                     //##################
                     // CASE: CALIB data
                     //##################
-                    if(curr->bias_mode==DENSITY)
+                    if(bias_mode==DENSITY)
                     {
                             
                         //====================
@@ -6143,7 +6234,7 @@ int WritePTAB_File(
                             }
                         }   // if(param_type==SWEEP_PARAMS) ... else ...
                         
-                    }   // if(curr->bias_mode==DENSITY)
+                    }   // if(bias_mode==DENSITY)
                     else // Assume bias mode is E_FIELD no other possible
                     {
                         //====================
@@ -6168,7 +6259,7 @@ int WritePTAB_File(
                         if(curr->sensor==SENS_P2 || dop==2) {
                             fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias2][2],cvoltage); // Write time, calibrated current and voltage
                         }
-                    }   // if(curr->bias_mode==DENSITY) ... else ...
+                    }   // if(bias_mode==DENSITY) ... else ...
                 }   // if(calib)
                 else
                 {
@@ -6178,7 +6269,7 @@ int WritePTAB_File(
                     if(curr->sensor==SENS_P1P2 && dop==0)
                     {                  
                         // For difference data P1-P2 we need to add two bias vectors..they can be different!
-                        if(curr->bias_mode==DENSITY) {
+                        if(bias_mode==DENSITY) {
                             fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,current,vbias1,vbias2); // Add two voltage bias vectors
                         } else {
                             fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,ibias1,ibias2,voltage); // Add two current bias vectors
@@ -6225,7 +6316,9 @@ int WritePLBL_File(
     char tstr1[256];
     char tstr2[256];
     
-    int diff=0; // Indicate if it is diff data
+    char bias_mode = getBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
+    
+    int diff;   // Indicate if it is diff data.
     
     int row_bytes;
     int columns=4;
@@ -6251,6 +6344,8 @@ int WritePLBL_File(
         
         // Prepare temporary sensor string
         // At this time sensor is set so we don't bother to check if it's not!
+        diff = 0;    // Assume it is not diff data.
+        
         switch(curr->sensor)
         {
             case SENS_P1:
@@ -6370,7 +6465,7 @@ int WritePLBL_File(
                 if(calib)
                 {
                     // We have difference data P1-P2
-                    if(diff && curr->bias_mode==E_FIELD) // We need an extra current bias column
+                    if(diff && bias_mode==E_FIELD) // We need an extra current bias column
                     {
                         fprintf(pds.slabel_fd,"NAME        = P1_CURRENT\r\n");  
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_REAL\r\n");
@@ -6393,7 +6488,7 @@ int WritePLBL_File(
                     fprintf(pds.slabel_fd,"UNIT        = AMPERE\r\n");
                     fprintf(pds.slabel_fd,"FORMAT      = \"E14.7\"\r\n");
                     
-                    if(curr->bias_mode==E_FIELD)
+                    if(bias_mode==E_FIELD)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CALIBRATED CURRENT BIAS\"\r\n");
                     else
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"MEASURED CALIBRATED CURRENT\"\r\n");
@@ -6401,7 +6496,7 @@ int WritePLBL_File(
                 }
                 else
                 {
-                    if(diff && curr->bias_mode==E_FIELD) // We need an extra current bias column
+                    if(diff && bias_mode==E_FIELD) // We need an extra current bias column
                     {
                         fprintf(pds.slabel_fd,"NAME        = P1_CURRENT\r\n");  
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
@@ -6420,7 +6515,7 @@ int WritePLBL_File(
                     fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                     fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
                     
-                    if(curr->bias_mode==E_FIELD)
+                    if(bias_mode==E_FIELD)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CURRENT BIAS\"\r\n");
                     else
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"MEASURED CURRENT\"\r\n");
@@ -6435,7 +6530,7 @@ int WritePLBL_File(
                 if(calib)
                 {
                     // We have difference data P1-P2
-                    if(diff && curr->bias_mode==DENSITY) // We need an extra voltage bias column
+                    if(diff && bias_mode==DENSITY) // We need an extra voltage bias column
                     {
                         fprintf(pds.slabel_fd,"NAME        = P1_VOLTAGE\r\n");
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_REAL\r\n");
@@ -6458,7 +6553,7 @@ int WritePLBL_File(
                     fprintf(pds.slabel_fd,"UNIT        = VOLT\r\n");
                     fprintf(pds.slabel_fd,"FORMAT      = \"E14.7\"\r\n");
                     
-                    if(curr->bias_mode==DENSITY)
+                    if(bias_mode==DENSITY)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CALIBRATED VOLTAGE BIAS\"\r\n");
                     else
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"MEASURED CALIBRATED VOLTAGE\"\r\n");
@@ -6467,7 +6562,7 @@ int WritePLBL_File(
                 else
                 {
                     // We have difference data P1-P2
-                    if(diff && curr->bias_mode==DENSITY) // We need an extra voltage bias column
+                    if(diff && bias_mode==DENSITY) // We need an extra voltage bias column
                     {
                         fprintf(pds.slabel_fd,"NAME        = P1_VOLTAGE\r\n");
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
@@ -6486,7 +6581,7 @@ int WritePLBL_File(
                     fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                     fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
                     
-                    if(curr->bias_mode==DENSITY)
+                    if(bias_mode==DENSITY)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"VOLTAGE BIAS\"\r\n");
                     else
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"MEASURED VOLTAGE\"\r\n");
