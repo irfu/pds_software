@@ -3212,7 +3212,9 @@ void *DecodeScience(void *arg)
                                                             //=======================
                                                             // QUESTION: How does the code know that it is P3?!! The if-condition seems insufficient.
                                                             // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.                                                            
-                                                            CPrintf("Creating file pair for dop=0 (P3?!).\n");    // DEBUG
+//                                                             if (debug >=1) {
+                                                                CPrintf("Creating file pair for dop=0 (P3?!).\n");    // DEBUG
+//                                                             }
  
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
                                                             ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
@@ -3226,7 +3228,7 @@ void *DecodeScience(void *arg)
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
                                                                 
-                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
+                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);                                                                
                                                             }
                                                         }
                                                         else // Split interleaved 20 Bit data into two pairs of label and tab files
@@ -3237,7 +3239,9 @@ void *DecodeScience(void *arg)
                                                             //====================
                                                             // Handle dop==1 (P1)
                                                             //====================
-                                                            CPrintf("Creating file pair for dop=1 (P1).\n");    // DEBUG
+//                                                             if (debug >=1) {
+                                                                CPrintf("Creating file pair for dop=1 (P1).\n");    // DEBUG
+//                                                             }
                                                             
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='1';
@@ -3269,7 +3273,9 @@ void *DecodeScience(void *arg)
                                                             //====================
                                                             // Handle dop==2 (P2)
                                                             //====================
-                                                            CPrintf("Creating file pair for dop=2 (P2).\n");    // DEBUG
+//                                                             if (debug >=1) {
+                                                                CPrintf("Creating file pair for dop=2 (P2).\n");    // DEBUG
+//                                                             }
                                                             
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='2';
@@ -5522,10 +5528,10 @@ int WritePTAB_File(
     int i,j,k,l,m;
     int val;
     int ti2=0;
-    
+
     int macro_id; 
-    int current;                    // Temporary current variable
-    int voltage;                    // Temporary voltage variable
+    int current;                    // Current variable
+    int voltage;                    // Voltage variable
     
     int ibias;                      // Temporary current variable
     int vbias;                      // Temporary voltage variable
@@ -5738,14 +5744,14 @@ int WritePTAB_File(
                     vcalf_ADC16 *= 16;
                 }
                 
-                if      (curr->sensor==SENS_P1P2 || dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }
+                if      (curr->sensor==SENS_P1P2 || dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }    // Should be "&&" in condition?!
                 else if (curr->sensor==SENS_P1   || dop==1) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1;                            }
                 else if (curr->sensor==SENS_P2   || dop==2) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P2;                            }
             }
         }
     }   //  if(calib) ...
     
-    
+
     
     //###############################
     //###############################
@@ -5975,6 +5981,13 @@ int WritePTAB_File(
                     }
                 }
                 
+                //=====================================================================
+                // Set "current" and "voltage"
+                // ---------------------------
+                // NOTE: This is the only place where "current" and "voltage" are set.
+                // Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
+                // Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
+                //=====================================================================
                 if(curr->bias_mode==DENSITY)
                 {
                     //====================
@@ -5984,7 +5997,7 @@ int WritePTAB_File(
                     if(param_type==SWEEP_PARAMS) // Do we have a sweep ?...
                     {
                         if(i<ini_samples) { // Sweep started ?
-                            voltage=vbias; // Set initial voltage bias before sweep starts
+                            voltage=vbias; // Set initial voltage bias before sweep starts. Not defined for P3.
                         }
                         else
                         { 
@@ -6003,7 +6016,7 @@ int WritePTAB_File(
                     }
                     else
                     {
-                        voltage=vbias; // Set FIX Density bias in TM unit
+                        voltage=vbias; // Set FIX Density bias in TM unit. Not defined for P3.
                     }
                 }
                 else
@@ -6011,7 +6024,7 @@ int WritePTAB_File(
                     //====================
                     // CASE: E-FIELD MODE
                     //====================
-                    current=ibias; // Set FIX Current bias in TM units
+                    current=ibias; // Set FIX Current bias in TM units. Not defined for P3.
                     voltage=val;   // Set sampled voltage value in TM units
                 }
                 
@@ -6021,7 +6034,7 @@ int WritePTAB_File(
 
                 //###############
                 //###############
-                // Write to disk
+                // WRITE TO DISK
                 //###############
                 //###############
                 if(calib)
@@ -6031,6 +6044,7 @@ int WritePTAB_File(
                     //##################
                     if(curr->bias_mode==DENSITY)
                     {
+                            
                         //====================
                         // CASE: DENSITY MODE
                         //====================
@@ -6141,6 +6155,7 @@ int WritePTAB_File(
                         cvoltage  = vcalf * ((double) voltage);
                         cvoltage -= vcalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
                         
+                        
                         if(curr->sensor==SENS_P1P2 && dop==0) {
                             // Write time, calibrated currents (two) and voltage (one).
                             fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],i_conv.C[ibias2][2],cvoltage); 
@@ -6179,7 +6194,7 @@ int WritePTAB_File(
             fclose(pds.stable_fd);
             pthread_testcancel();
     }  // if((pds.stable_fd=fopen(tstr2,"w"))==NULL) ... else ...
-    
+
     if(debug>1) // If debugging level is larger than 1, dump common and LAP-dictionary PDS parameters.
     {
         DumpPrp(&comm); // Debugging  
