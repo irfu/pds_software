@@ -5797,6 +5797,17 @@ int WritePTAB_File(
                 ibias2=curr->ibias2;
             }
             
+            // BUGFIX: if statement needed to interpret data for P3 (E field), macro 700, for 2006-12-19.
+            // /Erik P G Johansson 2016-03-09
+            if(curr->sensor==SENS_P1P2 && dop==0)
+            {
+                // P3=P1-P2 difference
+                ibias1 = curr->ibias1;
+                ibias2 = curr->ibias2;
+                vbias1 = curr->vbias1;
+                vbias2 = curr->vbias2;
+            }
+            
             old_time=0;
             
             
