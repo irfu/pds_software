@@ -11,7 +11,7 @@ void ProtectPlnkInit();                                         // Setup protect
 int InitP(prp_type *);						// Init pds linked list of property nodes
 int Append(prp_type *,char *,char *);				// Append at end of list
 int DeleteNo(prp_type *,int);					// Delete by number in list
-int DeleteP(prp_type *,char *,int);				// Delete by name and occurance
+int DeleteP(prp_type *,char *,int);				// Delete by name and occurrence
 int InsertTopK(prp_type *,char *,char *);			// Insert at top of list as keyword
 int InsertTopQ(prp_type *,char *,char *);			// Insert at top of list as quoted string
 int InsertTopV(prp_type *,char *,unsigned int);			// Insert at top as value
@@ -21,14 +21,14 @@ int InsertTopQV(prp_type *,char *,unsigned int);		// Insert at top as quoted val
 // Delete between "from name" to "to name" 
 int DeleteMidd(prp_type *p,char *frn,char *ton); 
 int GetNo(prp_type *,property_type **,int);			// Get by number 
-int FindP(prp_type *,property_type **,char *,int,char);		// Find by name, occurance and if checked, or not, or don't care
+int FindP(prp_type *,property_type **,char *,int,char);		// Find by name, occurrence and if checked, or not, or don't care
 // Find by name backwards starting with  *prop1 returning result in prop2, and if checked or not or don't care
 int FindB(prp_type *p,property_type **prop1,property_type **prop2,char *name,char); 
-int SetPT(prp_type *,property_type *prop,int);			// Set by property type and occurance
-int SetP(prp_type *,char *,char *,int);				// Set value by name and occurance 
-int InsertA(prp_type *,char *,char *,char *,int);		// Insert after occ occurance of name
+int SetPT(prp_type *,property_type *prop,int);			// Set by property type and occurrence
+int SetP(prp_type *,char *,char *,int);				// Set value by name and occurrence 
+int InsertA(prp_type *,char *,char *,char *,int);		// Insert after occ occurrence of name
 int InsertAV(prp_type *,char *,char *,unsigned int,int);	// Same as insert_a but value is integer 
-int InsertB(prp_type *,char *,char *,char *,int);		// Insert before occ occurance of name
+int InsertB(prp_type *,char *,char *,char *,int);		// Insert before occ occurrence of name
 int CopyPrp(property_type *,char *,char *);			// Copy property type to property type
 int DumpPrp(prp_type *);					// Dump property structure to screen
 int FDumpPrp(prp_type *,FILE *);				// Dump properties to file
@@ -645,10 +645,10 @@ int GetNo(prp_type *p,property_type **prop,int no)
 int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
 {
     int i;
-    int oc=0; // Occurance
+    int oc=0; // Occurrence
     property_type *tmp; 
     
-    pthread_mutex_lock(&protect_plnk);	
+    pthread_mutex_lock(&protect_plnk);
     
     
     *prop=NULL;
@@ -665,11 +665,11 @@ int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
             
             if(!strcmp(tmp->name,name))
             {
-                if(tmp->checked==check || check==DNTCARE) // Find occ occurance of checked or unchecked properties or don't care
+                if(tmp->checked==check || check==DNTCARE) // Find occ occurrence of checked or unchecked properties or don't care
                 {
                     *prop=tmp;
                     oc++;
-                    if(oc==occ) // Found occ occurance of name  
+                    if(oc==occ) // Found occ occurrence of name  
                     {
                         pthread_mutex_unlock(&protect_plnk);
                         return 1; // Ok! found it
@@ -737,7 +737,7 @@ int FindB(prp_type *p, property_type **prop1, property_type **prop2, char *name,
 int DeleteP(prp_type *p,char *name,int occ)
 {
     int i;
-    int oc=0; // Occurance
+    int oc=0; // Occurrence
     property_type *tmp;
     
     pthread_mutex_lock(&protect_plnk);	
@@ -756,7 +756,7 @@ int DeleteP(prp_type *p,char *name,int occ)
             if(!strcmp(tmp->name,name))
             {
                 oc++;
-                if(oc==occ) // Found occ occurance of name
+                if(oc==occ) // Found occ occurrence of name
                 {
                     if(DeleteNo(p,i)<0) //Delete by number      
                     {
@@ -896,7 +896,7 @@ int SetPT(prp_type *p,property_type *prop,int occ)
 {
     
     int i,len;
-    int oc=0; // Occurance
+    int oc=0; // Occurrence
     property_type *tmp;
     
     pthread_mutex_lock(&protect_plnk);	
@@ -915,7 +915,7 @@ int SetPT(prp_type *p,property_type *prop,int occ)
             if(!strcmp(tmp->name,prop->name))
             {
                 oc++;
-                if(oc==occ) // Found occ occurance of name
+                if(oc==occ) // Found occ occurrence of name
                 {
                     len=strlen(prop->value); // Get length of string
                     if(len>0 && len<MAX_STR) // Accepted length?
@@ -1010,7 +1010,7 @@ int SetP(prp_type *p,char *name,char *value,int occ)
 int InsertA(prp_type *p,char *name,char *iname,char *ivalue,int occ)
 {
     int i;
-    int oc=0; // Occurance
+    int oc=0; // Occurrence
     property_type *tmp1;
     property_type *tmp2;
     
@@ -1030,7 +1030,7 @@ int InsertA(prp_type *p,char *name,char *iname,char *ivalue,int occ)
             if(!strcmp(tmp1->name,name))
             {
                 oc++;
-                if(oc==occ) // Found occ occurance of name
+                if(oc==occ) // Found occ occurrence of name
                 {
                     //Create and insert new property node
                     if((tmp2=malloc(sizeof(property_type)))==NULL)
@@ -1065,12 +1065,12 @@ int InsertA(prp_type *p,char *name,char *iname,char *ivalue,int occ)
     return -3; // Error! empty
 }
 
-// Insert (iname,ivalue) after occ occurance of name
+// Insert (iname,ivalue) after occ occurrence of name
 // value is not a string! Default converts to 0x0000
 int InsertAV(prp_type *p,char *name,char *iname,unsigned int value,int occ)
 {
     int i;
-    int oc=0; // Occurance
+    int oc=0; // Occurrence
     property_type *tmp1;
     property_type *tmp2;
     char ivalue[32];
@@ -1091,7 +1091,7 @@ int InsertAV(prp_type *p,char *name,char *iname,unsigned int value,int occ)
             if(!strcmp(tmp1->name,name))
             {
                 oc++;
-                if(oc==occ) // Found occ occurance of name
+                if(oc==occ) // Found occ occurrence of name
                 {
                     //Create and insert new property node
                     if((tmp2=malloc(sizeof(property_type)))==NULL)
@@ -1129,7 +1129,7 @@ int InsertAV(prp_type *p,char *name,char *iname,unsigned int value,int occ)
 int InsertB(prp_type *p,char *name,char *iname,char *ivalue,int occ)
 {
     int i;
-    int oc=0; // Occurance
+    int oc=0; // Occurrence
     property_type *tmp1;
     property_type *tmp2;
     
@@ -1149,7 +1149,7 @@ int InsertB(prp_type *p,char *name,char *iname,char *ivalue,int occ)
             if(!strcmp(tmp1->name,name))
             {
                 oc++;
-                if(oc==occ) // Found occ occurance of name
+                if(oc==occ) // Found occ occurrence of name
                 {
                     //Create and insert new property node
                     if((tmp2=malloc(sizeof(property_type)))==NULL) 

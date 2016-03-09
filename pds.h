@@ -26,8 +26,8 @@
 #define SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY    12   // [seconds]  
 
 
-#define M_HEAD     0xAA // Main header
-#define S_HEAD     0xCC // Sub header
+#define M_HEAD     0xAA   // Main header
+#define S_HEAD     0xCC   // Sub header. pds_x.xx.c contains many 0xCC which one can suspect should really be replaced with S_HEAD.
 
 #define MAX_MACRO_BLCKS 10
 #define MAX_MACROS_INBL 256 // This is 8 physically in instrument..but to accomodate for extra versions it is set higher.
@@ -42,12 +42,14 @@
 #define SENS_P2      2
 #define SENS_P1P2    3
 
+// ADC sampling frequencies.
 #define SAMP_FREQ_ADC16 18750.0
 #define SAMP_FREQ_ADC20 60.0
 
 #define DENSITY 1
 #define E_FIELD 2
 
+// D16=16-bit ADC, D20=20-bit ADC
 // T = Truncated
 #define D16     16
 #define D20     20

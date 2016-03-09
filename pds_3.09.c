@@ -73,6 +73,9 @@
 //    CALIB/RPCLAP030101_CALIB_FRQ_E_P2.LBL
 //    NOTE: These files are specified in pds.conf.
 //    NOTE: This bug has probably been fixed now. /Erik P G Johansson 2015-12-10
+//    
+// NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
+// NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
 // 
 //====================================================================================================================
 
@@ -1444,8 +1447,11 @@ void *DecodeScience(void *arg)
     unsigned int samples  = 0;      // Number of samples in science data (Not same as length!)
     int macro_descr_NOT_found=0;    // Indicates that we have NOT found a matching macro description for the macro ID. 0==Found, 1==Not found (!).
     
+    // Measurement sequence.
+    // Specifies one of the LAP_SET_SUBHEADER/LAP_TRANSFER_DATA_TO_OUT_FROM in macro description (.mds file).
+    // Value is only changed in case S01_GET_MAINH (set to zero) and case S04_GET_ID_CODE (incremented by one)
+    unsigned int meas_seq = 0;
     
-    unsigned int meas_seq = 0;      // Measurement sequence. Specifies one of the LAP_SET_SUBHEADER/LAP_TRANSFER_DATA_TO_OUT_FROM in macro description (.mds file).
     int aqps_seq = 0;               // Number of aqps to the start of a sequence
     unsigned int ma=0;              // Macro number in block
     unsigned int mb=0;              // Macro block number
@@ -1576,7 +1582,7 @@ void *DecodeScience(void *arg)
         printf("Warning: No macro descriptions INST_MODE_DESC cant be set.\n");
     }
     
-    //DumpPrp(&mdesc); 
+    //DumpPrp(&mdesc);
     // STATE MACHINE LOOP
     in_sync=1;           // Assume we are in sync!
     state=S02_TEST_SYNC; // Set starting state
@@ -1591,7 +1597,7 @@ void *DecodeScience(void *arg)
                 macro_descr_NOT_found=1;   // Assume initially that no macro description is found
                 macro_priority=0;          // Assume we do not trust macro info more than parameters inside the data
                 
-                GetBuffer(cb,buff,1);      // Get a byte from circular science buffer
+                GetBuffer(cb,buff,1);      // Read one byte from circular science buffer.
                 
                 byte_sum+=buff[0];         // Increase byte sum
                 
@@ -1610,6 +1616,8 @@ void *DecodeScience(void *arg)
                     meas_seq=0;            // Set number of measurement sequences to none
                     state=S02_TEST_SYNC;   // Found header change state
                 }
+                
+                // Do not change value of "state". ==> Try again.
                 break;
                 
             case S02_TEST_SYNC:
@@ -1678,12 +1686,15 @@ void *DecodeScience(void *arg)
                 }
                 break;
                 
+                //##############################################
+                // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
+                //##############################################                
                 case S04_GET_ID_CODE:
                     DispState(state,"STATE = S04_GET_ID_CODE\n");
                     GetBuffer(cb,buff,1); // Get a byte from circular science buffer
                     
                     if(buff[0]==0xCC) // Found Sub Header
-                    { 
+                    {
                         GetBuffer(cb,buff,1); // Get a byte from circular science buffer
                         
                         id_code=buff[0];        // Remember ID code
@@ -1909,7 +1920,7 @@ void *DecodeScience(void *arg)
                                 CPrintf("    Found undefined, ID CODE:   0x%.2x\n",id_code);
                                 break;
                         }
-                    }
+                    }   // if(buff[0]==0xCC) // Found Sub Header
                     else
                     {
                         in_sync=0; // Indicate out of sync.
@@ -1917,6 +1928,9 @@ void *DecodeScience(void *arg)
                     }
                     break;
                     
+                            //##############################################
+                            // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
+                            //##############################################                
                             case S05_GET_MACRO_ID:
                                 DispState(state,"STATE = S05_GET_MACRO_ID\n");
                                 
@@ -2008,6 +2022,9 @@ void *DecodeScience(void *arg)
                                             state=S04_GET_ID_CODE;
                                         break;
                                     
+                                    //##############################################
+                                    // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
+                                    //##############################################
                                     case S07_GET_PARAMS:
                                         DispState(state,"STATE = S07_GET_PARAMS\n");
                                         
@@ -2883,6 +2900,10 @@ void *DecodeScience(void *arg)
                                                                 tm_rate='Z';            // And (Z)ero if no telemetry rate
                                                         }
                                                         
+                                                        // NOTE: DECEIVING IF STATEMENT.
+                                                        // The "if" condition is an assignment and only returns false in case of error.
+                                                        // Therefore the if statement will basically always be executed.
+                                                        // NOTE: This is the only location where "aqps_seq" is assigned.
                                                         if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                         {
                                                             CPrintf("    %d sequence starts %d aqps from start of sequence\n",meas_seq,aqps_seq);
@@ -2949,16 +2970,17 @@ void *DecodeScience(void *arg)
                                                             strcat(lbl_fname,".LBL");             // Add .LBL extension
                                                             strcat(tab_fname,".TAB");             // Add .TAB extension
                                                             
+                                                            // NOTE: PRODUCT_ID, FILE_NAME, ^TABLE are sometimes modified again when writing file (cases dop=1, dop=2).                                                            
                                                             sprintf(prod_id,"\"%s\"",tstr2);      // Add PDS quotes ".." 
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Set PRODUCT ID in common PDS parameters
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Set PRODUCT ID in common PDS parameters.
                                                             
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
-                                                            
+
                                                             sprintf(tstr1,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"^TABLE",tstr1,1);         // Set link to table in common PDS parameters
-                                                            
-                                                            
+
+
                                                             curr.factor=0.0; // Init
                                                             // Compute stop time of current sequence
                                                             if(param_type==SWEEP_PARAMS)
@@ -3023,6 +3045,7 @@ void *DecodeScience(void *arg)
                                                     //================================================================
                                                     // Derive all that we can without anomaly override and send it to log file.
                                                     // Problematic data are stored in the UnAccepted_Data directory.
+                                                    // case S15_WRITE_PDS_FILES uses "macro_descr_NOT_found" to know that the data needs a different treatment.
                                                     
                                                     CPrintf("    No macro description fits, data will be stored in the UnAccepted_Data directory\n");
                                                     if(param_type==NO_PARAMS)
@@ -3184,6 +3207,11 @@ void *DecodeScience(void *arg)
                                                         //##########################################################################
                                                         if(data_type!=D20 && data_type!=D20T)
                                                         {
+                                                            //=======================
+                                                            // Handle dop==0 (P3?!!)
+                                                            //=======================
+                                                            // QUESTION: How does the code know that it is P3?!! The if-condition seems insufficient.
+                                                            // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.                                                            
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path
                                                             ExtendStr(tstr4,tstr2,58,' ');                  // Make a new string extended with whitespace to 58 characters
                                                             
@@ -3203,9 +3231,9 @@ void *DecodeScience(void *arg)
                                                         {
                                                             // QUESTION: How does the code know that there is data for the respective probes,
                                                             // when it could just as well be that only one of them (or none) has?
-                                                                
+
                                                             //====================
-                                                            // Handle P1 (dop==1)
+                                                            // Handle dop==1 (P1)
                                                             //====================
                                                             
                                                             // Modify filename and product ID.
@@ -3235,9 +3263,10 @@ void *DecodeScience(void *arg)
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
                                                             }
                                                             
-                                                            //===================
-                                                            // Handle P2 (dop=2)
-                                                            //===================
+                                                            //====================
+                                                            // Handle dop==2 (P2)
+                                                            //====================
+                                                            
                                                             // Modify filename and product ID.
                                                             lbl_fname[21]='2';
                                                             tab_fname[21]='2';
@@ -3272,7 +3301,8 @@ void *DecodeScience(void *arg)
                                                         // At this point a macro description could not be found.
                                                         // If fingerprinting was enabled it must have failed.
                                                         // Anomaly correction must also have failed at this point.
-                                                        // Data will be stored in the UnAccepted_Data directory
+                                                        // 
+                                                        // Data will be stored in the UnAccepted_Data directory instead
                                                         // and requires manual attention.
                                                         YPrintf("Macro description missing, data stored in UnAccepted_Data\n"); // Put a note in the system log
                                                         CPrintf("    Dump data to %s\n",pds.uapath); // No macro description dump to unaccepted files
@@ -3687,7 +3717,7 @@ int PPrintf(const char *fmt, ...)
 }                  
 
 // As printf but everything goes into Science decoding log.
-int CPrintf(const char *fmt, ...) 
+int CPrintf(const char *fmt, ...)
 {
     int status;
     va_list args;
@@ -4263,7 +4293,7 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     return 0;
 }
 
-int  LoadExclude(unsigned int **exclude,char *path) // Load exclude file
+int LoadExclude(unsigned int **exclude,char *path) // Load exclude file
 {
     FILE *fd;
     char line[256]; // Line buffer
@@ -5502,7 +5532,7 @@ int WritePTAB_File(
     int vbias2;                      // Temporary voltage variable
     //  double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
     
-    // FKJN: offset for 20 bit data needs to be taken into account.
+    // FKJN: Offset for 20 bit data needs to be taken into account.
     // Equals 16 for "true 20-bit data" (_NON-TRUNCATED_ ADC20 data), otherwise 1.
     // Can be seen as a conversion factor between "16 bit TM units" and the current (16 or 20 bit) "TM units".  /Erik P G Johansson
     double ocalf = 1.0;              
@@ -6181,6 +6211,13 @@ int WritePLBL_File(
     }
     else
     {
+        // Check for illegal combinations of curr->sensor and dop based on my current understanding of the variables.
+        // NOTE: This depends on that the understanding of "dop" and curr.sensor is correct.
+        // /Erik P G Johansson 2016-03-09
+//         if ((curr->sensor==SENS_P1) & (dop!=1)) | ((curr->sensor==SENS_P2) & (dop!=2)) {
+//             YPrintf("ASSERTION ERROR: WritePLBL_File: Illegal combination of curr->sensor=%d and dop=%d.\n", curr->sensor, dop);
+//             CPrintf("ASSERTION ERROR: WritePLBL_File: Illegal combination of curr->sensor=%d and dop=%d.\n", curr->sensor, dop);
+//         }
         
         // Prepare temporary sensor string
         // At this time sensor is set so we don't bother to check if it's not!
@@ -6195,6 +6232,12 @@ int WritePLBL_File(
             case SENS_P1P2:
                 if(dop==0)
                 {
+                    // NOTE/BUG?: The tstr1 value does end up in PDS keyword/attributes and those must not contain
+                    // dash. This does however not happen in practice for diff=1.
+                    // The tstr1 value also ends up in unquoted PDS __values__ which might not permit dash for "symbolic" values.
+                    // Possibly the combinations are such that the value is only used legally for diff=1, dop=0, curr->sensor=SENS_P1P2 (?!!).
+                    // Source: "Object Description Language Specification and Usage", Version 3.8, Section 12 (Sections 12.4.2, 12.5, 12.5.4, 12.3.4?)
+                    // (Footnote: Rosetta officially uses PDS V3.6 but it is most likely identical to V3.8 here.)
                     strcpy(tstr1,"P1-P2"); // Difference
                     diff=1; // Must be 16 bit diff data
                 }
@@ -6227,10 +6270,15 @@ int WritePLBL_File(
         }
         sprintf(tstr2,"%02d",row_bytes);
         
-        if(calib)
+        if(calib) {
             SetP(&comm,"RECORD_BYTES",tstr2,1); // Set number of bytes in a column of a record
-            else
-                SetP(&comm,"RECORD_BYTES",tstr2,1); // Set number of bytes in a column of a record
+        } else {
+            SetP(&comm,"RECORD_BYTES",tstr2,1); // Set number of bytes in a column of a record
+        }
+        
+                //#######################
+                // NOTE: BAD INDENTATION
+                //#######################
                 
                 if(param_type==SWEEP_PARAMS)
                 {
@@ -6282,8 +6330,11 @@ int WritePLBL_File(
                 fprintf(pds.slabel_fd,"DESCRIPTION = \"SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)\"\r\n");
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                 
-                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");		  
-                
+                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
+
+                //===============================================
+                // CREATE 1 OR 2 CURRENT COLUMNS (2 ONLY FOR P3)
+                //===============================================
                 if(calib)
                 {
                     // We have difference data P1-P2
@@ -6298,7 +6349,7 @@ int WritePLBL_File(
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CALIBRATED CURRENT BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
-                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");		  
+                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
                         fprintf(pds.slabel_fd,"NAME        = P2_CURRENT\r\n");  
                     }
                     else
@@ -6341,12 +6392,14 @@ int WritePLBL_File(
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CURRENT BIAS\"\r\n");
                     else
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"MEASURED CURRENT\"\r\n");
-                    
                 }
                 
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                 fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
                 
+                //===============================================
+                // CREATE 1 OR 2 VOLTAGE COLUMNS (2 ONLY FOR P3)
+                //===============================================
                 if(calib)
                 {
                     // We have difference data P1-P2
@@ -6414,7 +6467,9 @@ int WritePLBL_File(
                 fclose(pds.slabel_fd);
     }
     return 0;
-}
+}   // WritePLBL_File
+
+
 
 // Buffer and TM functions
 //----------------------------------------------------------------------------------------------------------------------------------

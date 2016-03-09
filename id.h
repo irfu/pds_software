@@ -1,5 +1,7 @@
 /* id.h
  * 
+ * Values used for "subheaders".
+ * 
  * NOTE: This code is meant to be used by shell script "doid" to automatically generate "id.c" which means it can not be edited arbitrarily.
  * 
  * NOTE: Through "doid", the macro variable NAMES here are used to set the strings in "IDList" in "id.c" which values are then to some extent
