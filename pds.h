@@ -15,7 +15,8 @@
 // ---------------------------------------------------------------------------
 // NOTE: The optimal time (timeout & delay) values depend on the speed of execution, i.e. on (1) the speed
 // of the host computer itself (the specification) and (2) whether other processor-intensive applications are running at the same time.
-
+// PROPOSAL: Move these definitions to nice.h.
+// 
 // When exiting, try to terminate the science thread only after the science buffer fill value goes below this value
 // (or when exceeding timeout).
 #define SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD        3000   // [bytes]
@@ -37,6 +38,7 @@
 #define SWEEP_PARAMS 1 // Parameter type indicator, sweep parameters
 #define ADC20_PARAMS 2 // Parameter type indicator, ADC 20 Bit parameters
 
+// Used by "curr_type_def#sensor".
 #define SENS_NONE    0
 #define SENS_P1      1
 #define SENS_P2      2
@@ -49,8 +51,9 @@
 #define DENSITY 1
 #define E_FIELD 2
 
-// D16=16-bit ADC, D20=20-bit ADC
-// T = Truncated
+// D16=ADC16, D20=ADC20
+// D20x(T), x=probe
+// T = Truncated (i.e. 16 bit data from ADC20)
 #define D16     16
 #define D20     20
 #define D20T    203

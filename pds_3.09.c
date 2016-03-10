@@ -2934,6 +2934,13 @@ void *DecodeScience(void *arg)
                                                         // The "if" condition is an assignment and only returns false in case of error.
                                                         // Therefore the if statement will basically always be executed.
                                                         // NOTE: This is the only location where "aqps_seq" is assigned.
+                                                        // NOTE: This entire section could basically be moved to S15_WRITE_PDS_FILES, since it fits with creating files there.
+                                                        // However, this if statement is also contained within three other if statements:
+                                                        //    if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0) { ... }
+                                                        //    if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0) { ... }
+                                                        //    if(!macro_descr_NOT_found) { ... }
+                                                        // and one might not want to move the middle one to S15_WRITE_PDS_FILES(?).
+                                                        // /Erik P G Johansson 2016-03-10
                                                         if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                         {
                                                             CPrintf("    %d sequence starts %d aqps from start of sequence\n",meas_seq,aqps_seq);
@@ -2995,8 +3002,6 @@ void *DecodeScience(void *arg)
 
                                                             if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
                                                             if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
-                                                            //if(curr.bias_mode==E_FIELD)     { tstr2[19]='E'; }  // Set to [E]-Field or keep [D]ensity.
-                                                            //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX    // Intentionally trigger compilation error
                                                             if(param_type==SWEEP_PARAMS)    { tstr2[20]='S'; }  // Set to [S]weep or keep [B]ias.
 
                                                             strcpy(lbl_fname,tstr2);              // Save product ID as label filename.
@@ -3401,7 +3406,8 @@ void *DecodeScience(void *arg)
                                                     }   // if(!macro_descr_NOT_found)
                                                     else
                                                     {
-                                                        // At this point a macro description could not be found.
+                                                        // CASE: A macro description could not be found.
+                                                        // 
                                                         // If fingerprinting was enabled it must have failed.
                                                         // Anomaly correction must also have failed at this point.
                                                         // 
@@ -5778,10 +5784,8 @@ int WritePTAB_File(
                     //  CASE: P1
                     //============
                     if (is_high_gain_P1) {
-                        //printf("GAIN 1 16 Bit P1\n");
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
                     } else {
-                        //printf("GAIN 0.05 16 Bit P1\n");
                         ccalf=mc->CF[valid].c_cal_16b_lg;
                     }
                 }
@@ -5792,10 +5796,8 @@ int WritePTAB_File(
                     //  CASE: P2
                     //============
                     if (is_high_gain_P2) {
-                        //printf("GAIN 1 16 Bit P2\n");
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
                     } else {
-                        //printf("GAIN 0.05 16 Bit P2\n");
                         ccalf=mc->CF[valid].c_cal_16b_lg;
                     }
                 }
@@ -5814,7 +5816,7 @@ int WritePTAB_File(
                 }
                 
                 ccalf_ADC16 = ccalf;
-                // Other alternative than above shouldn't be possible..if so keep default ccalf
+                // Other alternatives than above shouldn't be possible. If so keep default ccalf.
             }   // if(data_type==D16)
             else
             {
@@ -5941,7 +5943,9 @@ int WritePTAB_File(
                         ti2=sw_info->start_bias;      // Get start bias 
             }
             
+            //============
             // Set biases
+            //============
             if(curr->sensor==SENS_P1 || dop==1)
             {
                 vbias=curr->vbias1;
@@ -6010,7 +6014,7 @@ int WritePTAB_File(
                     case D202:
                         ocalf = 16.0;
                         // Put together 8+8+4 bits to signed 20 bit number
-                        //EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA, MAKING THE LAST 4 BITS GARBAGE.
+                        // EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA, MAKING THE LAST 4 BITS GARBAGE.
                         val=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&val); // Convert 20 bit signed to native signed
                         if(D20_MA_on) {
@@ -6097,8 +6101,8 @@ int WritePTAB_File(
                     
                     if(extra_bias_setting)
                     {
-                        vbias1 = ((bias[l][1] & 0xff00)>>8); // Override macro present voltage bias p1
-                        vbias2 =  (bias[l][1] & 0xff);       // Override macro present voltage bias p2
+                        vbias1 = ((bias[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1
+                        vbias2 =  (bias[l][1] & 0xff);        // Override macro present voltage bias p2
                         ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
                         ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2 
                         /*** The above lines were corrected by aie@irfu.se 120822 as the current bias is permuted 
@@ -6306,14 +6310,14 @@ int WritePTAB_File(
                         //====================
                         
                         // NOTE: calib_nonsweep_TM_delta == 0 for ADC16 data.
-                        //cvoltage = vcalf * ((double)voltage - calib_nonsweep_TM_delta); // Voltage offset and factor calibration
+                        //cvoltage = vcalf * ((double)voltage - calib_nonsweep_TM_delta);   // Voltage offset and factor calibration
                         cvoltage  = vcalf * ((double) voltage);
                         cvoltage -= vcalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
                         
                         
                         if(curr->sensor==SENS_P1P2 && dop==0) {
                             // Write time, calibrated currents (two) and voltage (one).
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],i_conv.C[ibias2][2],cvoltage); 
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],i_conv.C[ibias2][2],cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                         }
                         
                         if(curr->sensor==SENS_P1 || dop==1) {
@@ -6332,15 +6336,16 @@ int WritePTAB_File(
                     //###################
                     if(curr->sensor==SENS_P1P2 && dop==0)
                     {                  
-                        // For difference data P1-P2 we need to add two bias vectors..they can be different!
+                        // For difference data P1-P2 we need to add two bias vectors. They can be different!
                         if(bias_mode==DENSITY) {
                             fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,current,vbias1,vbias2); // Add two voltage bias vectors
                         } else {
                             fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,ibias1,ibias2,voltage); // Add two current bias vectors
                         }
                     }
-                    else
+                    else {
                         fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d\r\n",tstr3,td2,current,voltage); // Write time, current and voltage 
+                    }
                 }   // if(calib) ... else ...
             }   // for(k=0,i=0,j=0;i<samples;i++)    // Iterate over all samples
             
@@ -6363,7 +6368,7 @@ int WritePTAB_File(
 
 /* WRITE TO DATA LABEL FILE .LBL
  * 
- * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is.
+ * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is. See "WritePTAB_File" (assuming it has the same meaning).
  * NOTE: This function only has very little dependence on "dop". Compare "WritePTAB_File".
  */
 int WritePLBL_File(
@@ -6420,7 +6425,9 @@ int WritePLBL_File(
                     // Source: "Object Description Language Specification and Usage", Version 3.8, Section 12 (Sections 12.4.2, 12.5, 12.5.4, 12.3.4?)
                     // (Footnote: Rosetta officially uses PDS V3.6 but it is most likely identical to V3.8 here.)
                     strcpy(tstr1,"P1-P2"); // Difference
-                    diff=1; // Must be 16 bit diff data
+                    diff=1;   // Must be 16 bit diff data.
+                    // The LAP instrument permits using 20 bit data for P3 but that is for some reason not an interesting case
+                    // and Anders Eriksson states (2016-03-10) that that will never be used in practice.
                 }
                 if(dop==1)
                     strcpy(tstr1,"P1");
@@ -7542,8 +7549,8 @@ int TrimQN(char *str)
 }
 
 
-// Make a new string dest using src extended with ch to elen length. 
-// We assume dest has space enough.
+// Make a new string "dest" using "src" and padded with character "ch" to length "elen". 
+// We assume that "dest" has enough space.
 int ExtendStr(char *dest,char *src,int elen,char ch)
 {
     int i;
@@ -8967,6 +8974,8 @@ void TraverseDDSArchive(pds_type *p)
         ExitPDS(0);
     }
 }   // TraverseDDSArchive
+
+
 
 // User defined function to fts_open which introduces order to hierarchy traversal.
 // return a negative value, zero, or a positive value to indicate if the file referenced  by
