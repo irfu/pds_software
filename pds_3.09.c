@@ -1535,6 +1535,58 @@ void *DecodeScience(void *arg)
     int oldtype;
     int status;
     
+    /* Function to remove repetition and shorten the code that writes TABL/LFL file pairs.
+     * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
+     * 
+     * NOTE: The function uses MANY variables defined in the enclosing outer function
+     * (DecodeScience) to avoid a very long and awkward argument list, but none of these are temporary variables.
+     * 
+     * dop : Defined in analogy with in "WritePTAB_File".
+     */
+    void WriteTABLBL_FilePair(int dop, unsigned int probeNbr) {
+        char tempChar;
+        char tstr10[256];
+        char indexStr[256];
+        
+        // Modify filenames and product ID.
+        if(getBiasMode(&curr, dop)==E_FIELD) {
+            tempChar = 'E';
+        } else {
+            tempChar = 'D';
+        }
+        lbl_fname[19]=tempChar;
+        tab_fname[19]=tempChar;
+        prod_id[19+1]=tempChar;
+        
+        sprintf(tstr10, "%1d", probeNbr);
+        lbl_fname[21]=tstr10[0];
+        tab_fname[21]=tstr10[0];
+        prod_id[21+1]=tstr10[0];
+        
+        sprintf(tstr10,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
+        ExtendStr(indexStr,tstr10,58,' ');                    // Make a new string extended with whitespace to 58 characters.
+        
+        // Name changed
+        SetP(&comm,"PRODUCT_ID",prod_id,1);    // Change PRODUCT ID in common PDS parameters.
+        sprintf(tstr10,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+        SetP(&comm,"FILE_NAME",tstr10,1);      // Set filename in common PDS parameters
+        sprintf(tstr10,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+        SetP(&comm,"^TABLE",tstr10,1);         // Set link to table in common PDS parameters
+        
+        if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, dop, ini_samples,param_type)>=0)
+        {
+            WritePTAB_File(
+                buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, dop,
+                &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+            
+            strncpy(tstr10,lbl_fname,29);
+            tstr10[25]='\0';   // Remove the file type ".LBL".
+            
+            WriteToIndexTAB(indexStr, tstr10, property2->value);
+        }
+    }
+    
+    
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
     status+= pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,&oldtype);
     
@@ -3259,12 +3311,11 @@ void *DecodeScience(void *arg)
                                                             // ---------------------------------------------------
                                                             // NOTE: P3 counts as one probe here.
                                                             //=====================================================
-                                                            // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.
                                                             if (debug >= 1) {
                                                                 CPrintf("    Creating LBL/TAB file pair (dop=0) - There is data for exactly one probe (?).\n");    // DEBUG
                                                             }                                                            
 
-                                                            // Modify filenames and product ID.
+                                                            /*// Modify filenames and product ID.
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
@@ -3285,7 +3336,7 @@ void *DecodeScience(void *arg)
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
                                                             ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
                                                             
-//                                                          // Name changed
+                                                            // Name changed
                                                             SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
                                                             SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
@@ -3301,8 +3352,9 @@ void *DecodeScience(void *arg)
                                                                 strncpy(tstr2,lbl_fname,29);
                                                                 tstr2[25]='\0';
                                                                 
-                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);                                                                
-                                                            }
+                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
+                                                            }*/
+                                                            WriteTABLBL_FilePair(0, curr.sensor);
                                                         }
                                                         else // Split interleaved 20 Bit data into two pairs of label and tab files
                                                         {
@@ -3317,7 +3369,7 @@ void *DecodeScience(void *arg)
                                                                 CPrintf("    Creating LBL/TAB file pair for P1 data (dop=1) - There is data for exactly two probes.\n");    // DEBUG
                                                             }
                                                             
-                                                            // Modify filenames and product ID.
+                                                            /*// Modify filenames and product ID.
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
@@ -3354,7 +3406,10 @@ void *DecodeScience(void *arg)
                                                                 tstr2[25]='\0';
                                                                 
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                            }
+                                                            }*/
+                                                            WriteTABLBL_FilePair(1, 1);
+                                                            
+
                                                             
                                                             //====================
                                                             // Handle dop==2 (P2)
@@ -3363,7 +3418,7 @@ void *DecodeScience(void *arg)
                                                                 CPrintf("    Creating LBL/TAB file pair for P2 data (dop=2) - There is data for exactly two probes.\n");    // DEBUG
                                                             }
                                                             
-                                                            // Modify filenames and product ID.
+                                                            /*// Modify filenames and product ID.
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
@@ -3399,7 +3454,8 @@ void *DecodeScience(void *arg)
                                                                 tstr2[25]='\0';
                                                                 
                                                                 WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                            }
+                                                            }*/
+                                                            WriteTABLBL_FilePair(2, 2);
                                                         }
                                                         
                                                         ClearDictPDS(&dict);   // Clear dictionary PDS LAP parameters, common parameters are not cleared until a new measurement cycle beginns
