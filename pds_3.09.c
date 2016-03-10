@@ -2991,7 +2991,7 @@ void *DecodeScience(void *arg)
                                                                     &tstr1[2], &tstr1[5], &tstr1[8],
                                                                     alphanum_s, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
                                                                     
-                                                            CPrintf("Tentative basis for filename (sometimes later modified): tstr2=\"%s\"\n", tstr2);    // DEBUG
+                                                            CPrintf("    Tentative basis for filename & product ID: tstr2=\"%s\"\n", tstr2);    // DEBUG
 
                                                             if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
                                                             if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
@@ -5772,7 +5772,7 @@ int WritePTAB_File(
                 //=================
                 
                 // NOTE: We have the same calibration factor for both P1 and P2 for now!
-                if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1)
+                if(curr->sensor==SENS_P1 || dop==1)
                 {
                     //============
                     //  CASE: P1
@@ -5799,6 +5799,20 @@ int WritePTAB_File(
                         ccalf=mc->CF[valid].c_cal_16b_lg;
                     }
                 }
+                
+                if(curr->sensor==SENS_P1P2 && dop==0)
+                {
+                    //============
+                    //  CASE: P3
+                    //============
+                    // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
+                    if (is_high_gain_P1) {
+                        ccalf=mc->CF[valid].c_cal_16b_hg1;
+                    } else {
+                        ccalf=mc->CF[valid].c_cal_16b_lg;
+                    }
+                }
+                
                 ccalf_ADC16 = ccalf;
                 // Other alternative than above shouldn't be possible..if so keep default ccalf
             }   // if(data_type==D16)
