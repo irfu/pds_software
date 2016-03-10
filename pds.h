@@ -18,12 +18,12 @@
 
 // When exiting, try to terminate the science thread only after the science buffer fill value goes below this value
 // (or when exceeding timeout).
-#define SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD   3000   // [bytes]
+#define SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD        3000   // [bytes]
 // When exiting, only wait for the science buffer to shrink below the threshold for no more than this period of time before
-// terminating the science thread anyway.
-#define SC_THREAD_CANCEL_THRESHOLD_TIMEOUT      600   // [seconds]
+// terminating the science thread anyway. This is a default value which can optionally be overridden.
+#define SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT   600   // [seconds], non-negative integer
 // When exiting, after the science buffer is below the threshold (or timeout has passed), wait this long for science buffer to be emptied.
-#define SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY    12   // [seconds]  
+#define SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY          12   // [seconds]  
 
 
 #define M_HEAD     0xAA   // Main header

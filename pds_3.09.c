@@ -441,6 +441,8 @@ extern FILE *stdout;            // Keep track of standard output
 
 unsigned int macro_id = 0;      // Macro ID tag.
 
+int sc_thread_cancel_threshold_timeout;
+    
 // Added mutex protector for logging functions
 static pthread_mutex_t protect_log=PTHREAD_MUTEX_INITIALIZER; 
 
@@ -681,20 +683,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-    
-    //========================================================================================
-    // CHECK ASSERTION that there are no "unused" arguments left.
-    // This implicitly checks for misspelled options/flags and options/flags occurring twice.
-    //========================================================================================
-    if (HasMoreArguments(argc, argv))
-    {
-        // Extra newline since preceeding log messages (not stderr) make it difficult to visually spot the error message.
-        fprintf(stderr, "\nCould not interpret all command-line options, or some command-line options occurred multiple times.\n\n");
-        //printUserHelpInfo(stderr, argv[0]);    // NOTE: Prints to stderr.
-        exit(1);
-    }
-    
-    
+
     YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     printf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     
@@ -740,7 +729,33 @@ int main(int argc, char *argv[])
     WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
     FreePrp(&cat);                                        // Free property value list
     
+    sc_thread_cancel_threshold_timeout = SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT;
+    if (GetOption("-stctt", argc, argv, tstr1)) {
+        // This flag is good to have while testing on small data sets.
+        // Temporarily Reducing the value can speed up the execution.
+        
+        // NOTE: The error test does not catch very much.
+        if ((status=sscanf(tstr1, "%d", &sc_thread_cancel_threshold_timeout))<=0) {
+            fprintf(stderr, "Can not interpret argument \"%s\"\n", tstr1);
+            exit(1);
+        }
+        YPrintf("Using %d as \"Science thread cancel timeout\" value instead of the default (%d).\n", sc_thread_cancel_threshold_timeout, SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
+    }
     
+    //========================================================================================
+    // CHECK ASSERTION that there are no "unused" arguments left.
+    // This implicitly checks for misspelled options/flags and options/flags occurring twice.
+    //========================================================================================
+    if (HasMoreArguments(argc, argv))
+    {
+        // Extra newline since preceeding log messages (not stderr) make it difficult to visually spot the error message.
+        fprintf(stderr, "\nCould not interpret all command-line options, or some command-line options occurred multiple times.\n\n");
+        //printUserHelpInfo(stderr, argv[0]);    // NOTE: Prints to stderr.
+        exit(1);
+    }
+
+
+
     // Open DATASET.CAT and change some keywords
     //-----------------------------------------------------------------------------------------------------------
     sprintf(tstr1,"%sCATALOG/DATASET.CAT",pds.apathpds);  // Get full path
@@ -979,6 +994,10 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
     fprintf(stream, "            [-calib] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
     fprintf(stream, "\n");
+    fprintf(stream, "            [-stctt <seconds>]              Science thread cancel threeshold timeout (STCTT), i.e. the time the program\n");
+    fprintf(stream, "                                            waits for the science thread to empty the science buffer to below a certain\n");
+    fprintf(stream, "                                            threshold before exiting.\n");
+    fprintf(stream, "\n");
     fprintf(stream, "   Alter default values and values in the mission calendar.\n");
     fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
     
@@ -988,7 +1007,7 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      E.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
     fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
     fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions.)\n");
-    fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");
+    fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
     fprintf(stream, "\n");
     fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -3457,7 +3476,9 @@ void ExitPDS(int status)
     time_t t_start_wait, t_now, t_last_log_msg;
     unsigned int sc_buff_fill;
     double t_wait_elapsed;
-    struct timespec sc_thread_cancel_postthreshold_delay = {(long int) SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY, 0};
+    
+    // Struct parameter required by nanosleep function. struct = {seconds, nanoseconds}.
+    const struct timespec SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY_struct = {(long int) SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY, 0};
     
     const double min_time_between_log_messages = 10.0;
     
@@ -3476,7 +3497,7 @@ void ExitPDS(int status)
             // Erik P G Johansson 2015-03-31: Added functionality for delaying the termination of the DecodeScience thread until
             //                                it has actually finished, or almost finished.
             //
-            // It has been previously observed (v3.07/c3.08) that the DecodeScience thread may otherwise sometimes be terminated
+            // It has been previously observed (pds v3.07/c3.08) that the DecodeScience thread may otherwise sometimes be terminated
             // too early and thus the last hours of data in an archive are never written to disk. Even with this bug fix, small
             // amounts of data (minutes) have still been observed to be missing from the end of the last day in an archive but this
             // might have other explanations.
@@ -3485,8 +3506,9 @@ void ExitPDS(int status)
             // NOTE: It is dangerous to assume that the circular science buffer will go down to exactly zero bytes
             // (data could be corrupt or incomplete). Therefore code uses a threshold plus an additional fixed delay for safety.
             //-------------------------------------------------------------------------------------------------------------------
-            YPrintf("Waiting to cancel science thread until the circular science buffer is close to empty (below %u bytes).\n", SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD);   // Disable log message?
-            
+            YPrintf("Waiting up to %u s to for the science thread to empty the circular science buffer (go below %u bytes).\n",
+                    sc_thread_cancel_threshold_timeout,
+                    SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD);
             
             t_start_wait   = time(NULL);
             t_last_log_msg = t_start_wait; // Time of previous log message. (Initial value is not meaningful, but that is OK.)
@@ -3505,15 +3527,16 @@ void ExitPDS(int status)
                     t_last_log_msg = t_now;
                 }
                 
-            } while ((sc_buff_fill > (unsigned int) SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD) && (t_wait_elapsed < SC_THREAD_CANCEL_THRESHOLD_TIMEOUT));
-            //nanosleep(&dose,NULL);        
+            } while ((sc_buff_fill > (unsigned int) SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD) && (t_wait_elapsed < sc_thread_cancel_threshold_timeout));
+            //nanosleep(&dose,NULL);
             
-            nanosleep(&sc_thread_cancel_postthreshold_delay, NULL); // Give the science thread some time to empty the remaining circular buffer contents.
+            YPrintf("   Wait further %u s.\n", SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY);   // Disable log message?
+            nanosleep(&SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY_struct, NULL); // Give the science thread some time to empty the remaining circular buffer contents.
             sc_buff_fill = GetBufferFill(&cbs);        
             YPrintf("Trying to cancel science thread again. %u bytes remaining in science buffer.\n", sc_buff_fill);   // Disable log message?
             
             pthread_cancel(scithread);
-            pthread_join(scithread,NULL); // Wait for Science thread to exit       
+            pthread_join(scithread,NULL); // Wait for Science thread to exit
             
         } else {
             
@@ -3905,6 +3928,7 @@ int AddPathsToSystemLog(pds_type *p)
 
 
 /* Get command-line argument (option/flag) and optionally an argument to that option that follows the option.
+ * 
  * If "arg" is not null then we expect there to be an argument after the option and which value is returned via "arg".
  * Return TRUE if-and-only-if the option was found and, if an associated argument was required, if that was found too.
  * NOTE: The function can not tell the difference between an option and an argument (associated with another option), other than by comparing
@@ -3912,6 +3936,11 @@ int AddPathsToSystemLog(pds_type *p)
  * NOTE: The function is designed to only read the same command-line arguments once. Therefore, the function will MODIFY argv[] by setting
  * used-up arguments to NULL to make it possible to check if there are arguments left over that could not be interpreted. It will thus ignore
  * values argv[i] == null.
+ * 
+ * opt : Flag (string)
+ * argv : (Remaining) command-line arguments.
+ * argc : Number of command-line arguments (length of argv array)
+ * arg : Iff non-null, then *arg will be assigned to the string value of the command-line argument that comes after the flag.
  */
 int GetOption(char *opt, int argc, char *argv[], char *arg)
 {
