@@ -2986,10 +2986,10 @@ void *DecodeScience(void *arg)
                                                             // [20] : [S]weep or [B]ias.
                                                             // [21] : P[1], P[2], P[3].
                                                             // Note: [i] : i=byte index in string (i=0: first character)
-
-                                                            sprintf(tstr2, "RPCLAP%s%s%s_%sS_RDB%1d%1d%cS",
+                                                            // NOTE: Sets probe number and density/E field to "x" since these will be overwritten later (case S15_WRITE_PDS_FILES).
+                                                            sprintf(tstr2, "RPCLAP%s%s%s_%sS_RxBx%1d%cS",
                                                                     &tstr1[2], &tstr1[5], &tstr1[8],
-                                                                    alphanum_s, curr.sensor, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
+                                                                    alphanum_s, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
                                                                     
                                                             CPrintf("Tentative basis for filename (sometimes later modified): tstr2=\"%s\"\n", tstr2);    // DEBUG
 
@@ -3004,15 +3004,15 @@ void *DecodeScience(void *arg)
                                                             strcat(lbl_fname,".LBL");             // Add .LBL extension
                                                             strcat(tab_fname,".TAB");             // Add .TAB extension
                                                             
-                                                            // NOTE: PRODUCT_ID, FILE_NAME, ^TABLE are sometimes modified again when writing file (cases dop=1, dop=2).                                                            
+                                                            // NOTE: PRODUCT_ID, FILE_NAME, ^TABLE are modified later when writing file.
                                                             sprintf(prod_id,"\"%s\"",tstr2);      // Add PDS quotes ".." 
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Set PRODUCT ID in common PDS parameters.
+                                                            //SetP(&comm,"PRODUCT_ID",prod_id,1);   // Set PRODUCT ID in common PDS parameters.
                                                             
-                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
+                                                            //sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+                                                            //SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
 
-                                                            sprintf(tstr1,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"^TABLE",tstr1,1);         // Set link to table in common PDS parameters
+                                                            //sprintf(tstr1,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+                                                            //SetP(&comm,"^TABLE",tstr1,1);         // Set link to table in common PDS parameters
 
 
                                                             curr.factor=0.0; // Init
@@ -3239,47 +3239,53 @@ void *DecodeScience(void *arg)
                                                         //##########################################################################
                                                         // WRITE TO DATA LABEL FILE (.LBL), TABLE FILE (.TAB), and add to INDEX.TAB
                                                         //##########################################################################
+                                                        // NOTE: data_type!=D20 && data_type!=D20T
+                                                        // <=>   (curr.sensor != SENS_P1P2 || data_type==D16)
+                                                        // <=>   Not (ADC20 and both probes).
+                                                        // NOTE: The if condition _APPEARS_TO_BE_ a very crude way of determining
+                                                        // if-and-only-if there is data from exactly one probe (P3 counts as one probe).
+                                                        // Not sure why it must should work, but it does seem to be consistent with id.h: no subheaders read ADC16 from both probes.
+                                                        // Why not use (curr.sensor==SENS_P1 || curr.sensor==SENS_P2), or curr.sensor!=SENS_P1P2?
+                                                        // /Erik P G Johansson 2016-03-10
                                                         if(data_type!=D20 && data_type!=D20T)
                                                         {
-                                                            //=======================
-                                                            // Handle dop==0 (P3?!!)
-                                                            //=======================
-                                                            // QUESTION: How does the code know that it is P3?!! The if-condition seems insufficient.
-                                                            // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.                                                            
-                                                            
-//                                                             if (debug >=1) {
-                                                                CPrintf("Creating file pair for dop=0 (P3?!).\n");    // DEBUG
-//                                                             }
-                                                            
-                                                            // This code should be added _IF_ one wants to make the P3 code analogous to the P1+P2 code.
-                                                            // Not entirely sure if one should at this point. /Erik P G Johansson 2016-03-09
-//                                                             {
-//                                                                 // Set to [E]-Field or keep [D]ensity.
-//                                                                 char tempChar;
-//                                                                 if(getBiasMode(&curr, 0)==E_FIELD) {
-//                                                                     tempChar = 'E';
-//                                                                 } else {
-//                                                                     tempChar = 'D';
-//                                                                 }
-//                                                                 lbl_fname[19]=tempChar;
-//                                                                 tab_fname[19]=tempChar;
-//                                                                 prod_id[19+1]=tempChar;
-//                                                             }
-//                                                             lbl_fname[21]='3';
-//                                                             tab_fname[21]='3';
-//                                                             prod_id[21+1]='3';
+                                                            //=====================================================
+                                                            // CASE: There is data for exactly one probe (dop==0).
+                                                            // ---------------------------------------------------
+                                                            // NOTE: P3 counts as one probe here.
+                                                            //=====================================================
+                                                            // QUESTION: Should this code not be more analogous to the case for P1, P2? There might be missing code here.
+                                                            if (debug >= 1) {
+                                                                CPrintf("    Creating LBL/TAB file pair (dop=0) - There is data for exactly one probe (?).\n");    // DEBUG
+                                                            }                                                            
+
+                                                            // Modify filenames and product ID.
+                                                            {
+                                                                // Set to [E]-Field or keep [D]ensity.
+                                                                char tempChar;
+                                                                if(getBiasMode(&curr, 0)==E_FIELD) {
+                                                                    tempChar = 'E';
+                                                                } else {
+                                                                    tempChar = 'D';
+                                                                }
+                                                                lbl_fname[19]=tempChar;
+                                                                tab_fname[19]=tempChar;
+                                                                prod_id[19+1]=tempChar;
+                                                            }                                                            
+                                                            sprintf(tstr1, "%1d", curr.sensor);
+                                                            lbl_fname[21]=tstr1[0];
+                                                            tab_fname[21]=tstr1[0];
+                                                            prod_id[21+1]=tstr1[0];
 
                                                             sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
                                                             ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
                                                             
-                                                            // This code should be added _IF_ one wants to make the P3 code analogous to the P1P2 case.
-                                                            // Not entirely sure if one should at this point. /Erik P G Johansson 2016-03-09
-//                                                             // Name changed
-//                                                             SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
-//                                                             sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-//                                                             SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
-//                                                             sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-//                                                             SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
+//                                                          // Name changed
+                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
+                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
+                                                            sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
+                                                            SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
                                                             
                                                             if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 0, ini_samples,param_type)>=0)
                                                             {
@@ -3295,17 +3301,18 @@ void *DecodeScience(void *arg)
                                                         }
                                                         else // Split interleaved 20 Bit data into two pairs of label and tab files
                                                         {
-                                                            // QUESTION: How does the code know that there is data for the respective probes,
-                                                            // when it could just as well be that only one of them (or none) has?
+                                                            //===========================================
+                                                            // CASE: There is data for exactly 2 probes.
+                                                            //===========================================
 
                                                             //====================
                                                             // Handle dop==1 (P1)
                                                             //====================
-//                                                             if (debug >=1) {
-                                                                CPrintf("Creating file pair for dop=1 (P1).\n");    // DEBUG
-//                                                             }
+                                                            if (debug >= 1) {
+                                                                CPrintf("    Creating LBL/TAB file pair for P1 data (dop=1) - There is data for exactly two probes.\n");    // DEBUG
+                                                            }
                                                             
-                                                            // Modify filename and product ID.
+                                                            // Modify filenames and product ID.
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
@@ -3347,11 +3354,11 @@ void *DecodeScience(void *arg)
                                                             //====================
                                                             // Handle dop==2 (P2)
                                                             //====================
-//                                                             if (debug >=1) {
-                                                                CPrintf("Creating file pair for dop=2 (P2).\n");    // DEBUG
-//                                                             }
+                                                            if (debug >= 1) {
+                                                                CPrintf("    Creating LBL/TAB file pair for P2 data (dop=2) - There is data for exactly two probes.\n");    // DEBUG
+                                                            }
                                                             
-                                                            // Modify filename and product ID.
+                                                            // Modify filenames and product ID.
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
@@ -5569,18 +5576,19 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
 
 
 // Return the bias mode for a given "dop" value as it used for when writing to file.
-// dop : 0=P3, 1=P1, 2=P2.
+// dop : See "WritePTAB_File".
 // NOTE: The return type is chosen to agree with pds.h:curr_type_def#bias_mode1/2.
 char getBiasMode(curr_type *curr, int dop) {
-    switch(dop) {
-        case 0: 
-            if (curr->bias_mode1 != curr->bias_mode2) {
-                CPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
-                YPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
-            }
-            return curr->bias_mode1;    // curr.bias_mode1/curr.bias_mode2 should be identical for this case.
-        case 1: return curr->bias_mode1;
-        case 2: return curr->bias_mode2;
+    if (curr->sensor==SENS_P1 || dop==1) {
+        return curr->bias_mode1;
+    } else if (curr->sensor==SENS_P2 || dop==2) {
+        return curr->bias_mode2;
+    } else if (curr->sensor==SENS_P1P2 && dop==0) {
+        if (curr->bias_mode1 != curr->bias_mode2) {
+            CPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+            YPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+        }
+        return curr->bias_mode1;
     }
     
     CPrintf("Error: getBiasMode: Can not determine bias mode (curr->sensor=%i).\n", curr->sensor);
@@ -5603,12 +5611,25 @@ char getBiasMode(curr_type *curr, int dop) {
  *    NOTE: Check how dop is used in WritePLBL_File (very little).
  *    NOTE: "dop" seems different from curr_type_def#sensor. sensor==0 has different meaning at the very least.
  *    GUESS: curr-->sensor refers to the probe(s) for which there is data.
- *    GUESS: dop refers to the data which is written to the file.
- *       dop=0 : P3 (difference P2-P1; NOT two different parallel measurements)
- *       dop=1 : P1
- *       dop=2 : P2
- *    QUESTION: IF guesses are correct, then why do if statements also refer to curr->sensor? Is that non unnecessary?
- *       Ex: if(curr->sensor==SENS_P1 || curr->sensor==SENS_P1P2 || dop==1)
+ *    GUESS: The combination of curr.sensor and "dop" determines which probe is being written to disk.
+ *       curr.sensor=SENS_P1
+ *          dop=0, 1 : P1
+ *       curr.sensor=SENS_P2
+ *          dop=0, 2 : P2
+ *       curr.sensor=SENS_P1P2
+ *          dop=0 : P3
+ *          dop=1 : P1
+ *          dop=2 : P2
+ *       <=> (This is equivalent with...)
+ *       dop=0
+ *          curr.sensor=SENS_P1   : P1 
+ *          curr.sensor=SENS_P2   : P2
+ *          curr.sensor=SENS_P1P2 : P3
+ *       dop=1
+ *          curr.sensor=SENS_P1, SENS_P1P2 : P1
+ *       dop=2
+ *          curr.sensor=SENS_P2, SENS_P1P2 : P2
+ * 
  */
 int WritePTAB_File(
     unsigned char *buff,
@@ -6363,14 +6384,6 @@ int WritePLBL_File(
     }
     else
     {
-        // Check for illegal combinations of curr->sensor and dop based on my current understanding of the variables.
-        // NOTE: This depends on that the understanding of "dop" and curr.sensor is correct.
-        // /Erik P G Johansson 2016-03-09
-//         if ((curr->sensor==SENS_P1) & (dop!=1)) | ((curr->sensor==SENS_P2) & (dop!=2)) {
-//             YPrintf("ASSERTION ERROR: WritePLBL_File: Illegal combination of curr->sensor=%d and dop=%d.\n", curr->sensor, dop);
-//             CPrintf("ASSERTION ERROR: WritePLBL_File: Illegal combination of curr->sensor=%d and dop=%d.\n", curr->sensor, dop);
-//         }
-        
         // Prepare temporary sensor string
         // At this time sensor is set so we don't bother to check if it's not!
         diff = 0;    // Assume it is not diff data.
