@@ -75,6 +75,7 @@
 //    NOTE: This bug has probably been fixed now. /Erik P G Johansson 2015-12-10
 //    
 // NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
+//       This is due to dysfunctional automatic indentation in the Kate editor.
 // NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
 // 
 //====================================================================================================================
@@ -1496,7 +1497,7 @@ void *DecodeScience(void *arg)
     char tstr1[256];                // Temporary string
     char tstr2[256];                // Temporary string
     char tstr3[256];                // Temporary string 
-    char tstr4[256];                // Temporary string
+    //char tstr4[256];                // Temporary string
     char tstr5[256];                // Temporary string 
     
     int i;                          // Temporary counters
@@ -1534,6 +1535,8 @@ void *DecodeScience(void *arg)
     int oldstate;
     int oldtype;
     int status;
+    
+    
     
     /* Function to remove repetition and shorten the code that writes TABL/LFL file pairs.
      * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
@@ -1585,6 +1588,7 @@ void *DecodeScience(void *arg)
             WriteToIndexTAB(indexStr, tstr10, property2->value);
         }
     }
+    
     
     
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
@@ -1656,7 +1660,9 @@ void *DecodeScience(void *arg)
     }
     
     //DumpPrp(&mdesc);
+    //####################
     // STATE MACHINE LOOP
+    //####################
     in_sync=1;           // Assume we are in sync!
     state=S02_TEST_SYNC; // Set starting state
     while(1)
@@ -3505,11 +3511,8 @@ void *DecodeScience(void *arg)
         }
     }   // while
     return 0;
+    
 }   // DecodeScience
-
-
-
-
 
 
 
@@ -5717,7 +5720,6 @@ int WritePTAB_File(
     char tstr1[256];                // Temporary string
     char tstr2[256];
     char tstr3[256];
-    //char tstr4[256];
     
     
     int curr_step=3;                // Current sweep step, default value just there to get rid of compilation warning
