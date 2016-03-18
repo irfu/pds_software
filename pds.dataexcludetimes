@@ -1,0 +1,41 @@
+#
+# List of time intervals for which data should be excluded (ignored).
+# -------------------------------------------------------------------
+# Data files for time intervals which overlap with the time intervals listed here
+# are never written to disk.
+# NOTE: Times have to be given as "spacecraft clock count" (false decimals designating a 16-bit number), i.e.
+# the same as SPACECRAFT_CLOCK_START/STOP_COUNT in the LBL files since this is (virtually) independent of
+# time conversions and still available in LBL files.
+# If pds' internal conversion between spacecraft clock count and UTC strings is ever modified, then this
+# designation will still refer to the same points in time since it is virtually (almost) the number actually
+# specified in the packets/telemetry with the exception of the reset counter.
+# UTC time strings in comments should thus be seen as only approximate.
+#
+
+
+# Timestamps appear to be 32 s too early.
+# 2014-11-09T00:46:58.295 - 2014-11-09T00:49:34.029
+1/0374114747.15680 1/0374114902.63740
+
+
+
+# Alla data from macro 614. Macro produced corrupt data and was run only once.
+# 2014-12-09T01:02:59.148  2014-12-09T12:57:09.412
+1/0376707707.15680 1/0376750557.32064
+# Exclusion added but I have not actually double-checked if data is actually correctly excluded.
+# /Erik P G Johansson 2015-04-13
+
+
+
+# All of macro 0x624 on 2015-01-23.
+# Bad programming on Rosetta led to generating more data than bandwidth permitted.
+# 2015-01-23T01:29:40.432 - 2015-01-23T06:28:50.388
+1/0380597307.15680 1/0380615257.12403
+
+
+
+# Time appears to be 32 s behind for a few minutes.
+# 2015-03-01T00:09:41.469640 - 2015-03-01T00:14:26.269731
+1/0383789275.15680 1/0383789592.2573
+
+
