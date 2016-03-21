@@ -993,19 +993,22 @@ int main(int argc, char *argv[])
 void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "Usage: %s  [-h] [-debug <Level>]\n", executable_name);
     fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
-    fprintf(stream, "            [-calib] -mp <Mission phase abbreviation> -vid <Volume ID> -dsv <Data set version>\n");        
+    fprintf(stream, "            [-calib]\n");
+    fprintf(stream, "            -mp <Mission phase abbreviation>\n");
+    fprintf(stream, "            -vid <Volume ID>\n");
+    fprintf(stream, "            -dsv <Data set version>\n");
     fprintf(stream, "\n");
     fprintf(stream, "            [-stctt <seconds>]              Science thread cancel threeshold timeout (STCTT), i.e. the time the program\n");
     fprintf(stream, "                                            waits for the science thread to empty the science buffer to below a certain\n");
     fprintf(stream, "                                            threshold before exiting.\n");
     fprintf(stream, "\n");
     fprintf(stream, "   Alter default values and values in the mission calendar.\n");
-    fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID, DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
+    fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID and DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
     
     // Values normally obtained from the mission calendar.
     // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
     // since deliveries may split up mission phases.
-    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      E.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
+    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      Mission phase name, e.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
     fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
     fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions.)\n");
     fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
@@ -8401,8 +8404,7 @@ double DecodeLAPTime(unsigned char *buff)
 // A negative return code means an error occured
 // 
 // NOTE: It appears that this function is not used as of 2015-06-22. /Erik P G Johansson 2015-06-22
-// 
-///*
+/*
 int DecodeRawTimeEst(double raw,char *stime)
 {
     double s;            // Seconds and fractional seconds
@@ -8440,7 +8442,7 @@ int DecodeRawTimeEst(double raw,char *stime)
     sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%06.3f",bt.tm_year+1900,bt.tm_mon+1,bt.tm_mday,bt.tm_hour,bt.tm_min,((double)bt.tm_sec)+frac_s);
     return 0; // Ok!
 }
-//*/
+*/
 
 
 
