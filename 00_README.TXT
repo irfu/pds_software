@@ -65,15 +65,15 @@ OPTIONS:
     This is a configuration file for the PDS system, if left out the default is $HOME/pds.conf
     See $LAP_PDS_HOME/pds_config for a template file.
 
-pds.config contain the following:
+pds.config contains the following:
 ---------------------------------------------------------------------------------------------------------
 % pds.conf
 % Note that comments are preceeded by % and not #
 % as usual. And # is interpreted as any numerical 
 % character.
 %
-01                                           % Number of times the space craft clock has been reseted
-2003-01-01T00:00:00                          % Date and time of last space craft clock reset
+01                                           % Number of times the spacecraft clock has been reset
+2003-01-01T00:00:00                          % Date and time of last spacecraft clock reset
 /usr/local/src/gse/pds/stubs                 % Path to Macro descriptions for the LAP instrument
 1.0                                          % The PDS data set version, first version is 1.0
 Reine Gill (IRFU), first release             % Label revision note

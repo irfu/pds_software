@@ -275,11 +275,11 @@ int DecodeRawTime(double raw,char *stime,int lfrac);					// Decodes raw S/C time
 int Raw2OBT_Str(double raw,int rcount,char *stime);					// Convert raw time to an OBT string (On Board Time)
 int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime);                       // Convert OBT string to raw time.
 
-//int Scet2Date(double raw,char *stime,int lfrac);     // Decodes SCET (Space craft event time, Calibrated OBT) into a date
+//int Scet2Date(double raw,char *stime,int lfrac);     // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
 
 // Replacement for Scet2Date ESA approach with OASWlib give dubious results. (dj2000 returns 60s instead of 59s etc.)
-int Scet2Date_2(double raw,char *stime,int lfrac);					// Decodes SCET (Space craft event time, Calibrated OBT) into a date
+int Scet2Date_2(double raw,char *stime,int lfrac);					// Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
 
 int TimeOfDatePDS(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970...) for a PDS date string 
@@ -367,8 +367,8 @@ unsigned int volume_id;
 // Initialize PDS configuration info, paths and file descriptors
 pds_type pds =
 {
-    0,          // Number of times the space craft clock has been reseted
-    "",         // Date and time of last space craft clock reset example: 2003-01-01T00:00:00
+    0,          // Number of times the spacecraft clock has been reset
+    "",         // Date and time of last spacecraft clock reset example: 2003-01-01T00:00:00
     "",         // Path to LAP template PDS archive
     "",         // Path to LAP macro descriptions
     0,          // DPL Number
@@ -1258,7 +1258,19 @@ void *SCDecodeTM(void *arg)
 }   // SCDecodeTM
 
 
+
+
+
+
+
 // -= THREAD TO DECODE HK =-
+// 
+// IMPORTANT NOTE: It appears that HK TAB/LBL file pairs group together up to HK_NUM_LINES subsequent HK packets.
+// Exactly which HK packets that are grouped together with which depend depends on when the previous group
+// of HK packets ended, and hence it depends on the exact start time of the whole data set. Data
+// for the same day from two different data sets with different start times will thus (likely) have different
+// HK files with different groups of HK packets.
+// /Erik P G Johansson 2016-03-21
 void *DecodeHK(void *arg)
 {   
     char alphanum_h[4]="000";       // Default starting alpha numeric value for unique HK file name
@@ -1294,17 +1306,18 @@ void *DecodeHK(void *arg)
     }
     
     
-    InitP(&hkl);						// Initialize linked property/value list for PDS LAP HK
-    ClearCommonPDS(&hkl);					// Set the common PDS header keywords 
-    SetupHK(&hkl);					// Setup HK keywords
-    SetP(&hkl,"RECORD_BYTES",HK_LINE_SIZE_STR,1);		// Set number of bytes in a column of a record
-    SetP(&hkl,"DESCRIPTION","\"LAP HK Data, Each line is a separate HK packet sent every 32s\"",1);
-    SetP(&hkl,"MISSION_PHASE_NAME",mp.phase_name,1);	// Set mission phase name in HK parameters
-    SetP(&hkl,"TARGET_TYPE",mp.target_type,1);		// Set target type in  HK parameters 
-    SetP(&hkl,"TARGET_NAME",mp.target_name_did,1);	// Set target name in  HK parameters 
     
-    SetP(&hkl,"DATA_SET_ID",mp.data_set_id,1);		// Set DATA SET ID in HK parameters
-    SetP(&hkl,"DATA_SET_NAME",mp.data_set_name,1);	// Set DATA SET NAME in HK parameters
+    InitP(&hkl);                            // Initialize linked property/value list for PDS LAP HK
+    ClearCommonPDS(&hkl);                   // Set the common PDS header keywords 
+    SetupHK(&hkl);                          // Setup HK keywords
+    SetP(&hkl,"RECORD_BYTES",HK_LINE_SIZE_STR,1);       // Set number of bytes in a column of a record
+    SetP(&hkl,"DESCRIPTION","\"LAP HK Data, Each line is a separate HK packet sent every 32s\"",1);
+    SetP(&hkl,"MISSION_PHASE_NAME",mp.phase_name,1);    // Set mission phase name in HK parameters
+    SetP(&hkl,"TARGET_TYPE",mp.target_type,1);          // Set target type in  HK parameters 
+    SetP(&hkl,"TARGET_NAME",mp.target_name_did,1);      // Set target name in  HK parameters 
+    
+    SetP(&hkl,"DATA_SET_ID",mp.data_set_id,1);          // Set DATA SET ID in HK parameters
+    SetP(&hkl,"DATA_SET_NAME",mp.data_set_name,1);      // Set DATA SET NAME in HK parameters
     
     if(calib) {// Set product type
         SetP(&hkl,"PRODUCT_TYPE","\"RDR\"",1);
@@ -1312,12 +1325,15 @@ void *DecodeHK(void *arg)
         SetP(&hkl,"PRODUCT_TYPE","\"EDR\"",1);
     }
     
-    ch=(buffer_struct_type *)((arg_type *)arg)->arg1;	// Get circular house keeping buffer pointer
+    ch=(buffer_struct_type *)((arg_type *)arg)->arg1;   // Get circular house keeping buffer pointer
     
     while(1)
-    {  
+    {
         pthread_testcancel();                             // Test if we are to cancel
         
+        //=======================================================================
+        // Assemble first line of TAB file, and gather information for LBL file.
+        //=======================================================================
         
         // Get first HK packet data and raw time (HK_NUM_LINES per TAB file)
         GetHKPacket(ch,buff,&time);
@@ -1350,12 +1366,12 @@ void *DecodeHK(void *arg)
         
         // Replace - in CCYY-MM-DD by null terminations so we can convert date from CCYY-MM-DD into YYMMDD
         tstr2[4]='\0'; 
-        tstr2[7]='\0'; 
+        tstr2[7]='\0';
         tstr2[10]='\0';
         
-        // Get highest alphanumeric value in filenames in dpathh matching pattern  "RPCLAPYYMM*_*_H.LBL"
-        // This causes the alphanum value to restart at zero every new day..
-        // (Any matching days from previous runs are not overwritten until alphanum wraps..
+        // Get highest alphanumeric value in filenames in dpathh matching pattern "RPCLAPYYMM*_*_H.LBL",
+        // This causes the alphanum value to restart at zero every new day.
+        // (Any matching days from previous runs are not overwritten until alphanum wraps.)
         //
         sprintf(tstr3,"RPCLAP%s%s*_*_*H.LBL",&tstr2[2],&tstr2[5]);
         GetAlphaNum(alphanum_h,pds.spathh,tstr3); 
@@ -1363,51 +1379,60 @@ void *DecodeHK(void *arg)
         
         sprintf(stub_fname,"RPCLAP%s%s%s_%s_H",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);
         
-        sprintf(tab_fname,"%s.TAB",stub_fname);                   // Compile HK data TAB path+filename
-        sprintf(lbl_fname,"%s.LBL",stub_fname);    		// Compile HK data LBL path+filename
+        sprintf(tab_fname,"%s.TAB",stub_fname);                     // Compile HK data TAB path+filename
+        sprintf(lbl_fname,"%s.LBL",stub_fname);                     // Compile HK data LBL path+filename
         
-        SetP(&hkl,"PRODUCT_ID",stub_fname,1);			// Add PRODUCT_ID HK LBL
+        SetP(&hkl,"PRODUCT_ID",stub_fname,1);                       // Add PRODUCT_ID HK LBL
         
-        GetUTime(prod_creat_time);				// Get current UTC time     
+        GetUTime(prod_creat_time);                                  // Get current UTC time     
         HPrintf("    UTC Creation Time: %s\n",prod_creat_time,1);
-        SetP(&hkl,"PRODUCT_CREATION_TIME",prod_creat_time,1);	// Set creation time in common PDS parameters, no quotes!
+        SetP(&hkl,"PRODUCT_CREATION_TIME",prod_creat_time,1);       // Set creation time in common PDS parameters, no quotes!
         
-        sprintf(tstr3,"\"%s\"",lbl_fname);			// Add PDS quotes ".."
-        SetP(&hkl,"FILE_NAME",tstr3,1);				// Add file name to HK LBL
-        sprintf(tstr3,"\"%s\"",tab_fname);			// Add PDS quotes ".." 
-        SetP(&hkl,"^TABLE",tstr3,1);				// Add pointer to HK TAB file
+        sprintf(tstr3,"\"%s\"",lbl_fname);          // Add PDS quotes ".."
+        SetP(&hkl,"FILE_NAME",tstr3,1);             // Add file name to HK LBL
+        sprintf(tstr3,"\"%s\"",tab_fname);          // Add PDS quotes ".." 
+        SetP(&hkl,"^TABLE",tstr3,1);                // Add pointer to HK TAB file
         
         // Write to the index file (We have at least one HK line otherwise GetHKPacket would not have returned.
         //----------------------------------------------------------------------------------------------------------------------------------------------------
-        ti=strlen(pds.apathpds);					// Find position there the root of the PDS archive starts
-        sprintf(tstr2,"%s%s",&pds.spathh[ti],lbl_fname);	        // Set path and file name together
-        ExtendStr(tstr3,tstr2,58,' ');		   	        // Make a new string extended with whitespace to 58 characters
-        ExtendStr(tstr2,stub_fname,25,' ');			// Make a new string extended with whitespace to 25 characters
+        ti=strlen(pds.apathpds);                            // Find position there the root of the PDS archive starts
+        sprintf(tstr2,"%s%s",&pds.spathh[ti],lbl_fname);    // Set path and file name together
+        ExtendStr(tstr3,tstr2,58,' ');                      // Make a new string extended with whitespace to 58 characters
+        ExtendStr(tstr2,stub_fname,25,' ');                 // Make a new string extended with whitespace to 25 characters
         WriteToIndexTAB(tstr3, tstr2, prod_creat_time);
         
         // Open label file and tab file for writing
         //----------------------------------------------------------------------------------------------------------------------------------------------------
-        strcpy(tstr2,pds.spathh);			       	        // Copy data path
-        strcat(tstr2,lbl_fname);				        // Add lbl filename to data path 
+        strcpy(tstr2,pds.spathh);                       // Copy data path
+        strcat(tstr2,lbl_fname);                        // Add lbl filename to data path 
         
-        if((pds.hlabel_fd=fopen(tstr2,"w"))==NULL)
+        //===============================================================================================
+        // Write all lines of TAB file, and gather remaining information for LBL file and write LBL file.
+        //===============================================================================================
+        if ((pds.hlabel_fd=fopen(tstr2,"w"))==NULL)     // Open HK label file
         {
             HPrintf("Couldn't open PDS HK LBL data file: %s!!\n",tstr2);
         }
         else
         {
-            strcpy(tstr2,pds.spathh);				// Copy data path
-            strcat(tstr2,tab_fname);				// Add tab filename to data path 
+            strcpy(tstr2,pds.spathh);               // Copy data path
+            strcat(tstr2,tab_fname);                // Add tab filename to data path 
             
             if((pds.htable_fd=fopen(tstr2,"w"))==NULL)          // Open HK table file
             {
                 HPrintf("Couldn't open PDS HK TAB data file: %s!!\n",tab_fname);
             }
-            else 
+            else
             {
-                fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);	// Add first HK line from above into the present table file
-                // Start at hk_cnt = 1 thus skip counting line already done above...
-                for(hk_info.hk_cnt=1;hk_info.hk_cnt<HK_NUM_LINES;hk_info.hk_cnt++)	
+                // CASE: Successfully opened both LBL and TAB file. First TAB line (variable "line") has already been assembled.
+                
+                fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);      // Add first HK line from above into the present table file
+                
+                //===========================================
+                // Iterate over remaining lines in TAB file.                
+                //===========================================
+                // (Start at hk_cnt = 1 to skip counting the line already written above.)
+                for (hk_info.hk_cnt=1; hk_info.hk_cnt<HK_NUM_LINES; hk_info.hk_cnt++)
                 {
                     GetHKPacket(ch,buff,&time);
                     
@@ -1426,18 +1451,20 @@ void *DecodeHK(void *arg)
             SetP(&hkl,"SPACECRAFT_CLOCK_STOP_COUNT",hk_info.obt_time_str,1);	// Set OBT stop time
             SetP(&hkl,"STOP_TIME",hk_info.utc_time_str,1);			// Update STOP_TIME in common PDS parameters
             sprintf(tstr1,"%d",hk_info.hk_cnt);
-            SetP(&hkl,"FILE_RECORDS",tstr1,1);					// Set number of records
-            SetP(&hkl,"ROWS",tstr1,1);						// Set number of rows
+            SetP(&hkl, "FILE_RECORDS", tstr1, 1);               // Set number of records
+            SetP(&hkl, "ROWS",         tstr1, 1);               // Set number of rows
             
             // Write to the HK Label file
-            //----------------------------------------------------------------------------------------------------------------------------------------------------
+            //------------------------------------------------------------------------------------------------------------------------------------------------
             FDumpPrp(&hkl,pds.hlabel_fd); // Dump hkl to HK label file
             fprintf(pds.hlabel_fd,"END\r\n");
             fclose(pds.hlabel_fd);
             pds.hlabel_fd=NULL;
-        }
+            
+            //HPrintf("(DecodeHK:) Closed HK LBL file.");   // Useful for determining whether the above code closed the LBL file, or if ExitPDS did.
+        }   // if ((pds.hlabel_fd=fopen(tstr2,"w"))==NULL) ... else ...
     }
-}
+}   // DecodeHK
 
 
 
@@ -3561,7 +3588,7 @@ void ExitPDS(int status)
     
     if(scithread>0)  
     {
-        YPrintf("Trying to cancel the science thread.\n");   // Disable log message?
+        YPrintf("Trying to cancel the science thread.\n");
         if (status == 0) {
             
             //-------------------------------------------------------------------------------------------------------------------
@@ -3661,8 +3688,9 @@ void ExitPDS(int status)
             FreePrp(&dict);                           // Then free dict memory
         }
         
-        if(anom.no_prop!=0 && anom.properties!=NULL) // Something in anom structure?
-            FreePrp(&anom);                           // Then free anom memory
+        if(anom.no_prop!=0 && anom.properties!=NULL) {  // Something in anom structure?
+            FreePrp(&anom);                             // Then free anom memory
+        }
             
             FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
             
@@ -3784,7 +3812,8 @@ void ExitPDS(int status)
             fflush(stdout); 
             
             exit(status);                             // Exit with return code "status"
-}
+}   // ExitPDS
+
 
 
 // Like printf but everything goes into PDS_LOG0.
@@ -5792,7 +5821,7 @@ int WritePTAB_File(
     vcalf=1.0; // Assume 1 to begin with
     ccalf=1.0; // Assume 1 to begin with
     
-    DecodeRawTime(curr->seq_time,tstr1,0); // First convert space craft time to UTC to get time calibration right
+    DecodeRawTime(curr->seq_time,tstr1,0); // First convert spacecraft time to UTC to get time calibration right
     
     TimeOfDatePDS(tstr1,&stime);            // Convert back to seconds
     
@@ -6733,7 +6762,8 @@ void FreeBuffs(buffer_struct_type *b0,buffer_struct_type *b1,buffer_struct_type 
 }
 
 // Get data from circular buffer
-// Do not return until it has all the data requested
+// 
+// NOTE: Does NOT RETURN until it has all the requested data.
 int GetBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
 {
     if(len>0)
@@ -6761,6 +6791,9 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
     return 0;
 }
 
+// Return data for one HK packet.
+// 
+// NOTE: Does NOT RETURN until it has all the requested data.
 int GetHKPacket(buffer_struct_type *ch,unsigned char *buff,double *rawt)
 {
     unsigned int length; // Length variable
@@ -6778,7 +6811,6 @@ int GetHKPacket(buffer_struct_type *ch,unsigned char *buff,double *rawt)
     *rawt=DecodeSCTime(&buff[6]);            // Decode S/C time into raw time
     
     GetBuffer(ch,buff,2);                    // Skip 2 bytes
-    
     
     GetBuffer(ch,buff,length);  // Get data from circular HK buffer
     
@@ -7695,7 +7727,7 @@ int GetAlphaNum(char *n,char *path,char *pattern)
         {
             strncpy(newn,&dentry->d_name[13],3);        // Remember matching file name
             newn[3]='\0';
-            // alphanumeric value in filename larger than previosly largest ?
+            // alphanumeric value in filename larger than previously largest ?
             nval=Alpha2Num(newn);
             if(nval>oval)
             {
@@ -7970,7 +8002,7 @@ int GetUnacceptedFName(char *name)
             lastm[9]='\0';                           // We only care about number part
             if(sscanf(&lastm[4],"%d",&tmp))           // Get number of file
             {
-                if(tmp>lastnum)   // Number of file larger than previosly largest
+                if(tmp>lastnum)   // Number of file larger than previously largest
                     lastnum=tmp;    // Remember new number
             }
         }
@@ -8020,6 +8052,8 @@ int Match(char *stra,char *strb)
     }
         return 0; // All matched
 }
+
+
 
 // HK Functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -8232,14 +8266,16 @@ void AssembleHKLine(unsigned char *b,char *line,double time,char *macro_id_str)
     } else {
             t  = ((b[8]<<8 | b[9]) ^ 0x8000)*T_SCALE+T_OFFSET; //CALIB values educated guesses!!
     }
-            
-            sprintf(tstr,"%05.f,",t);      
-        strcat(line,tstr); // Add string to table line
-        
-        sprintf(tstr,"%02d\r\n",b[11]); // Make software version string
-        strcat(line,tstr); // Add string to table line
-        
+    
+    sprintf(tstr,"%05.f,",t);      
+    strcat(line,tstr); // Add string to table line
+    
+    sprintf(tstr,"%02d\r\n",b[11]); // Make software version string
+    strcat(line,tstr); // Add string to table line
+    
 }
+
+
 
 // Low level data functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -8349,7 +8385,7 @@ double DecodeLAPTime(unsigned char *buff)
     unsigned int full_s; // Full seconds
     double frac_s;       // Fractional seconds
     
-    //Seconds since space craft clock reset
+    //Seconds since spacecraft clock reset
     full_s=((buff[0]<<22) | buff[1]<<14 | buff[2]<<6 | buff[3]>>2); // Full seconds
     frac_s=((double)((buff[3] & 0x3)<<8 | buff[4]))/1024.0;         // Fractional seconds
     
@@ -8366,6 +8402,7 @@ double DecodeLAPTime(unsigned char *buff)
 // 
 // NOTE: It appears that this function is not used as of 2015-06-22. /Erik P G Johansson 2015-06-22
 // 
+///*
 int DecodeRawTimeEst(double raw,char *stime)
 {
     double s;            // Seconds and fractional seconds
@@ -8403,6 +8440,7 @@ int DecodeRawTimeEst(double raw,char *stime)
     sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%06.3f",bt.tm_year+1900,bt.tm_mon+1,bt.tm_mday,bt.tm_hour,bt.tm_min,((double)bt.tm_sec)+frac_s);
     return 0; // Ok!
 }
+//*/
 
 
 
@@ -8414,7 +8452,7 @@ int DecodeRawTimeEst(double raw,char *stime)
 //
 // NOTE: The function uses the global tcp structure! 
 // 1) Can do this since it's the only user
-// 2) It only reads! no thread conflicts..
+// 2) It only reads! No thread conflicts..
 //
 // NOTE: The function and its input value is used by WritePTAB_File to produce the first two columns in (science data) TAB files: 
 //    stime: UTC_TIME (DESCRIPTION = "UTC TIME")
@@ -8454,15 +8492,14 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
     }
     
     craw=raw*gradient+offset; // Compute correlation...if no time calibration data found default coefficients are used.
-    
-    
+
     Scet2Date_2(craw,stime,lfrac); // Compute a PDS date string
     return 0;
 }
 
 
 
-// Convert RAW time to an OBT string
+// Convert RAW time (decimal number of seconds) to a corresponding OBT string.
 // Due to the fact that the point . in:
 //
 // SPACECRAFT_CLOCK_START/STOP_COUNT="1/21339876.237"
@@ -8477,9 +8514,12 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
 // In our .TAB files we have a column with UTC and a column with OBT
 // but with higher precision we can not use the 2^16 fractions there
 // it need to be a real_ascii with a true decimal point.
+// 
+// raw : Decimal number of seconds (true decimals)
+// rcount : Reset counter
+// stime : "OBT string", with digits after"decimals" representing the number of fractions 2^-16 [s].
 //
-//
-int Raw2OBT_Str(double raw,int rcount,char *stime)
+int Raw2OBT_Str(double raw, int rcount, char *stime)
 {
     unsigned int sec;
     unsigned int frac;
@@ -8724,14 +8764,11 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     return 0; // Ok!
 }
 
-//
-//
+
 // Returns current UTC time in CCYY-MM-DDThh:mm:ss  format
 //
-// Also we assume that ltime has enough space 
+// Assumes that ltime has enough space 
 // for the result, at least 20 chars.
-//
-//
 int GetUTime(char *ltime) 
 {
     

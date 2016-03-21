@@ -73,8 +73,9 @@
 #define T_OFFSET -260    
 #define T_SCALE  0.0215  
 
-#define HK_NUM_LINES       16
-#define HK_NUM_LINES_STR  "16"
+
+#define HK_NUM_LINES       16         // Maximum number of lines (HK packets) per HK TAB file.
+//#define HK_NUM_LINES_STR  "16"
 #define HK_LINE_SIZE      208
 #define HK_LINE_SIZE_STR "208"
 #define HK_LENGTH 14
@@ -259,8 +260,8 @@ typedef struct curr_type_def
 // Note that in structure below we often use path to refer to both path and filename.
 typedef struct pds_type_def
 {
-  int  SCResetCounter;         // Number of times the space craft clock has been reseted
-  char SCResetClock[20];       // Date and time of last space craft clock reset ex. 2003-01-01T00:00:00
+  int  SCResetCounter;         // Number of times the space raft clock has been reset
+  char SCResetClock[20];       // Date and time of last spacecraft clock reset ex. 2003-01-01T00:00:00
   char templp[PATH_MAX];       // Path to PDS archive template
   char macrop[PATH_MAX];       // Path to lap macro descriptions
   int  DPLNumber;              // DPL number
