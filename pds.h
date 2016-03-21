@@ -1,13 +1,13 @@
-#define EPS 1E-10             // Just a small number
-#define MLEN_DSID 40          // Max length of data set ID
-#define MLEN_DSNA 60          // Max length of data set name 
-#define DDS_TM_FILE_LEN 37 // DDS TM File length in the sorted directories
-#define SC_SIZE    131072 // Length of circular science input buffer 2^17
-#define MC_SIZE    32768  // Length of mirror buffer
-#define HK_SIZE    65536  // Length of circular HK input buffer 2^16
-#define T_SIZE     8192   // Temporary input buffer size ~2 max S/C packets
-#define RIDICULUS  65536  // Length of science data longer than this is ridiculus.
-#define MAX_STR    1024   //  
+#define EPS 1E-10           // Just a small number
+#define MLEN_DSID 1024      // Max length of data set ID. (Officially max 40 char string, according to "Rosetta Archiving Conventions".)
+#define MLEN_DSNA 1024      // Max length of data set name. (Officially max 60 char string, according to "Rosetta Archiving Conventions".)
+#define DDS_TM_FILE_LEN 37  // DDS TM File length in the sorted directories
+#define SC_SIZE    131072   // Length of circular science input buffer 2^17
+#define MC_SIZE    32768    // Length of mirror buffer
+#define HK_SIZE    65536    // Length of circular HK input buffer 2^16
+#define T_SIZE     8192     // Temporary input buffer size ~2 max S/C packets
+#define RIDICULUS  65536    // Length of science data longer than this is ridiculus.
+#define MAX_STR    1024    
 #define LAP_HK_LEN 12
 
 
