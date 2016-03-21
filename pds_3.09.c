@@ -7867,29 +7867,34 @@ int MakeDir(char *name,char *path,char *npath)
 
 // Make DATA directory structure
 // 
-// NOTE: Alters "date".
+// date : String beginning with "XXYY-MM-DD".
+// 
+// BUG FIX: No longer alters "date". /Erik P G Johansson 2016-03-21.
 int StrucDir(char *date,char *ipath,char *opath)
 {
-    char months[12][4]={"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+    char months[12][4] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
     char yeardir[PATH_MAX];
     char monthdir[PATH_MAX];
     char daydir[PATH_MAX];
     char tmp[PATH_MAX];
+    char split_date[PATH_MAX];
     int month;
+    
+    strncpy(split_date, date, PATH_MAX);
     
     // Date is CCYY-MM-DD.
     // NOTE: Alters the ARGUMENT "date".
-    date[4]='\0';
-    date[7]='\0';
-    date[10]='\0';
+    split_date[4]='\0';
+    split_date[7]='\0';
+    split_date[10]='\0';
 
     // Make sure there is a YEAR directory.
-    sprintf(tmp,"%s",date);
+    sprintf(tmp,"%s",split_date);
     MakeDir(tmp,ipath,yeardir);                     // Make a directory for current Year, if it's not already there!
     
     // Make sure there is a MONTH directory.
-    if(!sscanf(&date[5],"%d",&month)) {             // Month number
-        return -1;                                    // Could not convert to month invalid date!
+    if(!sscanf(&split_date[5],"%d",&month)) {       // Month number
+        return -1;                                  // Could not convert to month invalid date!
     }    
     month--;                                        // Start at 0
     if(month>=0 && month<=11)                       // In range
@@ -7897,11 +7902,11 @@ int StrucDir(char *date,char *ipath,char *opath)
         MakeDir(months[month],yeardir,monthdir);    // Make a month directory for current month, if it's not already there!
     }
     else {
-        return -2;                                    // Month out of range!
+        return -2;                                  // Month out of range!
     }
     
     // Make sure there is a DAY-OF-MONTH directory.
-    sprintf(tmp,"D%s",&date[8]);                    // Day of month
+    sprintf(tmp,"D%s",&split_date[8]);              // Day of month
     MakeDir(tmp,monthdir,daydir);                   // Make day dir!
     
     strcpy(opath,daydir); // Return data directory!
