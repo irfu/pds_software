@@ -641,11 +641,12 @@ int GetNo(prp_type *p,property_type **prop,int no)
 
 // Return pointer ("*prop") to instance of property_type within *p where *prop->name matches *name.
 // Of those matches that have the specified "check" value matching [property_type]->check, the functions returns the "occ:th" one.
+// 
 // check = DNTCARE, CHECKED, or UNCHECKED
-int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
+int FindP(prp_type *p, property_type **prop, char *name, int occ, char check)
 {
     int i;
-    int oc=0; // Occurrence
+    int oc=0;  // Occurrence
     property_type *tmp; 
     
     pthread_mutex_lock(&protect_plnk);
@@ -660,7 +661,7 @@ int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
             if(tmp==NULL)   
             {
                 pthread_mutex_unlock(&protect_plnk);
-                return -1; //Err not found
+                return -1;  // Error, not found
             }
             
             if(!strcmp(tmp->name,name))
@@ -669,10 +670,10 @@ int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
                 {
                     *prop=tmp;
                     oc++;
-                    if(oc==occ) // Found occ occurrence of name  
+                    if(oc==occ)  // Found occ occurrence of name  
                     {
                         pthread_mutex_unlock(&protect_plnk);
-                        return 1; // Ok! found it
+                        return 1;  // Ok! Found it
                     }
                 }
             } 
@@ -680,10 +681,10 @@ int FindP(prp_type *p,property_type **prop,char *name,int occ,char check)
         }  
         
         pthread_mutex_unlock(&protect_plnk);
-        return 0; // Ok! but didn't find it
+        return 0;  // Ok, but didn't find it.
     }  
     pthread_mutex_unlock(&protect_plnk);
-    return -2; // Error! empty
+    return -2;  // Error! Empty
 }
 
 
@@ -788,18 +789,18 @@ int DeleteMidd(prp_type *p,char *frn,char *ton)
     
     if(p->properties!=NULL && p->head!=NULL && frn!=NULL && ton!=NULL)
     {
-        if(FindP(p,&fr,frn,1,0)<=0)
+        if(FindP(p,&fr,frn,1,DNTCARE)<=0)
         {
-            if(FindP(p,&fr,frn,1,1)<=0)  
+            if(FindP(p,&fr,frn,1,CHECKED)<=0)  
             {
                 pthread_mutex_unlock(&protect_plnk);
                 return -1; // Couldn't find start
             }
         }
         
-        if(FindP(p,&to,ton,1,0)<=0) 
+        if(FindP(p,&to,ton,1,DNTCARE)<=0) 
         {
-            if(FindP(p,&to,ton,1,1)<=0)   
+            if(FindP(p,&to,ton,1,CHECKED)<=0)   
             {
                 pthread_mutex_unlock(&protect_plnk);
                 return -2; // Couldn't find end

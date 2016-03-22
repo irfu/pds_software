@@ -75,9 +75,11 @@
 // "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
 //        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
 //     NOTE: Changing this will/might cause backward-compatibility issues with lapdog and write_calib_meas.
-// 
 // "BUG": Code requires output directory path in pds.conf to end with slash.
 // "BUG": The code still does not update the LBL files in the DOCUMENT/ directory.
+// BUG: HK label files do not use "fingerprinting" for identifying macros (only DecodeScience does) and can therefor
+//      not recognize all macros.
+//
 //
 //    
 // NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
@@ -926,7 +928,7 @@ int main(int argc, char *argv[])
     }
     
     
-    // Setup a gracefull exit if Ctrl-c is pressed! Exits at a convenient starting point!..may take a long time!
+    // Set up a graceful exit if Ctrl-C is pressed! Exits at a convenient starting point! May take a long time!
     act.sa_handler=ExitWithGrace;
     act.sa_flags=0;
     if((sigemptyset(&act.sa_mask)==-1) || (sigaction(SIGINT,&act,NULL)==-1))
@@ -941,8 +943,11 @@ int main(int argc, char *argv[])
      * SetPRandSched(pthread_self(),minp+3,SCHEDULING); // Set priority and scheduling of main thread
      */
     
+    
+    
+    //=======================
     // Starting data threads
-    // ----------------------------------------------------------------------------------------------------
+    //=======================
     YPrintf("Starting data threads\n");
     
     scarg.arg1=&cbtm; // Pass circular TM buffer pointer as an argument
@@ -1356,7 +1361,6 @@ void *DecodeHK(void *arg)
         HPrintf("S/C time PDS Format: %s, Raw Time: %014.3f\n", hk_info.utc_time_str, raw_time);
         HPrintf("Mission ID: %s, Phase: %s\n", mp.abbrev, mp.phase_name);
         
-        //GetUTime(tstr1);                                        // Get current UTC time
         sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
         SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
 
@@ -1366,11 +1370,9 @@ void *DecodeHK(void *arg)
         //HPrintf("LINE=%s",line);
 
         // Create data path for current day
-        //hk_info.utc_time_str[10]='\0';                            // Truncate hh:mm:ss away and keep CCYY-MM-DD
         StrucDir(hk_info.utc_time_str, pds.dpathh, pds.spathh);   // Test if RPCLAPCCYY/MONTH exists for current time, if not it creates them.
         
         strncpy(tstr2, hk_info.utc_time_str, 20);   // Truncate raw time and store fractions of a seconds  
-        //tstr2[19]='\0';                           // Add null terminator
 
         // Replace - in CCYY-MM-DD by null terminations so we can convert date from CCYY-MM-DD into YYMMDD
         tstr2[4]='\0'; 
@@ -1576,7 +1578,7 @@ void *DecodeScience(void *arg)
     int status;
     
     
-    
+    //#############################################################################################################################
     /* Function to remove repetition and shorten the code that writes TABL/LFL file pairs.
      * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
      * 
@@ -1627,6 +1629,7 @@ void *DecodeScience(void *arg)
             WriteToIndexTAB(indexStr, tstr10, property2->value);
         }
     }
+    //#############################################################################################################################
     
     
     
@@ -2070,10 +2073,10 @@ void *DecodeScience(void *arg)
                                 SetP(&comm,"DATA_SET_NAME",mp.data_set_name,1);   // Set DATA SET NAME in common PDS parameters
                                 
                                 // Find human description of macro in macro mode descriptions
-                                sprintf(tstr1,"0x%04x",macro_id); // Create search variable..to search for in linked list of property name value pairs.
-                                if(FindP(&mdesc,&property1,tstr1,1,0)>0)
+                                sprintf(tstr1, "0x%04x", macro_id);   // Create search variable to search for in linked list of property name value pairs.
+                                if (FindP(&mdesc, &property1, tstr1, 1, DNTCARE)>0)
                                 {
-                                    SetP(&comm,"INSTRUMENT_MODE_DESC",property1->value,1); // Set human description of mode
+                                    SetP(&comm,"INSTRUMENT_MODE_DESC",property1->value,1);   // Set human description of mode
                                 }
                                 
                                 sprintf(tstr1,"\"%d\"",pds.DPLNumber);
@@ -2085,7 +2088,7 @@ void *DecodeScience(void *arg)
                                 for(mb=0;macro_descr_NOT_found && mb<MAX_MACRO_BLCKS;mb++)
                                     for(ma=0;macro_descr_NOT_found && ma<MAX_MACROS_INBL;ma++)
                                     {
-                                        if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_MACRO_ID_TAG",1,0)>0)
+                                        if(FindP(&macros[mb][ma], &property1, "ROSETTA:LAP_MACRO_ID_TAG", 1, DNTCARE)>0)
                                         {
                                             //TrimQN(property1->value);
                                             if(!sscanf(property1->value,"\"%x\"",&val)) 
@@ -8075,24 +8078,24 @@ int Match(char *stra,char *strb)
 // HK Functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// ASSEMBLE A HK LINE
+// Construct a string of HK data that can be written as row/line to a HK TAB file.
 //
-// NOTE: line must be a pointer to a buffer of at least 165 characters
+// macro_id_str : Will be set to macro ID string on form "MCID0X%02x%02x".
+// line : must be a pointer to a buffer of at least 165 characters
+//
 //
 // HOUSE KEEPING EXAMPLE ROW
 // -------------------------
+// NOTE 1: Longest strings used, thus DISABLED is 8 characters
+//         and ENABLED is 7 so if enabled we put in " ENABLED"
+//         with an initial white space.
 //
-// NOTE1:  Longest strings used, thus DISABLED is 8 characters
-//        and ENABLED is 7 so if enabled we put in " ENABLED"
-//        with an initial white space.
-//
-// NOTE2:  We use delimiters to make it easier for other software to
-//        quickly read the file for testing purposes.
-//
+// NOTE 2: We use delimiters to make it easier for other software to
+//         quickly read the file for testing purposes.
 //  
-// NOTE3:  Line is terminated with both carriage return and line feed
-//        as in a DOS system (This is not strictly needed anymore).
-//
+// NOTE 3: Line is terminated with both carriage return and line feed
+//         as in a DOS system (This is not strictly needed anymore).
+//         
 // Examle of a HK line with positions displayed vertically, time is in format description.
 //
 // Beginning of line:
@@ -8279,17 +8282,16 @@ void AssembleHKLine(unsigned char *b,char *line,double time,char *macro_id_str)
     sprintf(macro_id_str,"MCID0X%02x%02x",b[6],b[7]);
     
     if(temp) {
-        t  = ((b[8]<<8 | b[9]) ^ 0x8000); // If temp is off this is just a sample from ADC20 probe 2.
+        t  = ((b[8]<<8 | b[9]) ^ 0x8000);   // If temp is off this is just a sample from ADC20 probe 2.
     } else {
-            t  = ((b[8]<<8 | b[9]) ^ 0x8000)*T_SCALE+T_OFFSET; //CALIB values educated guesses!!
+            t  = ((b[8]<<8 | b[9]) ^ 0x8000)*T_SCALE+T_OFFSET;   // CALIB values educated guesses!!
     }
     
     sprintf(tstr,"%05.f,",t);      
     strcat(line,tstr); // Add string to table line
     
     sprintf(tstr,"%02d\r\n",b[11]); // Make software version string
-    strcat(line,tstr); // Add string to table line
-    
+    strcat(line,tstr); // Add string to table line    
 }
 
 
