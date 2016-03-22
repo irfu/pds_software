@@ -71,6 +71,10 @@
 //    Last HK LBL file in data set: SPACECRAFT_CLOCK_STOP_COUNT was erroneously effectively same as SPACECRAFT_CLOCK_START_COUNT.
 //    Every HK LBL file with only one row (in TAB file): STOP_TIME was only a year.
 //       /Erik P G Johansson 2016-03-21.
+//  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
+//      /Erik P G Johansson 2016-03-22
+//
+//
 //
 // "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
 //        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
@@ -260,7 +264,7 @@ int  Match(char *,char *);								// Match filename to pattern
 
 // HK Functions
 //----------------------------------------------------------------------------------------------------------------------------------
-void AssembleHKLine(unsigned char *,char *,double,char *);				// Assemble a HK line entry
+void AssembleHKLine(unsigned char *, char *, double, unsigned int *);       // Assemble a HK line entry
 
 // Low level data functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -447,8 +451,6 @@ tc_type tcp={0,NULL,NULL,NULL}; // Time correlation packets structure
 unsigned int ilogtab[256];      // Inverse logarithmic table for decoding of logarithmic sweeps
 
 extern FILE *stdout;            // Keep track of standard output 
-
-unsigned int macro_id = 0;      // Macro ID tag.
 
 int sc_thread_cancel_threshold_timeout;
     
@@ -942,6 +944,14 @@ int main(int argc, char *argv[])
      * minp=sched_get_priority_min(SCHEDULING); // [max - min]>=32 guaranteed..
      * SetPRandSched(pthread_self(),minp+3,SCHEDULING); // Set priority and scheduling of main thread
      */
+
+    // Load macro descriptions
+    InitP(&mdesc); // Initialize linked property/value list for macro descriptions.    
+    if (LoadModeDesc(&mdesc,pds.mpath) < 0)
+    {
+        YPrintf("Warning: Can not load macro descriptions. INSTRUMENT_MODE_DESC can not be set.\n");
+        printf("Warning: Can not load macro descriptions. INSTRUMENT_MODE_DESC can not be set.\n");
+    }
     
     
     
@@ -1294,14 +1304,15 @@ void *DecodeHK(void *arg)
     char stub_fname[256];           // Stub file name and path
     char tab_fname[256];            // Data HK table file name and path (complies to 27.3 file name standard)
     
-    char inst_mode_id[16]; 
+    unsigned int macro_id;
     char prod_creat_time[32];       // Product Creation time
-    char line[256];                 // HK line in PDS file
-    
+    char line[256];                 // HK line in PDS file    
     
     char tstr1[256];                // Temporary string
     char tstr2[256];                // Temporary string
     char tstr3[256];                // Temporary string
+    
+    property_type *property1;       // Temporary property pointer
     
     double raw_time;                // Raw time
     
@@ -1364,8 +1375,17 @@ void *DecodeHK(void *arg)
         sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
         SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
 
-        AssembleHKLine(buff,line,raw_time,inst_mode_id);        // Assemble first HK line (HK_NUM_LINES per TAB file)
-        SetP(&hkl,"INSTRUMENT_MODE_ID",inst_mode_id,1);         // Set mode ID to macro ID
+        AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble first HK line (HK_NUM_LINES per TAB file)
+        
+        sprintf(tstr1, "MCID0X%04x", macro_id);
+        SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
+        
+        // Find human description of macro in macro mode descriptions
+        sprintf(tstr1, "0x%04x", macro_id);                     // Create search variable to search for in linked list of property name value pairs.
+        if(FindP(&mdesc, &property1, tstr1, 1, DNTCARE)>0)
+        {
+            SetP(&hkl, "INSTRUMENT_MODE_DESC", property1->value, 1);   // Set human description of mode
+        }
 
         //HPrintf("LINE=%s",line);
 
@@ -1453,7 +1473,7 @@ void *DecodeHK(void *arg)
                     Raw2OBT_Str(raw_time, pds.SCResetCounter, hk_info.obt_time_str);    // Compile OBT string and add reset number of S/C clock
                     
                     HPrintf("S/C time PDS Format: %s Raw Time: %014.3f\n", hk_info.utc_time_str, raw_time);
-                    AssembleHKLine(buff, line, raw_time, inst_mode_id);     // Assemble a HK TAB file line
+                    AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble a HK TAB file line
                     HPrintf("%s", line);                                    // Print HK TAB file content to log(!)
                     fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);              // Write line to HK TAB file.
                     fflush(pds.htable_fd);
@@ -1509,6 +1529,8 @@ void *DecodeScience(void *arg)
     unsigned int lb=0;              // and low byte.
     unsigned int samples  = 0;      // Number of samples in science data (Not same as length!)
     int macro_descr_NOT_found=0;    // Indicates that we have NOT found a matching macro description for the macro ID. 0==Found, 1==Not found (!).
+    
+    unsigned int macro_id = 0;      // Macro ID tag.
     
     // Measurement sequence.
     // Specifies one of the LAP_SET_SUBHEADER/LAP_TRANSFER_DATA_TO_OUT_FROM in macro description (.mds file).
@@ -1648,7 +1670,7 @@ void *DecodeScience(void *arg)
     InitP(&comm);  // Initialize linked property/value list for PDS common parameters 
     InitP(&dict);  // Initialize linked property/value list for PDS LAP dictionary
     InitP(&anom);  // Initialize linked property/value list for anomalies
-    InitP(&mdesc); // Initialize linked property/value list for macro descriptions
+    
     
     // Load anomalies from anomaly file
     if(LoadAnomalies(&anom,pds.apath)<0)
@@ -1694,14 +1716,8 @@ void *DecodeScience(void *arg)
         printf( "Warning: Can not load data exclude times.\n");
     }
     
-    // Load Macro descriptions
-    if(LoadModeDesc(&mdesc,pds.mpath)<0)
-    {
-        YPrintf("Warning: No macro descriptions INST_MODE_DESC cant be set.\n");
-        printf("Warning: No macro descriptions INST_MODE_DESC cant be set.\n");
-    }
     
-    //DumpPrp(&mdesc);
+    
     //####################
     // STATE MACHINE LOOP
     //####################
@@ -2076,7 +2092,7 @@ void *DecodeScience(void *arg)
                                 sprintf(tstr1, "0x%04x", macro_id);   // Create search variable to search for in linked list of property name value pairs.
                                 if (FindP(&mdesc, &property1, tstr1, 1, DNTCARE)>0)
                                 {
-                                    SetP(&comm,"INSTRUMENT_MODE_DESC",property1->value,1);   // Set human description of mode
+                                    SetP(&comm, "INSTRUMENT_MODE_DESC", property1->value, 1);   // Set human description of mode
                                 }
                                 
                                 sprintf(tstr1,"\"%d\"",pds.DPLNumber);
@@ -8080,7 +8096,7 @@ int Match(char *stra,char *strb)
 
 // Construct a string of HK data that can be written as row/line to a HK TAB file.
 //
-// macro_id_str : Will be set to macro ID string on form "MCID0X%02x%02x".
+// macro_id : Will be set to macro ID number.
 // line : must be a pointer to a buffer of at least 165 characters
 //
 //
@@ -8095,7 +8111,7 @@ int Match(char *stra,char *strb)
 //  
 // NOTE 3: Line is terminated with both carriage return and line feed
 //         as in a DOS system (This is not strictly needed anymore).
-//         
+//
 // Examle of a HK line with positions displayed vertically, time is in format description.
 //
 // Beginning of line:
@@ -8112,7 +8128,7 @@ int Match(char *stra,char *strb)
 // 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345677778888
 // ITY,DENSITY,DENSITY,DENSITY,DENSITY,DENSITY,LAP,DISABLED,RX,DENSITY,FLOAT,RX,DENSITY,FLOAT,255,255,00000,00<CR><LF>
 //
-void AssembleHKLine(unsigned char *b,char *line,double time,char *macro_id_str)
+void AssembleHKLine(unsigned char *b, char *line, double time, unsigned int *macro_id)
 {
     char ldlmode_str[4][8]={"NONE   ","MIXED 0"," NORMAL","MIXED 1"};
     char tstr[80]; // Temporary string
@@ -8279,7 +8295,7 @@ void AssembleHKLine(unsigned char *b,char *line,double time,char *macro_id_str)
     sprintf(tstr,"%03d,",b[7]); // Calibration B
     strcat(line,tstr); // Add string to table line
     
-    sprintf(macro_id_str,"MCID0X%02x%02x",b[6],b[7]);
+    *macro_id = (b[6]<<8) | b[7];   // Put together high and low bytes.
     
     if(temp) {
         t  = ((b[8]<<8 | b[9]) ^ 0x8000);   // If temp is off this is just a sample from ADC20 probe 2.
