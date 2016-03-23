@@ -3116,7 +3116,7 @@ void *DecodeScience(void *arg)
                                                                     &tstr1[2], &tstr1[5], &tstr1[8],
                                                                     alphanum_s, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
                                                                     
-                                                            CPrintf("    Tentative basis for filename & product ID: tstr2=\"%s\"\n", tstr2);    // DEBUG
+//                                                             CPrintf("    Tentative basis for filename & product ID: tstr2=\"%s\"\n", tstr2);    // DEBUG
 
                                                             if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
                                                             if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
@@ -3694,7 +3694,7 @@ void ExitPDS(int status)
     // Last HK Label file is not closed properly
     if(pds.hlabel_fd!=NULL)
     {
-        HPrintf("Finish last HK LBL file after HK thread has been canceled.");
+        HPrintf("Finish last HK LBL file after HK thread has been canceled.\n");
         
         SetP(&hkl, "SPACECRAFT_CLOCK_STOP_COUNT", hk_info.obt_time_str,1);  // Set OBT stop time
         SetP(&hkl, "STOP_TIME",                   hk_info.utc_time_str,1);  // Update STOP_TIME in common PDS parameters
@@ -5163,7 +5163,6 @@ int  GetMCFiles(char *rpath, char *fpath, m_type *m)
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
-                //closedir(dir);
                 return -6;
             }
             n++;
@@ -5182,7 +5181,7 @@ int  GetMCFiles(char *rpath, char *fpath, m_type *m)
     free(namelist); //free pointer to array of pointers
     //closedir(dir);
     return 0;
-}
+}   // GetMCFiles
 
 
 
@@ -9578,8 +9577,9 @@ int main_DISABLED(int argc, char* argv[]) {
     printf("###################################################################################\n");
     ProtectPlnkInit();
 
+    RunShellCommand("echo \"SADQWRDSDF\"");
     
-    
+    /*
     prp_type p;
     int errorCode;
     printf("Read file\n");
@@ -9591,6 +9591,7 @@ int main_DISABLED(int argc, char* argv[]) {
     //  int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
     errorCode = WriteUpdatedLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL_modif");
     printf("errorCode = %i\n", errorCode);
+    //*/
     return -1;
 }
 
