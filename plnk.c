@@ -8,7 +8,7 @@
 
 void ProtectPlnkInit();                                         // Setup protection mutex
 
-int InitP(prp_type *);						// Init pds linked list of property nodes
+int InitP(prp_type *);						// Init pds linked list of property nodes.
 int Append(prp_type *,char *,char *);				// Append at end of list
 int DeleteNo(prp_type *,int);					// Delete by number in list
 int DeleteP(prp_type *,char *,int);				// Delete by name and occurrence
@@ -84,13 +84,12 @@ void ProtectPlnkInit()
 }
 
 
-
+// NOTE: Does not allocate any dynamic memory.
 int InitP(prp_type *p)
-{ 
+{
+    pthread_mutex_lock(&protect_plnk);
     
-    pthread_mutex_lock(&protect_plnk);	
-    
-    if(p==NULL) 
+    if(p==NULL)
     {
         pthread_mutex_unlock(&protect_plnk);
         return -1; // Err null pointer
@@ -98,7 +97,7 @@ int InitP(prp_type *p)
     
     p->properties=NULL;
     p->head=NULL;
-    p->no_prop=0; 
+    p->no_prop=0;
     
     pthread_mutex_unlock(&protect_plnk);
     
@@ -574,7 +573,7 @@ int FDumpPrp(prp_type *p,FILE *fd)
     return -1; // Error empty
 }
 
-// Clear the property list (clear the linked list and all its allocated memory, incl. name+value) and set it to length zero.
+// Clear the property list (clear the linked list and deallocate all its allocated memory, incl. name+value) and set it to length zero.
 int FreePrp(prp_type *p)
 {
     int i;

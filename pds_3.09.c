@@ -193,9 +193,9 @@ void TestDumpMacs();						// Test dump of macro descriptions
 
 // Label and Table functions
 //----------------------------------------------------------------------------------------------------------------------------------
-int WriteUpdatedLabelFile(prp_type *pds,char *name);		// Write label file
-int ReadLabelFile(prp_type *pds,char *name);			// Read a label file 
-int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);	// Read table file
+int WriteUpdatedLabelFile(prp_type *pds,char *name);            // Write label file
+int ReadLabelFile(prp_type *pds,char *name);                    // Read a label file 
+int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);   // Read table file
 
 char getBiasMode(curr_type *curr, int dop);
 
@@ -696,7 +696,7 @@ int main(int argc, char *argv[])
     }
 
     YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
-    printf("DATA_SET_ID                 : %s\n",mp.data_set_id);
+    printf( "DATA_SET_ID                 : %s\n",mp.data_set_id);
     
     // Create unquoted data set ID
     strcpy(tstr1,mp.data_set_id);		// Make temporary copy
@@ -714,9 +714,12 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Warning: No time correlation packets found.\n"); 
         fprintf(stderr,"All UTC times from this point are estimates.\n");
     }
-    
+
+
+
+    //===========================================
     // Open VOLDESC.CAT and change some keywords
-    //-----------------------------------------------------------------------------------------------------------
+    //===========================================
     sprintf(tstr1,"%sVOLDESC.CAT",pds.apathpds);          // Get full path
     status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
     
@@ -728,18 +731,22 @@ int main(int argc, char *argv[])
     strcpy(tstr3,mp.phase_name); // Make temporary copy
     TrimQN(tstr3);               // Remove quotes in temporary copy
     
-    // Set the VOLUME_NAME
+    // Construct and set VOLUME_NAME.
     if(calib) {
         sprintf(tstr2,"\"RPCLAP CALIBRATED DATA FOR %s\"",tstr3);
     } else {
         sprintf(tstr2,"\"RPCLAP EDITED RAW DATA FOR %s\"",tstr3);
-    }
-    
+    }    
     SetP(&cat,"VOLUME_NAME",tstr2,1); // Set VOLUME_NAME
     
-    WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
-    FreePrp(&cat);                                        // Free property value list
-    
+    WriteUpdatedLabelFile(&cat,tstr1);                      // Write back label file with new info
+    FreePrp(&cat);                                          // Free property value list
+
+
+
+    //===================
+    // Get option -stctt
+    //===================
     sc_thread_cancel_threshold_timeout = SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT;
     if (GetOption("-stctt", argc, argv, tstr1)) {
         // This flag is good to have while testing on small data sets.
@@ -766,9 +773,9 @@ int main(int argc, char *argv[])
     }
 
 
-
+    //===========================================
     // Open DATASET.CAT and change some keywords
-    //-----------------------------------------------------------------------------------------------------------
+    //===========================================
     sprintf(tstr1,"%sCATALOG/DATASET.CAT",pds.apathpds);  // Get full path
     status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
     
@@ -784,8 +791,10 @@ int main(int argc, char *argv[])
     
     SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
     
-    WriteUpdatedLabelFile(&cat,tstr1);                           // Write back label file with new info
+    WriteUpdatedLabelFile(&cat,tstr1);                    // Write back label file with new info
     FreePrp(&cat);                                        // Free property value list
+    
+    
     
     // Write initial message to system log
     YPrintf("LAP PDS SYSTEM STARTED     \n");
@@ -808,62 +817,53 @@ int main(int argc, char *argv[])
     // pds->cpathi   Path to current bias calibration data
     // pds->cpathm   Path to offset calibration data
     
-    InitP(&cc_lbl);                                      // Initialize property value pair list
-    status=ReadLabelFile(&cc_lbl,pds.cpathc);            // Read coarse bias voltage calibration label into property value pair list
+    //==================================================================================================================================
+    InitP(&cc_lbl);                                             // Initialize property value pair list
+    status=ReadLabelFile(&cc_lbl, pds.cpathc);                  // Read coarse bias voltage calibration label into property value pair list
     if(status>=0) {
-        status+=ReadTableFile(&cc_lbl,&v_conv,pds.cpathd); // Read coarse bias voltage calibration data into v_conv structure
-    }
-    
-    WriteUpdatedLabelFile(&cc_lbl,pds.cpathc);                  // Write back label file with new info
-    
-    InitP(&fc_lbl);                                      // Initialize property value pair list
-    
-    // Read fine bias voltage calibration label into property value pair list
-    status=+ReadLabelFile(&fc_lbl,pds.cpathf);           
-    
-    // Read fine bias voltage calibration data into f_conv structure
+        status+=ReadTableFile(&cc_lbl, &v_conv, pds.cpathd);    // Read coarse bias voltage calibration data into v_conv structure
+    }    
+    WriteUpdatedLabelFile(&cc_lbl, pds.cpathc);                 // Write back label file with new info    
+    //==================================================================================================================================
+    InitP(&fc_lbl);                                             // Initialize property value pair list
+    status=+ReadLabelFile(&fc_lbl, pds.cpathf);                 // Read fine bias voltage calibration label into property value pair list
     if(status>=0) {
-        status+=ReadTableFile(&fc_lbl,&f_conv,pds.cpathd); 
-    }
-    
-    WriteUpdatedLabelFile(&fc_lbl,pds.cpathf);                  // Write back label file with new info
-    
-    InitP(&ic_lbl);                                      // Initialize property value pair list
-    
-    // Read current bias voltage calibration label into property value pair list
-    status=+ReadLabelFile(&ic_lbl,pds.cpathi);           
-    
-    // Read current bias calibration data into i_conv structure
+        status+=ReadTableFile(&fc_lbl, &f_conv, pds.cpathd);    // Read fine bias voltage calibration data into f_conv structure
+    }    
+    WriteUpdatedLabelFile(&fc_lbl, pds.cpathf);                 // Write back label file with new info
+    //==================================================================================================================================
+    InitP(&ic_lbl);                                             // Initialize property value pair list
+    status=+ReadLabelFile(&ic_lbl, pds.cpathi);                 // Read current bias voltage calibration label into property value pair list        
     if(status>=0) {
-        status+=ReadTableFile(&ic_lbl,&i_conv,pds.cpathd);  
-    }
+        status+=ReadTableFile(&ic_lbl, &i_conv, pds.cpathd);    // Read current bias calibration data into i_conv structure
+    }    
+    WriteUpdatedLabelFile(&ic_lbl, pds.cpathi);                 // Write back label file with new info
+    //==================================================================================================================================
+    InitP(&tmp_lbl);                                            // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl, pds.cpathdfp1);             // Read density frequency response calibration file probe 1
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp1);             // Write back label file with new info
+    //==================================================================================================================================
+    FreePrp(&tmp_lbl);                                          // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl, pds.cpathdfp2);             // Read density frequency response calibration file probe 2
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp2);             // Write back label file with new info
+    //==================================================================================================================================
+    FreePrp(&tmp_lbl);                                          // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl, pds.cpathefp1);             // Read e-field frequency response calibration file probe 1
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp1);             // Write back label file with new info
+    //==================================================================================================================================
+    FreePrp(&tmp_lbl);                                          // Initialize property value pair list
+    status=+ReadLabelFile(&tmp_lbl, pds.cpathefp2);             // Read e-field frequency response calibration file probe 2
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp2);             // Write back label file with new info
+    //==================================================================================================================================
     
-    WriteUpdatedLabelFile(&ic_lbl,pds.cpathi);                  // Write back label file with new info
-    
-    InitP(&tmp_lbl);                                     // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl,pds.cpathdfp1);       // Read density frequency response calibration file probe 1
-    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathdfp1);              // Write back label file with new info
-    
-    FreePrp(&tmp_lbl);                                   // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl,pds.cpathdfp2);       // Read density frequency response calibration file probe 2
-    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathdfp2);              // Write back label file with new info
-    
-    FreePrp(&tmp_lbl);                                   // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl,pds.cpathefp1);       // Read e-field frequency response calibration file probe 1
-    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathefp1);              // Write back label file with new info
-    
-    FreePrp(&tmp_lbl);                                   // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl,pds.cpathefp2);       // Read e-field frequency response calibration file probe 2
-    WriteUpdatedLabelFile(&tmp_lbl,pds.cpathefp2);              // Write back label file with new info
-    
-    status=+GetMCFiles(pds.cpathd,pds.cpathm,&m_conv);   // Get measurement calibration files
-    
+    status=+GetMCFiles(pds.cpathd, pds.cpathm, &m_conv);        // Get measurement calibration files
+
     if(status<0)
     {
         YPrintf("Can not get or interpret the calibration files. Exiting.\n");
         ExitPDS(1);
     }
-    
+
     //Open INDEX table
     sprintf(tstr1,"%sINDEX.TAB",pds.ipath); 
     if((pds.itable_fd=fopen(tstr1,"a+"))==NULL) // Open index table for appending and reading
@@ -1006,7 +1006,7 @@ int main(int argc, char *argv[])
     TraverseDDSArchive(&pds);
     
     return 0;
-}
+}   // main
 
 
 
@@ -1856,7 +1856,7 @@ void *DecodeScience(void *arg)
                         // in the anomaly file..this we can easily do!
                         
                         // Macro information has high priority and a macro description has been found!
-                        // Thus we want to overide ID code in data!
+                        // Thus we want to override ID code in data!
                         if(macro_priority && !macro_descr_NOT_found) 
                         {
                             if((val=FindIDCode(&macros[mb][ma],meas_seq+1))<0)
@@ -3196,7 +3196,7 @@ void *DecodeScience(void *arg)
                                                 else
                                                 {
                                                     //================================================================
-                                                    // CASE: No macro description fits and no anomaly overide exists.
+                                                    // CASE: No macro description fits and no anomaly override exists
                                                     //================================================================
                                                     // Derive all that we can without anomaly override and send it to log file.
                                                     // Problematic data are stored in the UnAccepted_Data directory.
@@ -3256,7 +3256,7 @@ void *DecodeScience(void *arg)
                                                         }
                                                     }
                                                 }   // if(!macro_descr_NOT_found) ... else ...
-                                                
+
                                                 // Downsampling values should be resolved at this point so let's put them in!
                                                 // This part is always executed if we have a macro description or not.
                                                 if(param_type==NO_PARAMS || param_type==SWEEP_PARAMS)
@@ -3270,7 +3270,7 @@ void *DecodeScience(void *arg)
                                                 }
                                                 state=S15_WRITE_PDS_FILES; // Change state
                                                 break;
-                                                
+
                                                 case S15_WRITE_PDS_FILES:
                                                     DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
                                                     
@@ -3674,7 +3674,7 @@ void ExitPDS(int status)
             pthread_join(scithread,NULL); // Wait for Science thread to exit       
             
         }
-        YPrintf("Science thread has been cancelled.\n");   // Disable log message?
+        YPrintf("Science thread has been cancelled.\n");
     }
     
     if(hkthread>0)   
@@ -4264,8 +4264,7 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
         {
             tstr[len]='\0';     // Ensure null terminated string!
             printf("%s",tstr);  // Dump stdout from commands
-            YPrintf("%s",tstr); // Dump stdout from commands
-            
+            YPrintf("%s",tstr); // Dump stdout from commands            
         }
         nanosleep(&dose,NULL);  // Prevent hogging
     }
@@ -4274,7 +4273,8 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     printf("\n");
     YPrintf("\n");
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
+    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);
+    TrimWN(l_str);
     strncpy(p->apathdds,l_str,PATH_MAX);
     
     sprintf(p->tpath,"%s%s",p->apathdds,"/archivex/aux/TCORR"); // Setup path to time correlation packets
@@ -4297,12 +4297,11 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     strncat(line,"DATA",PATH_MAX);
     if(SetupPath("DATA                        ",line)<0)  return -9;  // Test if DATA directory exists
     
-    
+    // Trying to remove preexisting DATA/EDITED, DATA/CALIBRATED? Unnecessary?
     sprintf(p->dpathse,"%sEDITED/",line); 
-    sprintf(p->dpathsc,"%sCALIBRATED/",line); 
-    
-    rmdir(p->dpathsc);  // Try to remove calibrated
-    rmdir(p->dpathse);  // Try to remove edited
+    sprintf(p->dpathsc,"%sCALIBRATED/",line);
+    rmdir(p->dpathsc);
+    rmdir(p->dpathse);
     
     if(calib)
     {
@@ -4316,7 +4315,7 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     }
     
     if(calib)
-        strcpy(p->dpathse,p->dpathsc); // Overide edited!...
+        strcpy(p->dpathse,p->dpathsc); // Override edited!...
         
         strncpy(p->dpathh,p->dpathse,PATH_MAX);  // Same data path for HK
         
@@ -5096,13 +5095,11 @@ int  GetMCFiles(char *rpath, char *fpath, m_type *m)
         return -2;
     }
     
-    // Allocate memory for factor and offset structure arrays..
+    // Allocate memory for factor and offset structure arrays.
     m->n=n;
     if((m->CF=(cf_type *)CallocArray(m->n,sizeof(cf_type)))==NULL)
     {
-        YPrintf("Error allocating memory for array of factor structures\n");
-        
-        //closedir(dir);
+        YPrintf("Error allocating memory for array of factor structures\n");        
         return -3;
     }
     
@@ -5420,13 +5417,15 @@ int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
 {
     // Added by Erik P G Johansson 2015-05-04
     // Sets/updates certain keywords BUT ONLY IF THEY CAN BE FOUND in the original list.
-    // Not all LBL/CAT files should contain all of these keywords.
+    // Not all LBL/CAT files neither do, nor should, contain all of these keywords.
+    // 
+    // NOTE: Uncertain whether PUBLICATION_DATE should really be set to the same value everywhere.
     // 
     // NOTE: Does not set VOLUME_ID, VOLUME_NAME which need extra code to be derived and only apply   to VOLDESC.CAT (?).
     // NOTE: Does not set DATA_SET_RELEASE_DATE which needs extra code to be derived and only applies to DATASET.CAT (?).
     SetP(lb_data, "DATA_SET_ID",        mp.data_set_id,           1);
     SetP(lb_data, "DATA_SET_NAME",      mp.data_set_name,         1);  
-    SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of dataset
+    SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of data set
     SetP(lb_data, "PRODUCER_ID",        "EJ",                     1);  
     SetP(lb_data, "PRODUCER_FULL_NAME", "\"ERIK P G JOHANSSON\"", 1);
     SetP(lb_data, "MISSION_PHASE_NAME", mp.phase_name,            1);  
@@ -5610,13 +5609,13 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
     double tmp2;   // Temporary data value
     
     // Interpreting label file data
-    FindP(lbl_data,&property1,"^TABLE",1,DNTCARE);        // Get file name
+    FindP(lbl_data,&property1,"^TABLE",1,DNTCARE);        // Get file name (TAB file name).
     FindP(lbl_data,&property2,"START_TIME",1,DNTCARE);    // Get start time
     FindP(lbl_data,&property3,"ROWS",1,DNTCARE);          // Number of rows 
     FindP(lbl_data,&property4,"COLUMNS",1,DNTCARE);       // Number of columns
     strncpy(line,property1->value,8192);                   // Copy so we don't modify the real property list
     TrimQN(line);                                          // Trim quotes away..
-    sprintf(name,"%s%s",path,line);                        // Construct path + filname
+    sprintf(name,"%s%s",path,line);                        // Construct path + filename
     
     YPrintf("Reading table file: %s\n",name);
     // Open calibration table file
@@ -7754,7 +7753,7 @@ int GetAlphaNum(char *n,char *path,char *pattern)
     rewinddir(de);       // Rewind directory
     dentry=readdir(de);  // Get first entry
     
-    // Do a linear search through all filnames....
+    // Do a linear search through all filenames....
     // To find the last one with highest alphanumeric value
     
     while(dentry!=NULL && pattern!=NULL) 
@@ -7864,7 +7863,7 @@ int  FileStatus(FILE *fs,struct stat *sp)
 // Accepts a string and checks if it is a real path, and returns a "resolved" path (no symbolic links, no /../ etc).
 // Makes sure there is "/" at the end.
 // NOTE: Should only be used for DIRECTORY PATHS.
-// NOTE: "info_txt" is only used for log messages.
+// NOTE: "info_txt" is only used for log messages. NOT printed to logs, but stdout/stderr.
 int  SetupPath(char *info_txt,char *path)
 {
     char tp[PATH_MAX];
@@ -8030,7 +8029,7 @@ int GetUnacceptedFName(char *name)
     rewinddir(una_dir);       // Rewind
     dentry=readdir(una_dir);  // Get first entry
     
-    while(dentry!=NULL) // Do a linear search through all filnames....to find the last one
+    while(dentry!=NULL) // Do a linear search through all filenames....to find the last one
     {  
         if(!fnmatch("UNA_*_*.lap",dentry->d_name,0)) // Match filename to pattern
         {
@@ -9570,6 +9569,7 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
 // Alternative main function that can be temporarily used instead of the real one for testing purposes.
 // The real main function can conveniently be renamed (not commented out, not deleted) when using this function.
 // This is useful for having test code that has access to other pds-internal functions.
+// int main(int argc, char* argv[]) {
 int main_DISABLED(int argc, char* argv[]) {
     printf("###################################################################################\n");
     printf("The normal main() function has been DISABLED in this executable. This is test code.\n");

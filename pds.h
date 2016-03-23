@@ -75,7 +75,6 @@
 
 
 #define HK_NUM_LINES       16         // Maximum number of lines (HK packets) per HK TAB file.
-//#define HK_NUM_LINES_STR  "16"
 #define HK_LINE_SIZE      208
 #define HK_LINE_SIZE_STR "208"
 #define HK_LENGTH 14
@@ -260,7 +259,7 @@ typedef struct curr_type_def
 // Note that in structure below we often use path to refer to both path and filename.
 typedef struct pds_type_def
 {
-  int  SCResetCounter;         // Number of times the space raft clock has been reset
+  int  SCResetCounter;         // Number of times the spacecraft clock has been reset
   char SCResetClock[20];       // Date and time of last spacecraft clock reset ex. 2003-01-01T00:00:00
   char templp[PATH_MAX];       // Path to PDS archive template
   char macrop[PATH_MAX];       // Path to lap macro descriptions
@@ -268,47 +267,47 @@ typedef struct pds_type_def
   float DataSetVersion;        // Data Set Version, first version is 1.0
   char LabelRevNote[PATH_MAX]; // Label revision note, unlimited length in PDS, but we limit it to same as PATH_MAX characters!
   char ReleaseDate[11];        // Release date
-  char cpath[PATH_MAX];        // Path to configuration file	    
-  char apath[PATH_MAX];        // Path to anomaly file		    
-  char bpath[PATH_MAX];        // Path to bias settings file	    
+  char cpath[PATH_MAX];        // Path to configuration file
+  char apath[PATH_MAX];        // Path to anomaly file
+  char bpath[PATH_MAX];        // Path to bias settings file
   char epath[PATH_MAX];        // Path to (CALIB macro) exclude file
   char depath[PATH_MAX];       // Path to data exclude file   // Erik P G Johansson 2015-03-25: Added
-  char mpath[PATH_MAX];        // Path to macro description file	    
+  char mpath[PATH_MAX];        // Path to macro description file
   char mcpath[PATH_MAX];       // Mission calendar path and file name
   char apathpds[PATH_MAX];     // Archive path PDS (Out data)
   char apathdds[PATH_MAX];     // Archive path DDS (In data)
   char tpath[PATH_MAX];        // Path to time correlation packets
   char lpath[PATH_MAX];        // Log path
-  char dpathse[PATH_MAX];      // Data path PDS science edited		
-  char dpathsc[PATH_MAX];      // Data path PDS science calibrated		
-  char cpathd[PATH_MAX];       // Root path to calibration data.		
-  char cpathf[PATH_MAX];       // Path to fine bias calibration data	
-  char cpathc[PATH_MAX];       // Path to coarse bias calibration data	
-  char cpathi[PATH_MAX];       // Path to current bias calibration data	
-  char cpathm[PATH_MAX];       // Path to offset calibration data		
+  char dpathse[PATH_MAX];      // Data path PDS science edited
+  char dpathsc[PATH_MAX];      // Data path PDS science calibrated
+  char cpathd[PATH_MAX];       // Root path to calibration data
+  char cpathf[PATH_MAX];       // Path to fine bias calibration data
+  char cpathc[PATH_MAX];       // Path to coarse bias calibration data
+  char cpathi[PATH_MAX];       // Path to current bias calibration data
+  char cpathm[PATH_MAX];       // Path to offset calibration data
   char cpathdfp1[PATH_MAX];    // Path to density frequency response probe 1
   char cpathdfp2[PATH_MAX];    // Path to density frequency response probe 2
   char cpathefp1[PATH_MAX];    // Path to e-field frequency response probe 1
   char cpathefp2[PATH_MAX];    // Path to e-field frequency response probe 2
-  char spaths[PATH_MAX];       // Data subdirectory path for PDS science   
-  char dpathh[PATH_MAX];       // Data path PDS HK			       
-  char spathh[PATH_MAX];       // Data subdirectory path for PDS HK	       
-  char uapath[PATH_MAX];       // Path to data that has not been accepted	       
-  char ipath[PATH_MAX];        // Index table file path.		       
-  FILE *ylog_fd;               // Log file descriptor LAP PDS System log   
-  FILE *plog_fd;               // S/C packet filtering log		       
-  FILE *clog_fd;               // Log file descriptor Science Decoding log 
-  FILE *hlog_fd;               // Log file descriptor HK Decoding log      
+  char spaths[PATH_MAX];       // Data subdirectory path for PDS science
+  char dpathh[PATH_MAX];       // Data path PDS HK
+  char spathh[PATH_MAX];       // Data subdirectory path for PDS HK
+  char uapath[PATH_MAX];       // Path to data that has not been accepted
+  char ipath[PATH_MAX];        // Index table file path.
+  FILE *ylog_fd;               // Log file descriptor LAP PDS System log
+  FILE *plog_fd;               // S/C packet filtering log
+  FILE *clog_fd;               // Log file descriptor Science Decoding log
+  FILE *hlog_fd;               // Log file descriptor HK Decoding log
   FILE *dlog_fd;               // Log file descriptor dds packet filter log
-  FILE *uaccpt_fd;             // File descriptor to recoverfile		 
-  FILE *slabel_fd;             // Science archive PDS data file descriptor	 
-  FILE *stable_fd;             // Science data table file descriptor	 
-  FILE *hlabel_fd;             // HK archive PDS data file descriptor	 
-  FILE *htable_fd;             // HK data table file descriptor		 
-  FILE *ilabel_fd;             // Index label file descriptor		 
-  FILE *itable_fd;             // Index table file descriptor		 
-  FILE *ddsr_fd;               // DDS Read file descriptor			 
-  FILE *ddsp_fd;               // DDS progress file descriptor		 
+  FILE *uaccpt_fd;             // File descriptor to recoverfile
+  FILE *slabel_fd;             // Science archive PDS data file descriptor
+  FILE *stable_fd;             // Science data table file descriptor
+  FILE *hlabel_fd;             // HK archive PDS data file descriptor
+  FILE *htable_fd;             // HK data table file descriptor
+  FILE *ilabel_fd;             // Index label file descriptor
+  FILE *itable_fd;             // Index table file descriptor
+  FILE *ddsr_fd;               // DDS Read file descriptor
+  FILE *ddsp_fd;               // DDS progress file descriptor
 } pds_type;
 
 //Argument structure type for threads.

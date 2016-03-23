@@ -99,7 +99,7 @@ RPCLAP030101_CALIB_FRQ_E_P2.LBL              % Filename of e-field frequency res
     The method of correction is to set higher priority on macro information.
     So in case of mismatch the macro information is used. Currently the default
     is to trust the data information more than the macro description. One can choose
-    to overide with the macro id in the data stream or provide a macro id manualy in the file.
+    to override with the macro id in the data stream or provide a macro id manualy in the file.
     In special cases one can also construct a special macro description 
     just to correct a specific problem.
     See $LAP_PDS_HOME/pds_config for a template file.
