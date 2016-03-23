@@ -373,7 +373,6 @@ prp_type macros[MAX_MACRO_BLCKS][MAX_MACROS_INBL];
 
 mp_type mp;     // Mission phase data
 
-unsigned int volume_id;
 
 
 // Initialize PDS configuration info, paths and file descriptors
@@ -476,6 +475,9 @@ int main(int argc, char *argv[])
     mp.start=0;           // Mission start time, small dummy
     mp.stop=INT32_MAX;    // Mission stop time, big dummy ~68 years
     
+    unsigned int volume_id_nbr;   // The four-digit number in VOLUME_ID, ROLAP_xxxx
+    
+
     
     if(GetOption("-h",argc,argv,NULL))
     {
@@ -573,12 +575,12 @@ int main(int argc, char *argv[])
     //=============================================
     if(GetOption("-vid",argc,argv,tstr1))
     {
-        sscanf(tstr1,"%d\n",&volume_id);
-        printf("Volume ID: %d\n",volume_id);
+        sscanf(tstr1,"%d\n",&volume_id_nbr);
+        printf("Volume ID: %d\n",volume_id_nbr);
         
-        if(volume_id==0 || volume_id>999)
+        if(volume_id_nbr==0 || volume_id_nbr>9999)
         {
-            fprintf(stderr,"check -vid volume_id input\n");
+            fprintf(stderr,"check -vid volume_id_nbr input\n");
             exit(1);
         }
     }
@@ -723,7 +725,7 @@ int main(int argc, char *argv[])
     sprintf(tstr1,"%sVOLDESC.CAT",pds.apathpds);          // Get full path
     status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
     
-    sprintf(tstr2,"ROLAP_1%03d",volume_id);
+    sprintf(tstr2,"ROLAP_%04d", volume_id_nbr);
     SetP(&cat,"VOLUME_ID",tstr2,1);                       // Set VOLUME_ID
     
     
@@ -1016,7 +1018,7 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
     fprintf(stream, "            [-calib]\n");
     fprintf(stream, "            -mp <Mission phase abbreviation>\n");
-    fprintf(stream, "            -vid <Volume ID>\n");
+    fprintf(stream, "            -vid <Volume ID number>         The four-digit number xxxx in VOLUME_ID = ROLAP_xxxx (VOLDESC.CAT).\n");
     fprintf(stream, "            -dsv <Data set version>\n");
     fprintf(stream, "\n");
     fprintf(stream, "            [-stctt <seconds>]              Science thread cancel threeshold timeout (STCTT), i.e. the time the program\n");
