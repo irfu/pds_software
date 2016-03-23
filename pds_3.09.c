@@ -362,7 +362,6 @@ prp_type mdesc;           // Linked property/value list for Macro Descriptions
 prp_type cc_lbl;          // Linked property/value list for Coarse Bias Voltage Calibration Data Label
 prp_type ic_lbl;          // Linked property/value list for Bias Current Calibration Data Label
 prp_type fc_lbl;          // Linked property/value list for Fine Bias Voltage Calibration Data Label
-prp_type tmp_lbl;         // Linked property/value list for Temporary use
 prp_type cat;             // Linked property/value list for Catalog Files 
 
 
@@ -467,6 +466,8 @@ int main(int argc, char *argv[])
     char tstr1[1024];     // Temporary string
     char tstr2[1024];     // Temporary string
     char tstr3[1024];     // Temporary string
+    
+    prp_type tmp_lbl;     // Linked property/value list for temporary use
     
     arg_type scarg;       // Argument structure S/C TM thread
     arg_type sarg;        // Argument structure Science thread
@@ -857,6 +858,7 @@ int main(int argc, char *argv[])
     status=+ReadLabelFile(&tmp_lbl, pds.cpathefp2);             // Read e-field frequency response calibration file probe 2
     WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp2);             // Write back label file with new info
     //==================================================================================================================================
+    FreePrp(&tmp_lbl);                                          // Deallocate dynamic memory.
     
     status=+GetMCFiles(pds.cpathd, pds.cpathm, &m_conv);        // Get measurement calibration files
 
@@ -5037,59 +5039,176 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
 
 
 
-// Get measured data calibration files 
-// Return data in data structure "m".
-int  GetMCFiles(char *rpath, char *fpath, m_type *m)
+// Run shell command.
+// NOTE: There is some code that could be replaced by a call to this function (search for "popen").
+// NOTE: Current implementation does not return any error code.
+void RunShellCommand(char *command_str)
 {
-    // FKJN 4/9 2014
-    // completely rewritten to accommodate for scandir (and alphanumerical sorting)
-    prp_type mc_lbl; // Linked property/value list for measured data offset and conversion to volts/ampere.
+    struct timespec dose={0, DOSE_TIME};
+    FILE *pipe_fp;
+    char tstr[PATH_MAX];    // NOTE: Buffer length should probably be the same in the fread/fgets command.
+//     int len;
+    
+    /* Documentation "If mode is r, when the child process is started, its file descriptor STDOUT_FILENO shall be the writable end of the pipe,
+     * and the file descriptor fileno(stream) in the calling process, where stream is the stream pointer returned by popen(), shall be
+     * the readable end of the pipe.
+     */
+    pipe_fp = popen(command_str, "r");   // Runs shell command(s)
+    while (!feof(pipe_fp))               // Read out stdout from executing shell commands
+    {
+        
+        // Inherited implementation copied from other calls to popen.
+        // Only prints one character of output for unknown reason.
+        // /Erik P G Johansson 2016-03-23
+//         if ((len=fread(tstr, 1, PATH_MAX, pipe_fp)>0))
+//         {   
+//             printf("len = %i\n", len);
+//             tstr[len]='\0';             // Ensure null terminated string!
+//             printf("%s",tstr);          // Dump stdout from commands
+//             YPrintf("%s",tstr);         // Dump stdout from commands
+//         }
+        if (fgets(tstr, PATH_MAX, pipe_fp)) {
+//             printf("%s\n",tstr);            // Dump stdout from commands
+            YPrintf("%s",tstr);             // Dump stdout from commands
+        }
+        
+        nanosleep(&dose,NULL);          // Prevent hogging
+    }
+    pclose(pipe_fp);                    // Close pipeline
+}
+
+
+
+// Gets measured data calibration files 
+// Returns data in data structure "m".
+// 
+// MC = Measurement calibration(?)
+// 
+// NOTE: Removes calibration files copied from the template directory before they are even loaded/read.
+// This means it makes some assumptions on which files are actually used in the actual calibration.
+int GetMCFiles(char *rpath, char *fpath, m_type *m)
+{
+    // FKJN 2014-09-04
+    // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
+    prp_type mc_lbl;            // Linked property/value list for measured data offset and conversion to volts/ampere.
     property_type *property;
     
-    char name[PATH_MAX];
+    char file_path[PATH_MAX];
     char *base;                 // Basename
+    char tstr1[1024];
+    char tstr2[1024];
     
-    // DIR           *dir;         // Directory
-    struct dirent **namelist;   // 
-    struct dirent *dentry;      // Directory entry
+    struct dirent **dir_entry_list;     // (Pointer to array of pointers.)
+    struct dirent *dentry;              // Directory entry
     int n=0;
     int i=0;
-    int len;
+    int N_dir_entries;
     
-    base=basename(fpath); // Get basic name for measured data calib files
+    // Whether the algorithm has already kept one calibration file (pair) before the beginning of the time period covered by the data set.
+    int kept_one_before_begin = 0;
     
-    //if((dir = opendir(rpath))==NULL) // Open Calibration directory
-    //FKJN sort it alphanumerically first. 2/9 2014
-    len=scandir(rpath, &namelist, 0, alphasort);
     
-    if (len <0)
+    
+    base=basename(fpath);   // Get basic name for measured data calib files
+    
+    //======================================
+    // Remove unnecessary calibration files
+    // ------------------------------------
+    // IMPLEMENTATION NOTE: This should maybe ideally be incorporated into the other loops over files.
+    // NOTE: Assumes that list of calibration files is sorted in time.
+    // NOTE: Iterates over files in reverse order (backwards in time) to make the algorithm work.
+    //=================================================================================================
+//     YPrintf("Trying to remove unnecessarily copied calibration files\n");     // DEBUG
+    N_dir_entries=scandir(rpath, &dir_entry_list, 0, alphasort);   // Sorts files alphanumerically.
+    if (N_dir_entries<0)
     {
-        perror("opendir");
-        printf("FKJN message: len = %i  \t rpath = %s",len,rpath);
-        YPrintf("Couldn't open calibration directory\n");
+        printf("N_dir_entries = %i  \t rpath = %s", N_dir_entries, rpath);
+        YPrintf("Couldn't open/scan calibration directory\n");
+        return -1;
+    } else {
+        for (i=N_dir_entries-1; i>=0; i--)
+        {
+            dentry = dir_entry_list[i];
+            if (!Match(base,dentry->d_name)) // Match filename to pattern
+            {
+                sprintf(file_path, "%s%s", rpath, dentry->d_name);      // Construct full path
+                InitP(&mc_lbl);
+                if (ReadLabelFile(&mc_lbl,file_path)<0) // Read offset and TM calibration file
+                {
+                    FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
+                    return -5;
+                }
+
+                // Find START_TIME.
+                // NOTE: There is no STOP_TIME for these files.
+                FindP(&mc_lbl,&property,"START_TIME",1,DNTCARE);
+                int status = 0;
+                time_t mc_t;
+                if((status=TimeOfDatePDS(property->value,&mc_t)) < 0) {
+                    fprintf(stderr, "Can not find or convert START_TIME to a time: error code %i\n", status);
+                    YPrintf(        "Can not find or convert START_TIME to a time: error code %i\n", status);
+                }
+            
+                // Delete file LBL+TAB pair if they are found to be unnecessary.
+                // NOTE: It is important that "kept_one_before_begin" is initialized to false (zero) for this to work with the first file.
+                if ((kept_one_before_begin & (mc_t < mp.start)) | (mp.stop < mc_t)) {
+                    // CASE: Calibration time is NOT within the time period covered by the data set and
+                    // one file pair has already been kept before the time period.
+                    // ==> Delete file.
+                    printf( "Offset and TM conversion file: %s - Removes (the copied file)\n", dentry->d_name);
+                    YPrintf("Offset and TM conversion file: %s - Removes (the copied file)\n", dentry->d_name);
+                    
+                    // Get path to corresponding TAB file by reading LBL file.
+                    FindP(&mc_lbl, &property, "^TABLE", 1, DNTCARE);    // Get file name (TAB file name).
+                    strcpy(tstr1, property->value);
+                    TrimQN(tstr1);                                      // Trim quotes away..
+                    sprintf(tstr2, "%s%s", rpath, tstr1);               // Construct path + filename
+                    
+                    // Delete LBL+TAB file pair.
+                    sprintf(tstr1, "rm   \"%s\"   \"%s\"", file_path, tstr2);
+                    RunShellCommand(tstr1);
+                } else {
+                    // Keep file pair.
+                    kept_one_before_begin = (mc_t < mp.start);
+                }
+                
+                FreePrp(&mc_lbl);  // Free allocated memory.                        
+            }
+        }
+
+        for (i = 0; i < N_dir_entries; i++)   // Need to free array of all “returns”.. some other time.
+        {
+            free(dir_entry_list[i]); //free pointer
+        }
+        free(dir_entry_list);   // Free pointer to array of pointers
+    }
+//     YPrintf("Finished trying to remove unnecessarily copied calibration files\n");     // DEBUG
+
+    
+    
+    // FKJN sort it alphanumerically first. 2/9 2014
+    N_dir_entries=scandir(rpath, &dir_entry_list, 0, alphasort);    
+    if (N_dir_entries <0)
+    {
+        printf("N_dir_entries = %i  \t rpath = %s\n",N_dir_entries,rpath);
+        YPrintf("Couldn't open/scan calibration directory\n");
         return -1;
     }
     
-    dentry=namelist[i];
-    //rewinddir(dir);   // Rewind
-    //dentry=readdir(dir);  // Get first entry
-    
-    // First time we just count matching files!
-    while(dentry!=NULL) // Do a linear search through all filnames....to find the last one
+    // (Only) count matching files.
+    i=0;
+    dentry=dir_entry_list[i];
+    for(i=0; i<N_dir_entries; i++)
     {
+        dentry=dir_entry_list[i];
+        
         if(!Match(base,dentry->d_name)) // Match filename to pattern
         {
             n++;
-            YPrintf("Offset and TM conversion files: %s\n",dentry->d_name);  // Matching file name
+            YPrintf("Offset and TM conversion file: %s - Kept\n", dentry->d_name);  // Matching file name
         }
-        i++;
-        dentry=namelist[i]; // Get next filename 
-        //dentry=readdir(dir); // Get next filename 
+        dentry=dir_entry_list[i]; // Get next fiN_dir_entriesame 
     }
-    len = i-1;  //we now know length of namelist
-    
-    //  rewinddir(dir);   // Rewind
-    // dentry=readdir(dir);  // Get first entry
     
     if(n==0)
     {
@@ -5109,33 +5228,36 @@ int  GetMCFiles(char *rpath, char *fpath, m_type *m)
     {
         YPrintf("Error allocating memory for array of calibration structures\n");
         free(m->CF);
-        
-        //closedir(dir);
         return -4;
     }
     
-    n=0;
-    i=0;
-    dentry=namelist[i];
     
-    while(dentry!=NULL) // Do a linear search through all filnames....to find the last one
+    //============================
+    // Iterate over all filenames
+    //============================
+    n=0;
+    for(i=0; i<N_dir_entries; i++)
     {
+        dentry=dir_entry_list[i];
         if(!Match(base,dentry->d_name)) // Match filename to pattern
         {
-            
-            // Modify/update calibration LBL files.
-            sprintf(name,"%s%s",rpath,dentry->d_name); // Construct full path
+            //================================================
+            // Read and update (rewrite) calibration LBL file
+            //================================================
+            sprintf(file_path,"%s%s",rpath,dentry->d_name); // Construct full path
             InitP(&mc_lbl);
-            if(ReadLabelFile(&mc_lbl,name)<0) // Read offset and TM calibration file
+            if(ReadLabelFile(&mc_lbl,file_path)<0) // Read offset and TM calibration file
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
-                
-                //closedir(dir);
                 return -5;
             }
-            WriteUpdatedLabelFile(&mc_lbl,name);                       // Write back label file with new info
             
+            WriteUpdatedLabelFile(&mc_lbl,file_path);                       // Write back label file with new info
+
+            //==============================
+            // Extract values from LBL file
+            //==============================
             FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_16B",1,DNTCARE);
             sscanf(property->value,"\"%le\"",&m->CF[n].v_cal_16b);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_20B",1,DNTCARE);
@@ -5168,18 +5290,15 @@ int  GetMCFiles(char *rpath, char *fpath, m_type *m)
             n++;
             FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
         }
-        i++;
-        dentry=namelist[i];
-        
-        //dentry=readdir(dir); // Get next filename 
+        dentry=dir_entry_list[i];
     }
     
-    for (i = 0; i < len; i++) //need to free array of all “returns”.. some other time.
+    for (i = 0; i < N_dir_entries; i++)   // Need to free array of all “returns”.. some other time.
     {
-        free(namelist[i]); //free pointer
+        free(dir_entry_list[i]); //free pointer
     }
-    free(namelist); //free pointer to array of pointers
-    //closedir(dir);
+    free(dir_entry_list);   // Free pointer to array of pointers
+    
     return 0;
 }   // GetMCFiles
 
