@@ -1,13 +1,17 @@
 # 
 # Macro exclusion file
 #
+# Macros that are included in EDITED, but not in CALIB.
 # In calibration mode we do not want to 
 # calibrate the calibration data produced by
-# the instrument. Since it makes no sense!
+# the instrument, since that makes no sense.
 # 
-# All calibration macros to be excluded 
+# All calibration macros to be excluded from CALIB
 # should therefore be listed here
-#
+
 0x0104
 0x0105
 
+# Calibration macros run on 2015-06-10.
+0x0106
+0x0107
