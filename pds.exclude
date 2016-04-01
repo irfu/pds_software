@@ -1,0 +1,13 @@
+# 
+# Macro exclusion file
+#
+# In calibration mode we do not want to 
+# calibrate the calibration data produced by
+# the instrument. Since it makes no sense!
+# 
+# All calibration macros to be excluded 
+# should therefore be listed here
+#
+0x0104
+0x0105
+
