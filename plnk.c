@@ -539,6 +539,7 @@ int DumpPrp(prp_type *p)
     return -1; // Error empty
 }
 
+// Write properties to file, as an ODL file.
 int FDumpPrp(prp_type *p,FILE *fd)
 {
     int i;

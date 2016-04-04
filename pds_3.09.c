@@ -215,7 +215,7 @@ int  GetBuffer(buffer_struct_type *cs,unsigned char *buff,int len);			// Get dat
 int  LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len);			// Look ahead in circular buffer
 int  GetHKPacket(buffer_struct_type *,unsigned char *,double *);			// Get one packet of HK data
 void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id);			// Dump the non interesting SC TM packets
-int  SyncAhead(buffer_struct_type *cb,int len);						// Test data syncronisation ahead..
+int  SyncAhead(buffer_struct_type *cb,int len);						// Test data syncronisation ahead.
 
 // Functions handling/working with linked lists of property/value pairs
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ int  TestDir(char *name);								// Test if directory exists
 int  TestFile(char *name);								// Test if file exists and if we can read it.
 int  MakeDir(char *,char *,char *);							// Make a directory for current YYMMDDD, if it's not already there!
 int  StrucDir(char *,char *,char *);							// Test and create directory structure for data
-void DumpDir(char *path);								// Dump a directory..mostly for debugging
+void DumpDir(char *path);								// Dump a directory. Mostly for debugging
 int  GetUnacceptedFName(char *name);							// Get new filename for manual unaccepted file
 void FTSDump(FTSENT *fe);								// Dump FTSENT structure for debbuging
 int  Match(char *,char *);								// Match filename to pattern
@@ -297,7 +297,7 @@ int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime);               
 int Scet2Date_2(double raw,char *stime,int lfrac);					// Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
 
-int TimeOfDatePDS(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970...) for a PDS date string 
+int TimeOfDatePDS(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970) for a PDS date string
 // NOTE: This is not the inverse of Scet2Date!
 
 int GetUTime(char *);									// Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
@@ -462,6 +462,7 @@ static pthread_mutex_t protect_log=PTHREAD_MUTEX_INITIALIZER;
 
 // -=MAIN FUNCTION=-
 //----------------------------------------------------------------------------------------------------------------------------------
+// int main_DISABLED(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
     struct sigaction act;
@@ -824,17 +825,17 @@ int main(int argc, char *argv[])
     
     AddPathsToSystemLog(&pds); // Add paths to system log file
     
+    //==================================================================================================================================
     // Update keywords in the calibration files and get calibration data.
     //---------------------------------------------------------------------------------------------------------------------------------
     // Calibration files are supposed to reside in the CALIB directory, both for EDITED and CALIBRATED archives
     // however for EDITED archives the files are not used.
-    
+    //
     // pds->cpathd   Path to calib data
     // pds->cpathf   Path to fine bias calibration data
     // pds->cpathc   Path to coarse bias calibration data
     // pds->cpathi   Path to current bias calibration data
     // pds->cpathm   Path to offset calibration data
-    
     //==================================================================================================================================
     InitP(&cc_lbl);                                             // Initialize property value pair list
     status=ReadLabelFile(&cc_lbl, pds.cpathc);                  // Read coarse bias voltage calibration label into property value pair list
@@ -960,7 +961,7 @@ int main(int argc, char *argv[])
     
     // For real time version of PDS, (not needed)
     /*
-     * minp=sched_get_priority_min(SCHEDULING); // [max - min]>=32 guaranteed..
+     * minp=sched_get_priority_min(SCHEDULING); // [max - min]>=32 guaranteed.
      * SetPRandSched(pthread_self(),minp+3,SCHEDULING); // Set priority and scheduling of main thread
      */
 
@@ -1534,7 +1535,7 @@ void *DecodeScience(void *arg)
     char alphanum_s[4]="000";       // Default starting alpha numeric value for unique sience data file name and product ID
     
     unsigned int state;             // Current state of state machine
-    unsigned char buff[RIDICULUS];  // Temporary in buffer using a ridiculously large size...thus whole buffer shall never be needed.
+    unsigned char buff[RIDICULUS];  // Temporary in buffer using a ridiculously large size. Thus whole buffer shall never be needed.
     unsigned char tbuff[8];         // Temporary buffer
     unsigned int main_h_sum=0;      // Main header sum
     unsigned int byte_sum=0;        // Byte sum scanning for header
@@ -1562,14 +1563,14 @@ void *DecodeScience(void *arg)
     int dsa16_p1;                   // Down sample p1 adc 16
     int dsa16_p2;                   // Down sample p2 adc 16
     int samp_plateau=0;             // Samples on a plateau
-    int ini_samples=0;              // Number of initial plateau samples in a sweep, not the true number due to a well known bug..
+    int ini_samples=0;              // Number of initial plateau samples in a sweep, not the true number due to a well known bug.
     // that we compensate for in this code.
     
     // Structure with current settings for various parameters
     curr_type curr={0,0,0,0,0,0,0,0,0,0x7f,0x7f,0}; 
     
     int          finger_printing=0; // Are we doing fingerprinting ?
-    sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ....
+    sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
     adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
     
     unsigned int W0;                // Temporary word 0
@@ -1596,7 +1597,7 @@ void *DecodeScience(void *arg)
     unsigned int **bias=NULL;       // Extra bias settings
     unsigned int **mode=NULL;       // Mode changes from command files
     
-    unsigned int *exclude=NULL;     // Exclude macros
+    unsigned int *exclude=NULL;     // List of macros that should be present in EDITED but not CALIB.
     int nbias=0;                    // Number of extra bias settings
     int nmode=0;                    // Number of mode settings
     int nexcl=0;                    // Number of macros to exclude
@@ -1721,7 +1722,7 @@ void *DecodeScience(void *arg)
     
     // Load Exclude file
     if(calib) {
-        if((nexcl=LoadExclude(&exclude,pds.epath))<0) 
+        if((nexcl=LoadExclude(&exclude, pds.epath))<0)
         {
             YPrintf("Warning: Calibration macros will not be excluded\n");
             printf("Warning: Calibration macros will not be excluded\n");
@@ -1872,7 +1873,7 @@ void *DecodeScience(void *arg)
                         // 2.2) Finding it at a later stage by fingerprinting and not posssible to return here
                         //
                         // Thus we can not fix ID code problems in data, if we do not directly provide a macro ID
-                        // in the anomaly file..this we can easily do!
+                        // in the anomaly file. This we can easily do!
                         
                         // Macro information has high priority and a macro description has been found!
                         // Thus we want to override ID code in data!
@@ -1925,9 +1926,9 @@ void *DecodeScience(void *arg)
                                 }
                                 else
                                 {
-                                    curr.sensor=SENS_P1; // Set current sensor to sensor 1/probe 1
-                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                    meas_seq++; // Increase number of measurement sequences
+                                    curr.sensor=SENS_P1;   // Set current sensor to sensor 1/probe 1.
+                                    state=S11_GET_LENGTH;  // Ok! No params in this. Go get length.
+                                    meas_seq++;            // Increase number of measurement sequences
                                     CPrintf("    Found science data, from generic macro, ID CODE:   0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 }
                                 break;
@@ -1946,9 +1947,9 @@ void *DecodeScience(void *arg)
                                 }
                                 else
                                 {  
-                                    curr.sensor=SENS_P2; // Set current sensor to sensor 2/probe 2
-                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                    meas_seq++; // Increase number of measurement sequences
+                                    curr.sensor=SENS_P2;   // Set current sensor to sensor 2/probe 2.
+                                    state=S11_GET_LENGTH;  // Ok! No params in this. Go get length.
+                                    meas_seq++;            // Increase number of measurement sequences
                                     CPrintf("    Found science data, from generic macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 } 
                                 break;
@@ -1967,9 +1968,9 @@ void *DecodeScience(void *arg)
                                 }
                                 else
                                 {	  
-                                    curr.sensor=SENS_P1; // Set current sensor to sensor 1/probe 1
-                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                    meas_seq++; // Increase number of measurement sequences
+                                    curr.sensor=SENS_P1;   // Set current sensor to sensor 1/probe 1.
+                                    state=S11_GET_LENGTH;  // Ok! No params in this. Go get length.
+                                    meas_seq++;            // Increase number of measurement sequences.
                                     CPrintf("    Found science data, from generic LDL macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 }
                                 break;
@@ -1984,9 +1985,9 @@ void *DecodeScience(void *arg)
                                 }
                                 else
                                 {    
-                                    curr.sensor=SENS_P2;  // Set current sensor to sensor 2/probe 2
-                                    state=S11_GET_LENGTH; // Ok! No params in this..go get length
-                                    meas_seq++; // Increase number of measurement sequences
+                                    curr.sensor=SENS_P2;   // Set current sensor to sensor 2/probe 2.
+                                    state=S11_GET_LENGTH;  // Ok! No params in this. Go get length.
+                                    meas_seq++;            // Increase number of measurement sequences
                                     CPrintf("    Found science data, from generic LDL macro, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 }
                                 break;
@@ -2116,7 +2117,7 @@ void *DecodeScience(void *arg)
                                 
                                 sprintf(tstr1,"\"%d\"",pds.DPLNumber);
                                 
-                                SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level ID...
+                                SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level ID.
                                 
                                 // Search for macro with right macro ID in macs matrix
                                 macro_descr_NOT_found=1; // Indicate that we haven't found the macro 
@@ -2298,8 +2299,8 @@ void *DecodeScience(void *arg)
                                             // things like: (buff[0] & 0xf0)>>4
                                             
                                             a20_info.moving_average_length = (1<<GetBitF(buff[0],4,4)); // Length of moving average filter
-                                            a20_info.adc20_control         = GetBitF(buff[0],4,0);      // Indicate full, truncated,..and so on
-                                            a20_info.resampling_factor     = (1<<GetBitF(buff[1],4,0)); // Downsampling factor..(Thus keep every n:th samp)
+                                            a20_info.adc20_control         = GetBitF(buff[0],4,0);      // Indicate full, truncated, and so on
+                                            a20_info.resampling_factor     = (1<<GetBitF(buff[1],4,0)); // Downsampling factor (Thus keep every n:th samp)
                                             
                                             // POPULATE PDS LAP Dictionary with 20 bit ADC info.
                                             InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_DOWNSAMPLE",a20_info.resampling_factor);
@@ -2331,7 +2332,7 @@ void *DecodeScience(void *arg)
                                                             CPrintf("    Warning mismatch between parameters and macro description\n");
                                                             CPrintf("    MACRO: %s=%s\n",property2->name,property2->value);
                                                             CPrintf("    PARAM: %s=%s\n",property1->name,property1->value);
-                                                            // Remove warning keyword..enough with warning in logs
+                                                            // Remove warning keyword. Enough with warning in logs.
                                                             //InsertTopQ(&dict,"ROSETTA:LAP_SC_VS_MACRO_MISMATCH","WARNING");
                                                             break; // Break out of loop
                                                         }
@@ -2683,7 +2684,7 @@ void *DecodeScience(void *arg)
                                                                 dsa16_p2=val;
                                                             }
                                                             
-                                                            if(dsa16_p2!=val && !macro_priority)  { // Print mismatch warning..only if macro desc. has low priority
+                                                            if(dsa16_p2!=val && !macro_priority)  { // Print mismatch warning. Only if macro desc. has low priority
                                                                 CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");
                                                             }
                                                             //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p2);
@@ -2743,10 +2744,10 @@ void *DecodeScience(void *arg)
                                                                         if(!strcmp(property2->value,"\"E-FIELD\"") || macro_priority) {
                                                                             InsertTopK(&dict,property2->name,property2->value); // Yes, let's set it
                                                                         } else {
-                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
+                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more.
                                                                         }
                                                                         
-                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // Need to keep old bias in case of no macro change to accomodate for extra bias
                                                                         // settings outside of macros.
                                                                         if(macro_id!=curr.old_macro) 
                                                                         {
@@ -2783,7 +2784,7 @@ void *DecodeScience(void *arg)
                                                                             InsertTopQ(&dict,property2->name,"DENSITY"); //  No! Trust the ID code more.
                                                                         }
                                                                         
-                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // Need to keep old bias in case of no macro change to accomodate for extra bias
                                                                         // settings outside of macros.
                                                                         if(macro_id!=curr.old_macro)
                                                                         {
@@ -2881,10 +2882,10 @@ void *DecodeScience(void *arg)
                                                                         }
                                                                         else
                                                                         {
-                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more..
+                                                                            InsertTopQ(&dict,property2->name,"E-FIELD"); // No! Trust the ID code more.
                                                                         }
                                                                         
-                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // Need to keep old bias in case of no macro change to accomodate for extra bias
                                                                         // settings outside of macros.
                                                                         if(macro_id!=curr.old_macro) 
                                                                         {
@@ -2926,7 +2927,7 @@ void *DecodeScience(void *arg)
                                                                         }
                                                                         
                                                                         //----------------------------------------------------------------------------------------------------
-                                                                        // Need to keep old bias in case of no macro change..to accomodate for extra bias
+                                                                        // Need to keep old bias in case of no macro change to accomodate for extra bias
                                                                         // settings outside of macros. /Unknown, before 2015-04-07
                                                                         //----------------------------------------------------------------------------------------------------
                                                                         // The macro 515 that was uploaded to Rosetta is malfunctioning and appears to use two different values
@@ -4495,9 +4496,9 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     // Count bias table lines
     while(fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue; // Empty line..
-        if (line[0] == '#') continue; // Remove comments..
-        if(line[0] == ' ')  continue;  // White line
+        if(line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#') continue;  // Remove comments.
+        if(line[0] == ' ')  continue;  // Ignore whitespace line.
         if(strstr(line,"*Mode*")==NULL)
             bias_cnt++;
         else
@@ -4515,11 +4516,11 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     mode_cnt=0;
     while (fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue; // Empty line..
-        if (line[0] == '#') continue; // Remove comments..
-        if(line[0] == ' ')  continue;  // White line
-        Separate(line,l_tok,m_tok,'\t',1); // Separate at first occurrence of a tab character
-        Separate(line,m_tok,r_tok,'\t',2); // Separate at second occurrence of a tab character
+        if(line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#') continue;  // Remove comments.
+        if(line[0] == ' ')  continue;  // Ignore whitespace line.
+        Separate(line,l_tok,m_tok,'\t',1);  // Separate at first occurrence of a tab character
+        Separate(line,m_tok,r_tok,'\t',2);  // Separate at second occurrence of a tab character
         TimeOfDatePDS(l_tok,&t);          // Convert time to seconds
         
         
@@ -4554,7 +4555,17 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     return 0;
 }
 
-int LoadExclude(unsigned int **exclude,char *path) // Load exclude file
+
+
+/* Load list of macros that should only be present in EDITED but not in CALIB.
+ * This feature is intended for calibration macros.
+ * 
+ * path : Path to text file to load.
+ * exclude : List of macro numbers.
+ * 
+ * NOTE: Ignores lines beginning with "#", LF (empty lines), and whitespace
+ */
+int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
 {
     FILE *fd;
     char line[256]; // Line buffer
@@ -4563,7 +4574,7 @@ int LoadExclude(unsigned int **exclude,char *path) // Load exclude file
     
     int excl_cnt=0;
     
-    printf("Loading macro exclude file: %s\n",path);
+    printf( "Loading macro exclude file: %s\n",path);
     YPrintf("Loading macro exclude file: %s\n",path);
     
     if((fd=fopen(path,"r"))==NULL)
@@ -4575,9 +4586,9 @@ int LoadExclude(unsigned int **exclude,char *path) // Load exclude file
     // Count exclude table lines
     while(fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue; // Empty line..
-        if (line[0] == '#') continue; // Remove comments..
-        if(line[0] == ' ')  continue;  // White line
+        if (line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#')  continue;  // Remove comments.
+        if (line[0] == ' ')  continue;  // Ignore whitespace line.
         excl_cnt++;
     }
     
@@ -4588,15 +4599,14 @@ int LoadExclude(unsigned int **exclude,char *path) // Load exclude file
     excl_cnt=0;
     while(fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue; // Empty line..
-        if (line[0] == '#') continue; // Remove comments..
-        if(line[0] == ' ')  continue;  // White line
+        if(line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#') continue;  // Remove comments.
+        if(line[0] == ' ')  continue;  // Ignore whitespace line.
         sscanf(line,"%x",&macro);
         tmp_e[excl_cnt]=macro;
         excl_cnt++;
     }
     fclose(fd);
-    
     
     *exclude=tmp_e;
     return excl_cnt;
@@ -4655,7 +4665,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     {
         if (line[0] == '\n') continue; // Ignore empty line.
         if (line[0] == '#')  continue; // Ignore comments.
-        //if (line[0] == ' ')  continue; // Ignore white line
+        //if (line[0] == ' ')  continue; // Ignore whitespace line
         dataExcludeTimes_temp.N_intervals++;
     }
     
@@ -4668,9 +4678,9 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     YPrintf("LoadDataExcludeTimes: Ingested data exclude time intervals: file contents strings and interpretations (true decimals)\n");  // Print to "pds system log".
     while(fgets(line, 255, fd) != NULL)  // NOTE: "line" will end with a \n.
     {      
-        if (line[0] == '\n') continue; // Ignore empty line..
-        if (line[0] == '#')  continue; // Ignore comments..
-        //if (line[0] == ' ')  continue; // Ignore white line
+        if (line[0] == '\n') continue; // Ignore empty line.
+        if (line[0] == '#')  continue; // Ignore comments.
+        //if (line[0] == ' ')  continue; // Ignore whitespace line
         if (sscanf(line, " %s %s ", l_tok, r_tok) != 2)   // Whitespace represent any sequence of whitespace and tab (incl. empty).
         {
             YPrintf("LoadDataExcludeTimes: ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
@@ -5011,8 +5021,8 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
             n_macs++;
             while (fgets(line,255,mac_fd) != NULL)
             {
-                if(line[0] == '\n') continue; //Empty line..
-                if (line[0] == '#') continue; //Remove comments..
+                if(line[0] == '\n') continue; //Empty line.
+                if (line[0] == '#') continue; //Remove comments.
                 
                 switch(state)
                 {
@@ -5097,7 +5107,7 @@ void RunShellCommand(char *command_str)
 // Gets measured data calibration files 
 // Returns data in data structure "m".
 // 
-// MC = Measurement calibration(?)
+// MC = Measurement/measured calibration(?)
 // 
 // NOTE: Removes calibration files copied from the template directory before they are even loaded/read.
 // This means it makes some assumptions on which files are actually used in the actual calibration.
@@ -5176,7 +5186,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
                     // Get path to corresponding TAB file by reading LBL file.
                     FindP(&mc_lbl, &property, "^TABLE", 1, DNTCARE);    // Get file name (TAB file name).
                     strcpy(tstr1, property->value);
-                    TrimQN(tstr1);                                      // Trim quotes away..
+                    TrimQN(tstr1);                                      // Trim quotes away.
                     sprintf(tstr2, "%s%s", rpath, tstr1);               // Construct path + filename
                     
                     // Delete LBL+TAB file pair.
@@ -5464,8 +5474,8 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
     nline[255]='\0';
     while(fgets(nline,255,fd)!= NULL)
     {
-        if(nline[0] == '\n') continue;  // Skip empty lines..
-        if(nline[0] == '#')  continue;  // Remove any comments..
+        if(nline[0] == '\n') continue;  // Skip empty lines.
+        if(nline[0] == '#')  continue;  // Remove any comments.
         
         // Extract values from columns, two columns at a time.
         Separate(nline, m->phase_name,      abbrev,             ':', 1);  // Get mission phase name (incl. quotes) and abbreviation.
@@ -5531,7 +5541,7 @@ void DeriveDSIandDSN(
 
 
 
-// Dump macros..this is for debugging
+// Dump macros. This is for debugging.
 void TestDumpMacs()
 {
     int i,j;
@@ -5679,6 +5689,7 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
 
 
 
+
 // Read label file
 // 
 // NOTE: The function is implicitly used for modifying LBL/CAT files from the template directory
@@ -5687,7 +5698,7 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
 // NOTE: I _think_ this code can handle LBL and CAT files
 // with multiple line values. This is important for being able to modify *.CAT files
 // with long texts in the form of "values".   /Erik P G Johansson 2015-04-27.
-int ReadLabelFile(prp_type *lb_data,char *name)
+int ReadLabelFile(prp_type *lb_data,char *file_path)
 {
     FILE *fd;
     char line[MAX_STR];   // Line buffer
@@ -5711,18 +5722,18 @@ int ReadLabelFile(prp_type *lb_data,char *name)
     
 
     // Open label file, for description of calibration table
-    if((fd=fopen(name,"r"))==NULL)
+    if((fd=fopen(file_path, "r"))==NULL)
     {
-        YPrintf("Couldn't open label file:  %s\n",name);
+        YPrintf("Couldn't open label file:  %s\n", file_path);
         return -1;
     }
     
     while(fgets(line,msubone,fd)!= NULL)   // Reads line into variable "line". Appears to include ending line feed.
     {
-        if(line[0] == '\n') continue;     // Empty line..
+        if(line[0] == '\n') continue;     // Empty line.
         if(line[0] == '\r') continue;
-        if(line[0] == '#') continue;      // Remove comments..
-        if(line[0] == '/') continue;      // Remove comments..
+        if(line[0] == '#') continue;      // Remove comments.
+        if(line[0] == '/') continue;      // Remove comments.
         
         if(!(strcmp(line,"END") && strcmp(line,"END\r\n"))) {
             continue; // Skip ending END not a keyword
@@ -5805,21 +5816,22 @@ int ReadLabelFile(prp_type *lb_data,char *name)
 }
 
 
-
-// Read table file described in "lbl_data" into
-// the calibration structure "cal".
+// Read TABLE file described in "lbl_data" into the calibration structure "cal".
+// The table file's name is taken from ^TABLE in lbl_data, and the directory is taken from the function argument.
 //
 // I try to use the description in the label file as much as possible
 // but it could probably be done better.
 //
-int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
+// dir_path : Path to directory(!)
+//
+int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
 {
     int i,j;
     
-    char name[PATH_MAX];
+    char file_path[PATH_MAX];
     
     // Following arrays are taken to be large enough for their purposes
-    char format[256]; // A vector indicating column format..thus max 256 columns..we have 4 in reality.
+    char format[256]; // A vector indicating column format, thus max 256 columns. We have 4 in reality.
     char line[8192];  // Temporary buffer  to read a row into.
     int start[256];   // A vector indicating start positions of columns
     
@@ -5845,15 +5857,15 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
     FindP(lbl_data,&property2,"START_TIME",1,DNTCARE);    // Get start time
     FindP(lbl_data,&property3,"ROWS",1,DNTCARE);          // Number of rows 
     FindP(lbl_data,&property4,"COLUMNS",1,DNTCARE);       // Number of columns
-    strncpy(line,property1->value,8192);                   // Copy so we don't modify the real property list
-    TrimQN(line);                                          // Trim quotes away..
-    sprintf(name,"%s%s",path,line);                        // Construct path + filename
-    
-    YPrintf("Reading table file: %s\n",name);
+    strncpy(line,property1->value,8192);                  // Copy so we don't modify the real property list
+    TrimQN(line);                                         // Trim quotes away.
+    sprintf(file_path,"%s%s",dir_path,line);              // Construct file_path = dir_path + filename
+
+    YPrintf("Reading table file: %s\n",file_path);
     // Open calibration table file
-    if((fd=fopen(name,"r"))==NULL)
+    if((fd=fopen(file_path,"r"))==NULL)
     {
-        YPrintf("Couldn't open table file:  %s\n",name);
+        YPrintf("Couldn't open table file:  %s\n",file_path);
         return -1;
     }
     
@@ -5889,7 +5901,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *path)
             if(!strncmp(property5->value,"ASCII_REAL",10)) { // Float column ?
                 format[j]=1;
             } else {
-                return -2; // Error..we only expect integer or double for now!
+                return -2; // Error. We only expect integer or double for now!
             }
         }
         
@@ -5962,7 +5974,7 @@ char getBiasMode(curr_type *curr, int dop) {
  * Write TAB file, CALIB or EDITED.
  * Convert from TM units to physical units (i.e. calibrate) in CALIB.
  *
- *  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ....
+ *  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
  *  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
  *
  * We use the mode information from command logs here since it also contain off information
@@ -6063,7 +6075,7 @@ int WritePTAB_File(
     time_t stime;                   // Time of current data
     time_t vtime;                   // Valid time of calibration data
     
-    double utime;                  // Current time in UTC for test of extra bias settings..
+    double utime;                  // Current time in UTC for test of extra bias settings.
     int valid=0;                   // Valid time index
     
     property_type *property1; 	// declare temporary property1
@@ -6227,7 +6239,7 @@ int WritePTAB_File(
                         ccalf_ADC16 *= 16;
                     }
                 }
-                // Other alternative than above shouldn't be possible..if so keep default ccalf
+                // Other alternative than above shouldn't be possible, if so keep default ccalf.
             }
             
         }   // if(bias_mode==DENSITY)
@@ -6507,14 +6519,14 @@ int WritePTAB_File(
                     // CASE: DENSITY MODE
                     //====================
                     current=val; // Set sampled current value in TM units
-                    if(param_type==SWEEP_PARAMS) // Do we have a sweep ?...
+                    if(param_type==SWEEP_PARAMS) // Do we have a sweep?
                     {
                         if(i<ini_samples) { // Sweep started ?
                             voltage=vbias; // Set initial voltage bias before sweep starts. Not defined for P3.
                         }
                         else
                         { 
-                            voltage=ti2; // Set value used before changing the bias, prevents start bias value to be modified before used... 
+                            voltage=ti2; // Set value used before changing the bias, prevents start bias value to be modified before used.
                             k++;
                             if(!(k%samp_plateau)) {   // Every new step set a new bias voltage
                                 ti2+=curr_step;     // Change bias
@@ -6593,7 +6605,7 @@ int WritePTAB_File(
                                 {
                                     // Offset and factor calibration, voltage is not entirely correct here!!
                                     // We should perhaps have a calibration mode for fine sweeps in space
-                                    // but it would be rather many 4096..
+                                    // but it would be rather many 4096.
                                     
                                     // Edit FKJN 02/09 2014. Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
                                     // to a number from 0-255 if we want to use the same offset calibration file
@@ -6608,7 +6620,7 @@ int WritePTAB_File(
                                 {
                                     // Offset and factor calibration, voltage is not entierly correct here!!
                                     // We should pherhaps have a calibration mode for fine sweeps in space
-                                    // but it would be rather many 4096..
+                                    // but it would be rather many 4096.
                                     
                                     ccurrent=ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][2]));
                                     // Write time, current and calibrated voltage 
@@ -6813,7 +6825,7 @@ int WritePLBL_File(
         sprintf(tstr2,"%02d",row_bytes);
 
         
-        // if-else looks unnecessary...
+        // if-else looks unnecessary.
         if(calib) {
             SetP(&comm,"RECORD_BYTES",tstr2,1); // Set number of bytes in a column of a record
         } else {
@@ -7052,7 +7064,7 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
         while(LookB(bs,buff,len)<0)
         {
             pthread_testcancel(); // Test if we are to die
-            sched_yield();        // nanosleep is not good here, cant delay less than us resolution
+            sched_yield();        // nanosleep is not good here, can't delay less than us resolution
         }
     }
     return 0;
@@ -7072,7 +7084,7 @@ int GetHKPacket(buffer_struct_type *ch,unsigned char *buff,double *rawt)
     HPrintf("HK packet, length: %d\n",length);
     
     if(length>LAP_HK_LEN) {
-        length=LAP_HK_LEN; // Packet to long, force standard length...add warning in the future...
+        length=LAP_HK_LEN; // Packet to long, force standard length. Add warning in the future...
     }
     
     *rawt=DecodeSCTime(&buff[6]);            // Decode S/C time into raw time
@@ -7103,7 +7115,7 @@ void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id)
 }
 
 
-// Test syncronisation ahead..
+// Test syncronisation ahead.
 int SyncAhead(buffer_struct_type *cb,int len)
 {
     unsigned char ch;
@@ -7461,7 +7473,7 @@ int SetupIndex(prp_type *p)
         Append(p,"END_OBJECT",    "COLUMN");
         
         Append(p,"OBJECT",        "COLUMN");
-        Append(p,"NAME",          "PRODUCT_ID"); // This I think is weird..however PVV complains with FILE_NAME
+        Append(p,"NAME",          "PRODUCT_ID"); // This I think is weird, however PVV complains with FILE_NAME
         Append(p,"DATA_TYPE",     "CHARACTER");
         Append(p,"START_BYTE",    "63");
         Append(p,"BYTES",         "25");
@@ -7527,7 +7539,7 @@ void WriteIndexLBL(prp_type *p,mp_type *m)
         fflush(pds.itable_fd); // Flush index table file
         rewind(pds.itable_fd); // Rewind index table file
         
-        // Count index table lines! Assume all lines are shorter than dummy line...
+        // Count index table lines! Assume all lines are shorter than dummy line.
         // It is needed in a keyword below
         while(fgets(dline,PATH_MAX,pds.itable_fd) != NULL) {
             index_cnt++;
@@ -7985,7 +7997,7 @@ int GetAlphaNum(char *n,char *path,char *pattern)
     rewinddir(de);       // Rewind directory
     dentry=readdir(de);  // Get first entry
     
-    // Do a linear search through all filenames....
+    // Do a linear search through all filenames..
     // To find the last one with highest alphanumeric value
     
     while(dentry!=NULL && pattern!=NULL) 
@@ -8156,12 +8168,12 @@ int MakeDir(char *name,char *path,char *npath)
     strcat(npath,name);
     strcat(npath,"/");
     
-    // If mkdir is not thread safe this might cause problems..if so add mutex lock.
+    // If mkdir is not thread safe this might cause problems. If so add mutex lock.
     err=mkdir(npath,0775); 
     
     if(!err || err==EEXIST) return 0; // If no error or it already exist, return ok!
     
-    return err; // Else we return the error code..
+    return err; // Else we return the error code.
 }
 
 // Make DATA directory structure
@@ -8261,7 +8273,7 @@ int GetUnacceptedFName(char *name)
     rewinddir(una_dir);       // Rewind
     dentry=readdir(una_dir);  // Get first entry
     
-    while(dentry!=NULL) // Do a linear search through all filenames....to find the last one
+    while(dentry!=NULL) // Do a linear search through all filenames to find the last one.
     {  
         if(!fnmatch("UNA_*_*.lap",dentry->d_name,0)) // Match filename to pattern
         {
@@ -8555,12 +8567,12 @@ void SignExt20(int *val)
         *val=~*val;      // Invert it
         *val&=0x07ffff;  // Cut off anything extra
         *val+=1;         // Add 1 
-        *val=-*val;      // Make it negative X number of bits...
+        *val=-*val;      // Make it negative X number of bits.
     }
     // If not negative do nothing
 }
 
-// Returns double..from 64 bit big endian data
+// Returns double from 64 bit big-endian data
 // Assumes this is a little endian machine!!
 double GetDBigE(unsigned char *buff)
 {
@@ -8616,7 +8628,7 @@ unsigned int E2Epoch(char *rtime)
     
     t=mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
     
-    t+=at.tm_gmtoff; // Add number of second east of UTC..to get UTC
+    t+=at.tm_gmtoff; // Add number of second east of UTC to get UTC.
     return t;
 }
 
@@ -8717,7 +8729,7 @@ int DecodeRawTimeEst(double raw,char *stime)
 //
 // NOTE: The function uses the global tcp structure! 
 // 1) Can do this since it's the only user
-// 2) It only reads! No thread conflicts..
+// 2) It only reads! No thread conflicts.
 //
 // NOTE: The function and its input value is used by WritePTAB_File to produce the first two columns in (science data) TAB files: 
 //    stime: UTC_TIME (DESCRIPTION = "UTC TIME")
@@ -8745,7 +8757,7 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
         if(i<(tcp.netries-1)) {   // If we are not at the end
             tmp=tcp.SCET[i+1];   // Use next SCET to test the upper validity limit
         } else {
-                tmp=1e100; // No next SCET ..last correlation packet valid until ground station produces new ones..
+                tmp=1e100; // No next SCET. Last correlation packet valid until ground station produces new ones.
         }
                 
                 if(correlated>=tcp.SCET[i] && correlated<tmp) // Test if in valid range
@@ -8756,7 +8768,7 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
                 }
     }
     
-    craw=raw*gradient+offset; // Compute correlation...if no time calibration data found default coefficients are used.
+    craw=raw*gradient+offset; // Compute correlation. If no time calibration data found default coefficients are used.
 
     Scet2Date_2(craw,stime,lfrac); // Compute a PDS date string
     return 0;
@@ -8769,7 +8781,7 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
 //
 // SPACECRAFT_CLOCK_START/STOP_COUNT="1/21339876.237"
 //
-// is not a decimal point.. (NOT specified in PDS) but now specified
+// is not a decimal point (NOT specified in PDS) but now specified
 // in PSA to be a fraction of 2^16 thus decimal .00123 seconds is stored as
 // 0.123*2^16 ~ .81
 //
@@ -9008,7 +9020,7 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     }
     
     if(atime.tm_year<1970) {
-        return -7;       // Err only do time after 1970, could be 2000..
+        return -7;       // Err only do time after 1970, could be 2000.
     }
     
     atime.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
@@ -9059,7 +9071,7 @@ int GetUTime(char *ltime)
 
 //
 // This log is used for sweep compression.
-// First X=|x|+1 is done..to get all values in the range 1 to 32768.
+// First X=|x|+1 is done to get all values in the range 1 to 32768.
 //
 // The log is then:	 L(X)=17*b-17+(17*X)*2^-b
 //
@@ -9089,7 +9101,7 @@ int GetUTime(char *ltime)
 // L(00456)=149   |
 // L(00457)=149   |
 // L(00458)=149   |
-// L(00459)=149   > Choosing this value for inverse will be least wrong in an average sense..thus L_Inverse(149)=459
+// L(00459)=149   > Choosing this value for inverse will be least wrong in an average sense. Thus L_Inverse(149)=459
 // L(00460)=149   |
 // L(00461)=149   |
 // L(00462)=149   |
@@ -9155,7 +9167,7 @@ void DoILogTable(unsigned int *ilog)
 
 //
 // This log is used for sweep compression.
-// First X=|x|+1 is done..to get all values in the range 1 to 32768.
+// First X=|x|+1 is done to get all values in the range 1 to 32768.
 //
 // The log is then:	 L(X)=17*b-17+(17*X)*2^-b
 //
@@ -9385,7 +9397,7 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
     static double old=0.0;   // Previous DDS packet time
     static double scet=1.0;  // DDS Packet time
     
-    double eps=1e-5; // Epsilon..cant have to small
+    double eps=1e-5; // Epsilon. Can't have too small value.
     
     int toggle=1; // Just print one message to the log, until time is current
     
@@ -9402,7 +9414,7 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
             break;
         }
         
-        if(scet>=old) // As long as we at least have the same DDS time or move forward in time..
+        if(scet>=old) // As long as we at least have the same DDS time or move forward in time.
         {
             old=scet; // Remember old time
             toggle=1; // Indicate monotonic time
@@ -9548,7 +9560,7 @@ int DDSFileDuration(char *str)
 }
 
 // Returns the start time of any file/directory
-// in a DDS archive hierarchy..
+// in a DDS archive hierarchy.
 // Function assumes that it is a true DDS archive
 // hierarchy. Start time is in seconds)
 
@@ -9641,7 +9653,7 @@ time_t DDSFileStartTime(FTSENT *f)
     
     t=mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
     
-    t+=at.tm_gmtoff; // Add number of second east of UTC..to get UTC
+    t+=at.tm_gmtoff; // Add number of second east of UTC to get UTC
     return t;
 }
 
@@ -9668,7 +9680,7 @@ int DDSVirtualCh(unsigned char *ibuff)
 
 // Get Ground station name from global variable gstations
 // As long as global vars do not change thus like constants
-// It's not bad to use them..
+// It's not bad to use them.
 
 void DDSGroundSN(unsigned short int gsid,char *str)
 {
@@ -9797,11 +9809,12 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
 }
 
 
+
 //##################################################################################################################
 // Alternative main function that can be temporarily used instead of the real one for testing purposes.
 // The real main function can conveniently be renamed (not commented out, not deleted) when using this function.
 // This is useful for having test code that has access to other pds-internal functions.
-// int main(int argc, char* argv[]) {
+//int main(int argc, char* argv[]) {
 int main_DISABLED(int argc, char* argv[]) {
     printf("###################################################################################\n");
     printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
@@ -9823,6 +9836,7 @@ int main_DISABLED(int argc, char* argv[]) {
     errorCode = WriteUpdatedLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL_modif");
     printf("errorCode = %i\n", errorCode);
     //*/
+
     return -1;
 }
 
