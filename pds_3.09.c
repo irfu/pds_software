@@ -73,6 +73,8 @@
 //       /Erik P G Johansson 2016-03-21.
 //  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
 //      /Erik P G Johansson 2016-03-22
+//  * Updated to update LBL files under DOCUMENT/ (recursively).
+//      /Erik P G Johansson 2016-04-04
 //
 //
 //
@@ -193,9 +195,10 @@ void TestDumpMacs();						// Test dump of macro descriptions
 
 // Label and Table functions
 //----------------------------------------------------------------------------------------------------------------------------------
-int WriteUpdatedLabelFile(prp_type *pds,char *name);            // Write label file
-int ReadLabelFile(prp_type *pds,char *name);                    // Read a label file 
-int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);   // Read table file
+int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, char update_PUBLICATION_DATE);
+int WriteUpdatedLabelFile(prp_type *pds, char *name, char update_PUBLICATION_DATE);     // Write label file
+int ReadLabelFile(prp_type *pds,char *name);                                            // Read a label file 
+int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);                           // Read table file
 
 char getBiasMode(curr_type *curr, int dop);
 
@@ -742,7 +745,7 @@ int main(int argc, char *argv[])
     }    
     SetP(&cat,"VOLUME_NAME",tstr2,1); // Set VOLUME_NAME
     
-    WriteUpdatedLabelFile(&cat,tstr1);                      // Write back label file with new info
+    WriteUpdatedLabelFile(&cat, tstr1, 1);                  // Write back label file with new info
     FreePrp(&cat);                                          // Free property value list
 
 
@@ -794,11 +797,23 @@ int main(int argc, char *argv[])
     
     SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
     
-    WriteUpdatedLabelFile(&cat,tstr1);                    // Write back label file with new info
+    WriteUpdatedLabelFile(&cat, tstr1, 1);                // Write back label file with new info
     FreePrp(&cat);                                        // Free property value list
     
     
     
+    //======================================================
+    // Update LBL files copied from the template directory.
+    //
+    // NOTE: There are no *.CAT files under DOCUMENT/
+    // NOTE: It is unnecessary to update CATALOG/ since the only file to modify is
+    // DATASET.CAT, which is modified elsewhere (including some additional fields).
+    //======================================================
+    sprintf(tstr1,"%sDOCUMENT",pds.apathpds);     // Get full path to subdirectory.
+    UpdateDirectoryODLFiles(tstr1, "*.LBL", 0);
+
+
+
     // Write initial message to system log
     YPrintf("LAP PDS SYSTEM STARTED     \n");
     YPrintf("========================================================================\n");
@@ -826,37 +841,37 @@ int main(int argc, char *argv[])
     if(status>=0) {
         status+=ReadTableFile(&cc_lbl, &v_conv, pds.cpathd);    // Read coarse bias voltage calibration data into v_conv structure
     }    
-    WriteUpdatedLabelFile(&cc_lbl, pds.cpathc);                 // Write back label file with new info    
+    WriteUpdatedLabelFile(&cc_lbl, pds.cpathc, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&fc_lbl);                                             // Initialize property value pair list
     status=+ReadLabelFile(&fc_lbl, pds.cpathf);                 // Read fine bias voltage calibration label into property value pair list
     if(status>=0) {
         status+=ReadTableFile(&fc_lbl, &f_conv, pds.cpathd);    // Read fine bias voltage calibration data into f_conv structure
     }    
-    WriteUpdatedLabelFile(&fc_lbl, pds.cpathf);                 // Write back label file with new info
+    WriteUpdatedLabelFile(&fc_lbl, pds.cpathf, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&ic_lbl);                                             // Initialize property value pair list
     status=+ReadLabelFile(&ic_lbl, pds.cpathi);                 // Read current bias voltage calibration label into property value pair list        
     if(status>=0) {
         status+=ReadTableFile(&ic_lbl, &i_conv, pds.cpathd);    // Read current bias calibration data into i_conv structure
     }    
-    WriteUpdatedLabelFile(&ic_lbl, pds.cpathi);                 // Write back label file with new info
+    WriteUpdatedLabelFile(&ic_lbl, pds.cpathi, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&tmp_lbl);                                            // Initialize property value pair list
     status=+ReadLabelFile(&tmp_lbl, pds.cpathdfp1);             // Read density frequency response calibration file probe 1
-    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp1);             // Write back label file with new info
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp1, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Initialize property value pair list
     status=+ReadLabelFile(&tmp_lbl, pds.cpathdfp2);             // Read density frequency response calibration file probe 2
-    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp2);             // Write back label file with new info
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp2, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Initialize property value pair list
     status=+ReadLabelFile(&tmp_lbl, pds.cpathefp1);             // Read e-field frequency response calibration file probe 1
-    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp1);             // Write back label file with new info
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp1, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Initialize property value pair list
     status=+ReadLabelFile(&tmp_lbl, pds.cpathefp2);             // Read e-field frequency response calibration file probe 2
-    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp2);             // Write back label file with new info
+    WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp2, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Deallocate dynamic memory.
     
@@ -5253,7 +5268,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
                 return -5;
             }
             
-            WriteUpdatedLabelFile(&mc_lbl,file_path);                       // Write back label file with new info
+            WriteUpdatedLabelFile(&mc_lbl, file_path, 1);   // Write back label file with new info
 
             //==============================
             // Extract values from LBL file
@@ -5529,15 +5544,110 @@ void TestDumpMacs()
 
 
 
-// Write updated label file
-// 
-// "updated" refers to certain keyword values being set by the function.
-// The Function is in practise used for updating LBL/CAT files copied from the template.
-int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
+/* Update certain fields LBL/CAT files in a given directory, recursively.
+ * Ths is in practise meant to be used for updating LBL/CAT (maybe TXT) files copied from templates.
+ *
+ * dir_path : Path to directory.
+ * filename_pattern : Search pattern that selects the filenames of those files which will be updated. E.g. "*.LBL".
+ *
+ * NOTE: Does not follow symlinks.
+ * NOTE: This does not work for *.TXT files where the first part is ODL keywords & values, and the last part is pure text,
+ *       since ReadLabelFile & WriteUpdatedLabelFile can not handle that file format.
+ */
+int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, char update_PUBLICATION_DATE)
+{
+    int i;
+    int N_files;
+
+    struct dirent **dir_entry_list;
+    struct dirent *dir_entry;
+
+
+
+    // Scan directory
+    N_files=scandir(dir_path, &dir_entry_list, 0, alphasort);  // Returns sorted list, although sorting is unnecessary.
+    if (N_files < 0)
+    {
+        char tstr[1024];
+        sprintf(tstr, "Failed to scan directory for files: \"%s\"\n", dir_path);
+        YPrintf(tstr);
+        perror(tstr);
+        //printf("message: N_files = %i  \t dir_path = %s", N_files, dir_path);    // DEBUG
+        return -1;
+    }
+
+    // Iterate over files/directories located in directory.
+    for (i=0; i<N_files; i++)
+    {
+        dir_entry=dir_entry_list[i];
+
+        // DT_REG : Regular file (not directory)
+        if ((dir_entry->d_type==DT_REG) && !fnmatch(filename_pattern, dir_entry->d_name, 0))
+        {
+            char file_path[PATH_MAX];
+            sprintf(file_path, "%s/%s", dir_path, dir_entry->d_name); // Construct full path
+
+            YPrintf("Modifying: %s\n", file_path);
+            printf( "Modifying: %s\n", file_path);
+
+            prp_type temp_odl;
+            InitP(&temp_odl);
+            if(ReadLabelFile(&temp_odl,file_path)<0) // Read offset and TM calibration file
+            {
+                // ExitPDS() will free m->CF and m->CD memory at exit.
+                FreePrp(&temp_odl); // Free linked property/value list for measured data offset
+                return -5;
+            }
+
+            WriteUpdatedLabelFile(&temp_odl, file_path, update_PUBLICATION_DATE);   // Write back label file with new info
+            FreePrp(&temp_odl); // Free linked property/value list for measured data offset
+        }
+        else if ((dir_entry->d_type==DT_DIR) && strcmp(dir_entry->d_name, ".") && strcmp(dir_entry->d_name, ".."))  // DT_DIR : Directory
+        {
+            char subdir_path[PATH_MAX];
+            sprintf(subdir_path, "%s/%s", dir_path, dir_entry->d_name);
+            //printf("subdir_path = %s\n", subdir_path);      // DEBUG
+            int status = UpdateDirectoryODLFiles(subdir_path, filename_pattern, update_PUBLICATION_DATE);    // NOTE: RECURSIVE CALL
+            if (status<0) {
+                // Free allocated memory.
+                // NOTE: Uncertain if this code actually frees everything it should.
+                for (i = 0; i < N_files; i++)   // Need to free array of all “returns”.. some other time.
+                {
+                    free(dir_entry_list[i]);
+                }
+                free(dir_entry_list);
+
+                return status;
+            }
+        }
+    }
+
+
+    // Free allocated memory.
+    // NOTE: Uncertain if this code actually frees everything it should.
+    for (i = 0; i < N_files; i++)   // Need to free array of all “returns”.. some other time.
+    {
+        free(dir_entry_list[i]);
+    }
+    free(dir_entry_list);
+
+    return 0;
+}
+
+
+
+/* Write updated label file
+ *
+ * "updated" refers to certain keyword values being set by the function.
+ * The function is in practise used for updating LBL/CAT files copied from the template.
+ *
+ * update_PUBLICATION_DATE : true iff PUBLICATION_DATE should be updated.
+ */
+int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION_DATE)
 {
     // Added by Erik P G Johansson 2015-05-04
-    // Sets/updates certain keywords BUT ONLY IF THEY CAN BE FOUND in the original list.
-    // Not all LBL/CAT files neither do, nor should, contain all of these keywords.
+    // Sets/updates certain keywords BUT ONLY IF THEY ARE ALREADY PRESENT in the file's original list of keywords.
+    // Not all TXT/LBL/CAT files neither do, nor should, contain all of these keywords.
     // 
     // NOTE: Uncertain whether PUBLICATION_DATE should really be set to the same value everywhere.
     // 
@@ -5545,10 +5655,12 @@ int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
     // NOTE: Does not set DATA_SET_RELEASE_DATE which needs extra code to be derived and only applies to DATASET.CAT (?).
     SetP(lb_data, "DATA_SET_ID",        mp.data_set_id,           1);
     SetP(lb_data, "DATA_SET_NAME",      mp.data_set_name,         1);  
-    SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of data set
     SetP(lb_data, "PRODUCER_ID",        "EJ",                     1);  
     SetP(lb_data, "PRODUCER_FULL_NAME", "\"ERIK P G JOHANSSON\"", 1);
     SetP(lb_data, "MISSION_PHASE_NAME", mp.phase_name,            1);  
+    if (update_PUBLICATION_DATE) {
+        SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of data set
+    }
     
     FILE *fd;
     if((fd=fopen(name,"w"))==NULL)
