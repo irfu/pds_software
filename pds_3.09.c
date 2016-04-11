@@ -75,6 +75,8 @@
 //      /Erik P G Johansson 2016-03-22
 //  * Updated to update LBL files under DOCUMENT/ (recursively).
 //      /Erik P G Johansson 2016-04-04
+//  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
+//      /Erik P G Johansson 2016-04-11
 //
 //
 //
@@ -845,38 +847,38 @@ int main(int argc, char *argv[])
     WriteUpdatedLabelFile(&cc_lbl, pds.cpathc, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&fc_lbl);                                             // Initialize property value pair list
-    status=+ReadLabelFile(&fc_lbl, pds.cpathf);                 // Read fine bias voltage calibration label into property value pair list
+    status+=ReadLabelFile(&fc_lbl, pds.cpathf);                 // Read fine bias voltage calibration label into property value pair list
     if(status>=0) {
         status+=ReadTableFile(&fc_lbl, &f_conv, pds.cpathd);    // Read fine bias voltage calibration data into f_conv structure
     }    
     WriteUpdatedLabelFile(&fc_lbl, pds.cpathf, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&ic_lbl);                                             // Initialize property value pair list
-    status=+ReadLabelFile(&ic_lbl, pds.cpathi);                 // Read current bias voltage calibration label into property value pair list        
+    status+=ReadLabelFile(&ic_lbl, pds.cpathi);                 // Read current bias voltage calibration label into property value pair list
     if(status>=0) {
         status+=ReadTableFile(&ic_lbl, &i_conv, pds.cpathd);    // Read current bias calibration data into i_conv structure
     }    
     WriteUpdatedLabelFile(&ic_lbl, pds.cpathi, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&tmp_lbl);                                            // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl, pds.cpathdfp1);             // Read density frequency response calibration file probe 1
+    status+=ReadLabelFile(&tmp_lbl, pds.cpathdfp1);             // Read density frequency response calibration file probe 1
     WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp1, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl, pds.cpathdfp2);             // Read density frequency response calibration file probe 2
+    status+=ReadLabelFile(&tmp_lbl, pds.cpathdfp2);             // Read density frequency response calibration file probe 2
     WriteUpdatedLabelFile(&tmp_lbl, pds.cpathdfp2, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl, pds.cpathefp1);             // Read e-field frequency response calibration file probe 1
+    status+=ReadLabelFile(&tmp_lbl, pds.cpathefp1);             // Read e-field frequency response calibration file probe 1
     WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp1, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Initialize property value pair list
-    status=+ReadLabelFile(&tmp_lbl, pds.cpathefp2);             // Read e-field frequency response calibration file probe 2
+    status+=ReadLabelFile(&tmp_lbl, pds.cpathefp2);             // Read e-field frequency response calibration file probe 2
     WriteUpdatedLabelFile(&tmp_lbl, pds.cpathefp2, 1);          // Write back label file with new info
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Deallocate dynamic memory.
     
-    status=+GetMCFiles(pds.cpathd, pds.cpathm, &m_conv);        // Get measurement calibration files
+    status+=GetMCFiles(pds.cpathd, pds.cpathm, &m_conv);        // Get measurement calibration files
 
     if(status<0)
     {
