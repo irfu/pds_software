@@ -1,107 +1,108 @@
-//====================================================================================================================
-// LAP PDS SOFTWARE
-// ----------------
-//
-// See 00_README.TXT for more information.
-//
-//
-// VERSION: 3.09
-// 
-// AUTHOR: Reine Gill
-// Lines 4603-4604 modified from 2.98 by aie@irfu.se,
-// Lines 6661 & 6806-6815 edited by fj@irfu.se
-// DATE: 140710
-// ...
-// CHANGES FROM VERSION 3.07 TO 3.08
-//  * Fixed bug that assigns command-line argument specified configuration file paths to the wrong string variables.
-//       Erik P G Johansson 2015-02-xx
-//  * Changed the name of three PDS keywords to being probe-specific (in addition to four previously renamed PDS keywords).
-//       Erik P G Johansson 2015-03-xx
-//  * Implemented functionality for ignoring data within specific time intervals (pds.dataexcludetimes).
-//       Erik P G Johansson 2015-03-31
-//  * Corrected typos in PDS DESCRIPTION fields in LBL files.
-//       Erik P G Johansson 2015-03-30
-//  * Fixed bug that sometimes terminates the DecodeScience thread prematurely thus omitting the last hour(s) of data.
-//       Erik P G Johansson 2015-03-31
-//  * Specifically permit the faulty macro 515 to set new vbias2 in every macro loop (not just the first loop) thus
-//    permitting vbias2 to change value in every macro loop cycle, as described in the .mds file.
-//       Erik P G Johansson 2015-04-10
-//  * Modified and simplified code that updates certain PDS keyword values in LBL/CAT files copied from
-//    the template directory so that it now updates more PDS keyword values.
-//    Thus modified WriteLabelFile and renamed it WriteUpdatedLabelFile.
-//       Erik P G Johansson 2015-05-04
-//  * Fixed bug that made INDEX.LBL not adjust to the DATA_SET_ID column changing width.
-//       Erik P G Johansson 2015-05-12
-//
-// CHANGES FROM VERSION 3.08 TO 3.09
-//  * Fixed bug that made ADC20 always choose high-gain.
-//       Erik P G Johansson 2015-06-03
-//  * Added code for calibrating ADC20 data relative to ADC16
-//    See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
-//    Also see added constants in "pds.h".
-//       Erik P G Johansson 2015-06-10
-//  * Fixed bug that multiplied ccalf_ADC16 by 16 for non-truncated ADC20 data, density mode, P1/P2.
-//    This led to calibration offsets being multiplied by 16.
-//    (Braces surrounding the statements after two if-then were missing.)
-//       Erik P G Johansson 2015-08-31
-//  * Fixed potential bug that interpreted macro ID strings as decimal numbers rather than hexadecimal numbers.
-//    Code still worked since the result was only used to compare with decimal macro ID numbers
-//    and the code (seemed to) fail well for hexadecimal string representations.
-//       Erik P G Johansson 2015-12-07
-//  * Added extra flags for overriding the MISSION_PHASE_NAME, period start date & duration, and description
-//    string used in DATA_SET_ID and DATA_SET_NAME.
-//       Erik P G Johansson 2015-12-09
-//  * Start time & duration can now be specified with higher accuracy than days using CLI parameters.
-//  * All logs now display wall time the same way ("3pds_dds_progress.log" was previously different).
-//  * Bug fix: pds.modes can now handle colons in the description string.
-//  * Raised permitted string length for code interpreting "pds.modes". Can now (probably) handle all rows up
-//    to 1024 characters, including CR & LF.
-//       Erik P G Johansson 2015-12-17
-//  * Bug fix: Reading LBL files failed to add CR at end-of-line for first line of multiline keyword values.
-//    Bug was in ReadLabelFile(..).
-//    This caused newlines without CR when pds modified
-//       CALIB/RPCLAP030101_CALIB_FRQ_D_P1.LBL
-//       CALIB/RPCLAP030101_CALIB_FRQ_E_P1.LBL
-//       CALIB/RPCLAP030101_CALIB_FRQ_D_P2.LBL
-//       CALIB/RPCLAP030101_CALIB_FRQ_E_P2.LBL
-//       /Erik P G Johansson 2015-12-10, 2016-03-21
-//  * Bug fix: StrucDir no longer alters parameter "date".
-//       /Erik P G Johansson 2016-03-21.
-//  * Bug fix: DecodeHK/ExitPDS:
-//    Last HK LBL file in data set: SPACECRAFT_CLOCK_STOP_COUNT was erroneously effectively same as SPACECRAFT_CLOCK_START_COUNT.
-//    Every HK LBL file with only one row (in TAB file): STOP_TIME was only a year.
-//       /Erik P G Johansson 2016-03-21.
-//  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
-//      /Erik P G Johansson 2016-03-22
-//  * Updated to update LBL files under DOCUMENT/ (recursively).
-//      /Erik P G Johansson 2016-04-04
-//  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
-//      /Erik P G Johansson 2016-04-11
-//  * Updated the way offset calibrations and TM conversion factors are selected.
-//    Uses the nearest calibration by default. Added a manual "calibration selection" list (override).
-//    Removes unused calibration files (replaces the previous functionality for removing unused calibration files).
-//      /Erik P G Johansson 2016-04-13
-//
-//
-//
-// "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
-//        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
-//     NOTE: Changing this will/might cause backward-compatibility issues with lapdog and write_calib_meas.
-// "BUG": Code requires output directory path in pds.conf to end with slash.
-// "BUG": The code still does not update the LBL files in the DOCUMENT/ directory.
-// BUG: HK label files do not use "fingerprinting" for identifying macros (only DecodeScience does) and can therefor
-//      not recognize all macros.
-//
-//
-//    
-// NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
-//       This is due to dysfunctional automatic indentation in the Kate editor.
-// NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
-// NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
-// Code concern includes (incomplete list): function E2Epoch (used only once), possibly the use of bias e.g. in LoadBias.
-// Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to
-// 
-//====================================================================================================================
+/*====================================================================================================================
+ * LAP PDS SOFTWARE
+ * ----------------
+ *
+ * See 00_README.TXT for more information.
+ *
+ *
+ * VERSION: 3.09
+ *
+ * AUTHOR: Reine Gill
+ * Lines 4603-4604 modified from 2.98 by aie@irfu.se,
+ * Lines 6661 & 6806-6815 edited by fj@irfu.se
+ * DATE: 140710
+ * ...
+ * CHANGES FROM VERSION 3.07 TO 3.08
+ *  * Fixed bug that assigns command-line argument specified configuration file paths to the wrong string variables.
+ *       Erik P G Johansson 2015-02-xx
+ *  * Changed the name of three PDS keywords to being probe-specific (in addition to four previously renamed PDS keywords).
+ *       Erik P G Johansson 2015-03-xx
+ *  * Implemented functionality for ignoring data within specific time intervals (pds.dataexcludetimes).
+ *       Erik P G Johansson 2015-03-31
+ *  * Corrected typos in PDS DESCRIPTION fields in LBL files.
+ *       Erik P G Johansson 2015-03-30
+ *  * Fixed bug that sometimes terminates the DecodeScience thread prematurely thus omitting the last hour(s) of data.
+ *       Erik P G Johansson 2015-03-31
+ *  * Specifically permit the faulty macro 515 to set new vbias2 in every macro loop (not just the first loop) thus
+ *    permitting vbias2 to change value in every macro loop cycle, as described in the .mds file.
+ *       Erik P G Johansson 2015-04-10
+ *  * Modified and simplified code that updates certain PDS keyword values in LBL/CAT files copied from
+ *    the template directory so that it now updates more PDS keyword values.
+ *    Thus modified WriteLabelFile and renamed it WriteUpdatedLabelFile.
+ *       Erik P G Johansson 2015-05-04
+ *  * Fixed bug that made INDEX.LBL not adjust to the DATA_SET_ID column changing width.
+ *       Erik P G Johansson 2015-05-12
+ *
+ * CHANGES FROM VERSION 3.08 TO 3.09
+ *  * Fixed bug that made ADC20 always choose high-gain.
+ *       Erik P G Johansson 2015-06-03
+ *  * Added code for calibrating ADC20 data relative to ADC16
+ *    See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
+ *    Also see added constants in "pds.h".
+ *       Erik P G Johansson 2015-06-10
+ *  * Fixed bug that multiplied ccalf_ADC16 by 16 for non-truncated ADC20 data, density mode, P1/P2.
+ *    This led to calibration offsets being multiplied by 16.
+ *    (Braces surrounding the statements after two if-then were missing.)
+ *       Erik P G Johansson 2015-08-31
+ *  * Fixed potential bug that interpreted macro ID strings as decimal numbers rather than hexadecimal numbers.
+ *    Code still worked since the result was only used to compare with decimal macro ID numbers
+ *    and the code (seemed to) fail well for hexadecimal string representations.
+ *       Erik P G Johansson 2015-12-07
+ *  * Added extra flags for overriding the MISSION_PHASE_NAME, period start date & duration, and description
+ *    string used in DATA_SET_ID and DATA_SET_NAME.
+ *       Erik P G Johansson 2015-12-09
+ *  * Start time & duration can now be specified with higher accuracy than days using CLI parameters.
+ *  * All logs now display wall time the same way ("3pds_dds_progress.log" was previously different).
+ *  * Bug fix: pds.modes can now handle colons in the description string.
+ *  * Raised permitted string length for code interpreting "pds.modes". Can now (probably) handle all rows up
+ *    to 1024 characters, including CR & LF.
+ *       Erik P G Johansson 2015-12-17
+ *  * Bug fix: Reading LBL files failed to add CR at end-of-line for first line of multiline keyword values.
+ *    Bug was in ReadLabelFile(..).
+ *    This caused newlines without CR when pds modified
+ *       CALIB/RPCLAP030101_CALIB_FRQ_D_P1.LBL
+ *       CALIB/RPCLAP030101_CALIB_FRQ_E_P1.LBL
+ *       CALIB/RPCLAP030101_CALIB_FRQ_D_P2.LBL
+ *       CALIB/RPCLAP030101_CALIB_FRQ_E_P2.LBL
+ *       /Erik P G Johansson 2015-12-10, 2016-03-21
+ *  * Bug fix: StrucDir no longer alters parameter "date".
+ *       /Erik P G Johansson 2016-03-21.
+ *  * Bug fix: DecodeHK/ExitPDS:
+ *    Last HK LBL file in data set: SPACECRAFT_CLOCK_STOP_COUNT was erroneously effectively same as SPACECRAFT_CLOCK_START_COUNT.
+ *    Every HK LBL file with only one row (in TAB file): STOP_TIME was only a year.
+ *       /Erik P G Johansson 2016-03-21.
+ *  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
+ *      /Erik P G Johansson 2016-03-22
+ *  * Updated to update LBL files under DOCUMENT/ (recursively).
+ *      /Erik P G Johansson 2016-04-04
+ *  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
+ *      /Erik P G Johansson 2016-04-11
+ *  * Updated the way offset calibrations and TM conversion factors are selected.
+ *    Uses the nearest calibration by default. Added a manual "calibration selection" list (override).
+ *    Removes unused calibration files (replaces the previous functionality for removing unused calibration files).
+ *      /Erik P G Johansson 2016-04-13
+ *
+ *
+ *
+ * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
+ *        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
+ *     NOTE: Changing this will/might cause backward-compatibility issues with lapdog and write_calib_meas.
+ * "BUG": Code requires output directory path in pds.conf to end with slash.
+ * "BUG": The code still does not update the LBL files in the DOCUMENT/ directory.
+ * BUG: HK label files do not use "fingerprinting" for identifying macros (only DecodeScience does) and can therefor
+ *      not recognize all macros.
+ *
+ *
+ *
+ * NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
+ *       This is due to dysfunctional automatic indentation in the Kate editor.
+ * NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
+ * NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
+ * Code concern includes (incomplete list): function E2Epoch (used only once), possibly the use of bias e.g. in LoadBias.
+ * Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to
+ *
+ *====================================================================================================================
+ */
 
 // *************************************************************
 // -= "Emancipate yourself from mental slavery..", Bob Marley =-
@@ -5411,129 +5412,6 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
     }
     free(dir_entry_list);   // Free pointer to array of pointers
 }
-
-/*
- * int  GetMCFiles_old(char *rpath,char *fpath,m_type *m)
- * {
- * prp_type mc_lbl; // Linked property/value list for measured data offset and conversion to volts/ampere.
- * property_type *property;
- * 
- * char name[PATH_MAX];
- * char *base;                 // Basename
- * 
- * DIR           *dir;         // Directory
- * struct dirent *dentry;      // Directory entry
- * int n=0;
- * 
- * base=basename(fpath); // Get basic name for measured data calib files
- * 
- * if((dir = opendir(rpath))==NULL) // Open Calibration directory
- *    {
- *    perror("opendir");
- *    YPrintf("Couldn't open calibration directory\n");
- *    return -1;
- *    }
- * 
- * rewinddir(dir);   // Rewind
- * dentry=readdir(dir);  // Get first entry
- * 
- * // First time we just count matching files!
- * while(dentry!=NULL) // Do a linear search through all filnames....to find the last one
- *    {  
- *    if(!Match(base,dentry->d_name)) // Match filename to pattern
- *    {
- *    n++; 
- *    YPrintf("Offset and TM conversion files: %s\n",dentry->d_name);  // Matching file name
- *    }
- *    dentry=readdir(dir); // Get next filename 
- *    }
- * 
- * rewinddir(dir);   // Rewind
- * dentry=readdir(dir);  // Get first entry
- * 
- * 
- * if(n==0)
- *    {
- *    YPrintf("No offset or factor calibration label files found\n");
- *    return -2;
- *    }
- * 
- * // Allocate memory for factor and offset structure arrays..
- * m->n=n;
- * if((m->CF=(cf_type *)CallocArray(m->n,sizeof(cf_type)))==NULL)
- *    {
- *    YPrintf("Error allocating memory for array of factor structures\n");
- *    closedir(dir);
- *    return -3;
- *    }
- * 
- * if((m->CD=(c_type *)CallocArray(m->n,sizeof(c_type)))==NULL)
- *    {
- *    YPrintf("Error allocating memory for array of calibration structures\n");
- *    free(m->CF);
- *    closedir(dir);
- *    return -4;
- *    }
- * 
- * n=0;
- * while(dentry!=NULL) // Do a linear search through all filnames....to find the last one
- *    {  
- *    if(!Match(base,dentry->d_name)) // Match filename to pattern
- *    {
- *    sprintf(name,"%s%s",rpath,dentry->d_name); // Construct full path
- *    InitP(&mc_lbl);
- *    if(ReadLabelFile(&mc_lbl,name)<0) // Read offset and TM calibration file
- *        {
- *        // ExitPDS() will free m->CF and m->CD memory at exit.
- *        FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
- *        closedir(dir);
- *        return -5;
- *        }
- * 
- *    SetP(&mc_lbl,"DATA_SET_ID",mp.data_set_id,1);       // Set DATA SET ID in calibration file
- *    SetP(&mc_lbl,"DATA_SET_NAME",mp.data_set_name,1);   // Set DATA SET NAME in calibration file     
- *    WriteLabelFile(&mc_lbl,name);                       // Write back label file with new info
- * 
- *    FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_16B",1,DNTCARE);
- *    sscanf(property->value,"\"%le\"",&m->CF[n].v_cal_16b);
- *    FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_20B",1,DNTCARE);
- *    sscanf(property->value,"\"%le\"",&m->CF[n].v_cal_20b);
- *    FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_16B_G1",1,DNTCARE);
- *    sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_16b_hg1);
- *    FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_20B_G1",1,DNTCARE);
- *    sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_20b_hg1);
- *    FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_16B_G0_05",1,DNTCARE);
- *    sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_16b_lg);
- *    FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_20B_G0_05",1,DNTCARE);
- *    sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_20b_lg); 
- * 
- *    if(debug>2)
- *        {
- *        printf("ROSETTA:LAP_VOLTAGE_CAL_16B %e\n",m->CF[n].v_cal_16b);
- *        printf("ROSETTA:LAP_VOLTAGE_CAL_20B %e\n",m->CF[n].v_cal_20b);
- *        printf("ROSETTA:LAP_CURRENT_CAL_16B_G1 %e\n",m->CF[n].c_cal_16b_hg1); 
- *        printf("ROSETTA:LAP_CURRENT_CAL_20B_G1 %e\n",m->CF[n].c_cal_20b_hg1);
- *        printf("ROSETTA:LAP_CURRENT_CAL_16B_G0_05 %e\n",m->CF[n].c_cal_16b_lg); 
- *        printf("ROSETTA:LAP_CURRENT_CAL_20B_G0_05 %e\n",m->CF[n].c_cal_20b_lg); 
- *        }
- * 
- *    if(ReadTableFile(&mc_lbl,&m->CD[n],rpath)<0) // Read data into array of data structures
- *        {
- *        // ExitPDS() will free m->CF and m->CD memory at exit.
- *        FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
- *        closedir(dir);
- *        return -6;
- *        }
- *    n++;
- *    FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
- *    }
- *    dentry=readdir(dir); // Get next filename 
- *    }
- * 
- * closedir(dir);
- * return 0;
- * }
- */
 
 
 // Given a path (p->mcpath) and mission phase abbreviation (m->abbrev), initialize an instance of mp_type with data from the mission calendar file.
