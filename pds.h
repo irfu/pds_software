@@ -1,3 +1,7 @@
+
+#define FALSE 0
+#define TRUE 1              // NOTE: Mostly useful for assignment. NOTE: If all non-zero values represent true, then comparing with this does not work for equality checks ("true==true", but still 1!=2).
+
 #define EPS 1E-10           // Just a small number
 #define MLEN_DSID 1024      // Max length of data set ID. (Officially max 40 char string, according to "Rosetta Archiving Conventions".)
 #define MLEN_DSNA 1024      // Max length of data set name. (Officially max 60 char string, according to "Rosetta Archiving Conventions".)
@@ -178,11 +182,32 @@ typedef struct cf_type_def
   double c_cal_20b_lg;  
 } cf_type;
 
+// Linked list. Last item has next==NULL.
+typedef struct calib_interval_struct
+{
+    struct calib_interval_struct *next;
+    time_t  t_begin;
+    time_t  t_end;
+} calib_interval_type;
+
+// Could probably be merged with cf_type but want to avoid renaming variable m_type.CF (used in many places).
+typedef struct calibration_info_struct
+{
+    char                 *LBL_filename;            // Needed for (possibly) deleting unused calibration files and for matching calibration selection time intervals.
+    int                  calibration_file_used;    // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
+    calib_interval_type  *intervals;   // Array of linked list of time intervals.
+} calib_info_type;
+
+
+
+// Structure containing data read from the offset calibration files (CALIB_MEAS LBL+TAB files).
+// and information on when the information should be used.
 typedef struct m_type_def
 {
-  int n;         // Lengt of arrays below
-  cf_type *CF;   // Array of calibration factor structures 
-  c_type  *CD;   // Array of calibration data structures
+  int              n;            // Length of arrays below
+  cf_type          *CF;          // Array of calibration factor (CF) structures
+  c_type           *CD;          // Array of calibration data (CD) structures
+  calib_info_type  *calib_info;  // Array of calibration info structures
 } m_type;
 
 
@@ -293,6 +318,7 @@ typedef struct pds_type_def
   char cpathdfp2[PATH_MAX];    // Path to density frequency response probe 2
   char cpathefp1[PATH_MAX];    // Path to e-field frequency response probe 1
   char cpathefp2[PATH_MAX];    // Path to e-field frequency response probe 2
+  char cpathcs[PATH_MAX];      // Path to calibration selection (cs) data. May or may not be under the CALIB/ directory.
   char spaths[PATH_MAX];       // Data subdirectory path for PDS science
   char dpathh[PATH_MAX];       // Data path PDS HK
   char spathh[PATH_MAX];       // Data subdirectory path for PDS HK

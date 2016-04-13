@@ -73,13 +73,14 @@
 //       /Erik P G Johansson 2016-03-21.
 //  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
 //      /Erik P G Johansson 2016-03-22
-//  * Updated to remove unused CALIB_MEAS files.
-//    NOTE: This algorithm has to be synced with code for chosing calibration files based on time of data.
-//      /Erik P G Johansson 2016-03-23.
 //  * Updated to update LBL files under DOCUMENT/ (recursively).
 //      /Erik P G Johansson 2016-04-04
 //  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
 //      /Erik P G Johansson 2016-04-11
+//  * Updated the way offset calibrations and TM conversion factors are selected.
+//    Uses the nearest calibration by default. Added a manual "calibration selection" list (override).
+//    Removes unused calibration files (replaces the previous functionality for removing unused calibration files).
+//      /Erik P G Johansson 2016-04-13
 //
 //
 //
@@ -189,8 +190,9 @@ int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depa
 int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData);
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
-int  GetMCFiles(char *rpath,char *fpath,m_type *m);                             // Get measured data calibration files 
-int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp,pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp) 
+int  LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m_type *m);             // Get measured data calibration files
+void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries);
+int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp,pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
 
 // Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
 void DeriveDSIandDSN(
@@ -206,7 +208,11 @@ int WriteUpdatedLabelFile(prp_type *pds, char *name, char update_PUBLICATION_DAT
 int ReadLabelFile(prp_type *pds,char *name);                                            // Read a label file 
 int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);                           // Read table file
 
-char getBiasMode(curr_type *curr, int dop);
+// Miscellaneous functions
+//----------------------------------------------------------------------------------------------------------------------------------
+char GetBiasMode(curr_type *curr, int dop);
+int  SelectCalibrationData(time_t, m_type*);
+int  RemoveUnusedOffsetCalibrationFiles(char*, m_type*);
 
 // Write data to data product table file .tab
 int WritePTAB_File(
@@ -418,7 +424,8 @@ pds_type pds =
     "",         // Path to density frequency response probe 2
     "",         // Path to e-field frequency response probe 1
     "",         // Path to e-field frequency response probe 2
-    "",         // Data subdirectory path for PDS science   
+    "",         // Calibration selection data.
+    "",         // Data subdirectory path for PDS science
     "",         // Data path PDS HK			       
     "",         // Data subdirectory path for PDS HK	       
     "",         // Path to data that has not been accepted	       
@@ -581,8 +588,13 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Mandatory mission phase abbreviation argument is missing.\n");
         exit(1);
     }
-    
-    
+
+
+
+    sprintf(pds.cpathcs, "%s/%s", getenv("HOME"), "pds.calibrationselection");
+
+
+
     //=============================================
     // Get volume ID option
     //=============================================
@@ -884,11 +896,17 @@ int main(int argc, char *argv[])
     //==================================================================================================================================
     FreePrp(&tmp_lbl);                                          // Deallocate dynamic memory.
     
-    status+=GetMCFiles(pds.cpathd, pds.cpathm, &m_conv);        // Get measurement calibration files
-
+    // Check if any of the (several) preceeding functions generated error.
     if(status<0)
     {
         YPrintf("Can not get or interpret the calibration files. Exiting.\n");
+        ExitPDS(1);
+    }
+
+    status = LoadOffsetCalibrationsTMConversion(pds.cpathd, pds.cpathm, pds.cpathcs, &m_conv);        // Get measurement calibration files
+    if(status<0)
+    {
+        YPrintf("Can not load offset calibration TM conversion files, and or calibration selection file. Function error code %i. Exiting.\n", status);
         ExitPDS(1);
     }
 
@@ -1646,7 +1664,7 @@ void *DecodeScience(void *arg)
         char indexStr[256];
         
         // Modify filenames and product ID.
-        if(getBiasMode(&curr, dop)==E_FIELD) {
+        if(GetBiasMode(&curr, dop)==E_FIELD) {
             tempChar = 'E';
         } else {
             tempChar = 'D';
@@ -3421,7 +3439,7 @@ void *DecodeScience(void *arg)
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
-                                                                if(getBiasMode(&curr, 1)==E_FIELD) {
+                                                                if(GetBiasMode(&curr, 1)==E_FIELD) {
                                                                     tempChar = 'E';
                                                                 } else {
                                                                     tempChar = 'D';
@@ -3470,7 +3488,7 @@ void *DecodeScience(void *arg)
                                                             {
                                                                 // Set to [E]-Field or keep [D]ensity.
                                                                 char tempChar;
-                                                                if(getBiasMode(&curr, 2)==E_FIELD) {
+                                                                if(GetBiasMode(&curr, 2)==E_FIELD) {
                                                                     tempChar = 'E';
                                                                 } else {
                                                                     tempChar = 'D';
@@ -3702,6 +3720,13 @@ void ExitPDS(int status)
         fflush(pds.itable_fd);     // Flush and close
         fclose(pds.itable_fd);     // Close table file
     }
+
+
+    int func_status = RemoveUnusedOffsetCalibrationFiles(pds.cpathd, &m_conv);
+    if (func_status < 0) {
+        YPrintf("Error when removing unused calibration files. Function error code %i\n", func_status);
+    }
+
     
     if(comm.no_prop!=0 && comm.properties!=NULL) // Something in comm structure?
         FreePrp(&comm);                           // Then free comm memory
@@ -3739,6 +3764,20 @@ void ExitPDS(int status)
                         }
                     }
                     free(m_conv.CD);
+                }
+                if(m_conv.calib_info!=NULL && m_conv.n!=0) {
+                    for(i=0;i<m_conv.n;i++)
+                    {
+                        free(m_conv.calib_info[i].LBL_filename);
+
+                        calib_interval_type *next_ci = m_conv.calib_info[i].intervals;
+                        while (next_ci != NULL) {
+                            calib_interval_type *prev_ci = next_ci;
+                            next_ci = next_ci->next;
+                            free(prev_ci);
+                        }
+                    }
+                    free(m_conv.calib_info);
                 }
             }
             
@@ -5091,14 +5130,23 @@ void RunShellCommand(char *command_str)
 
 
 
-// Gets measured data calibration files 
-// Returns data in data structure "m".
-// 
-// MC = Measurement/measured calibration(?)
-// 
-// NOTE: Removes calibration files copied from the template directory before they are even loaded/read.
-// This means it makes some assumptions on which files are actually used in the actual calibration.
-int GetMCFiles(char *rpath, char *fpath, m_type *m)
+/*
+ * Reads measured offset calibration files and the "calibration selection" list file.
+ * The calibration selection file contains manually selected time intervals which should specific calibrations..
+ * Returns data in data structure "m".
+ *
+ * MC = Measurement/measured calibration(?)
+ *
+ * IMPLEMENTATION NOTE: The code should be able to handle a future PDS compliant calibration selection LBL file.
+ * It should therefore be able to handle newline=CR+LF.
+ * NOTE: The function rewrites the offset calibration LBL files with some updated information.
+ * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills the data structure used by that algorithm.
+ *
+ * rpath : Path to directory where the CALIB_MEAS files are (LBL+TAB).
+ * fpath : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS filenames must match the pattern. The rest of the string/path is unused(!).
+ * cspath : Path to calibration selection file.
+ */
+int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m_type *m)
 {
     // FKJN 2014-09-04
     // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
@@ -5106,130 +5154,52 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
     property_type *property;
 
     char file_path[PATH_MAX];
-    char *base;                 // Basename
-    char tstr1[1024];
-    char tstr2[1024];
-    
+    char *filename_pattern;
     struct dirent **dir_entry_list;     // (Pointer to array of pointers.)
     struct dirent *dentry;              // Directory entry
-    int n=0;
+    int N_calibrations;
     int i=0;
     int N_dir_entries;
-    
-    // Whether the algorithm has already kept one calibration file (pair) before the beginning of the time period covered by the data set.
-    int kept_one_before_begin = 0;
-    
-    
-    
-    base=basename(fpath);   // Get basic name for measured data calib files
-    
-    //======================================
-    // Remove unnecessary calibration files
-    // ------------------------------------
-    // IMPLEMENTATION NOTE: This should maybe ideally be incorporated into the other loops over files.
-    // NOTE: Assumes that list of calibration files is sorted in time.
-    // NOTE: Iterates over files in reverse order (backwards in time) to make the algorithm work.
-    //=================================================================================================
-//     YPrintf("Trying to remove unnecessarily copied calibration files\n");     // DEBUG
-    N_dir_entries=scandir(rpath, &dir_entry_list, 0, alphasort);   // Sorts files alphanumerically.
-    if (N_dir_entries<0)
-    {
-        printf("N_dir_entries = %i  \t rpath = %s", N_dir_entries, rpath);
-        YPrintf("Couldn't open/scan calibration directory\n");
-        return -1;
-    } else {
-        for (i=N_dir_entries-1; i>=0; i--)
-        {
-            dentry = dir_entry_list[i];
-            if (!Match(base,dentry->d_name)) // Match filename to pattern
-            {
-                sprintf(file_path, "%s%s", rpath, dentry->d_name);      // Construct full path
-                InitP(&mc_lbl);
-                if (ReadLabelFile(&mc_lbl,file_path)<0) // Read offset and TM calibration file
-                {
-                    FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
-                    return -5;
-                }
+    int i_calib;
 
-                // Find START_TIME.
-                // NOTE: There is no STOP_TIME for these files.
-                FindP(&mc_lbl,&property,"START_TIME",1,DNTCARE);
-                int status = 0;
-                time_t mc_t;
-                if((status=TimeOfDatePDS(property->value,&mc_t)) < 0) {
-                    fprintf(stderr, "Can not find or convert START_TIME to a time: error code %i\n", status);
-                    YPrintf(        "Can not find or convert START_TIME to a time: error code %i\n", status);
-                }
-            
-                // Delete file LBL+TAB pair if they are found to be unnecessary.
-                // NOTE: It is important that "kept_one_before_begin" is initialized to false (zero) for this to work with the first file.
-                if ((kept_one_before_begin & (mc_t < mp.start)) | (mp.stop < mc_t)) {
-                    // CASE: Calibration time is NOT within the time period covered by the data set and
-                    // one file pair has already been kept before the time period.
-                    // ==> Delete file.
-                    printf( "Offset and TM conversion file: %s - Removes (the copied file)\n", dentry->d_name);
-                    YPrintf("Offset and TM conversion file: %s - Removes (the copied file)\n", dentry->d_name);
-                    
-                    // Get path to corresponding TAB file by reading LBL file.
-                    FindP(&mc_lbl, &property, "^TABLE", 1, DNTCARE);    // Get file name (TAB file name).
-                    strcpy(tstr1, property->value);
-                    TrimQN(tstr1);                                      // Trim quotes away.
-                    sprintf(tstr2, "%s%s", rpath, tstr1);               // Construct path + filename
-                    
-                    // Delete LBL+TAB file pair.
-                    sprintf(tstr1, "rm   \"%s\"   \"%s\"", file_path, tstr2);
-                    RunShellCommand(tstr1);
-                } else {
-                    // Keep file pair.
-                    kept_one_before_begin = (mc_t < mp.start);
-                }
-                
-                FreePrp(&mc_lbl);  // Free allocated memory.                        
-            }
-        }
 
-        for (i = 0; i < N_dir_entries; i++)   // Need to free array of all “returns”.. some other time.
-        {
-            free(dir_entry_list[i]); //free pointer
-        }
-        free(dir_entry_list);   // Free pointer to array of pointers
-    }
-//     YPrintf("Finished trying to remove unnecessarily copied calibration files\n");     // DEBUG
 
-    
-    
+    // Get the name of the file/directory (the part of the path after the last "/"). Is used as a filename pattern for measured data calib files.
+    filename_pattern=basename(fpath);
+
+    // Read files in CALIB directory.
     // FKJN sort it alphanumerically first. 2/9 2014
     N_dir_entries = scandir(rpath, &dir_entry_list, 0, alphasort);
     if (N_dir_entries <0)
     {
-        printf("N_dir_entries = %i  \t rpath = %s\n",N_dir_entries,rpath);
-        YPrintf("Couldn't open/scan calibration directory\n");
+        YPrintf("Could not open/scan calibration directory\n");
         return -1;
     }
-    
-    // (Only) count matching files.
-    i=0;
-    dentry=dir_entry_list[i];
+
+    //====================================================================================
+    // Count the number of matching files. (Needed to allocate arrays of the right size.)
+    //====================================================================================
+    N_calibrations = 0;
     for(i=0; i<N_dir_entries; i++)
     {
         dentry=dir_entry_list[i];
-        
-        if(!Match(base,dentry->d_name)) // Match filename to pattern
+        if(!Match(filename_pattern,dentry->d_name)) // Match filename to pattern
         {
-            n++;
-            YPrintf("Offset and TM conversion file: %s - Kept\n", dentry->d_name);  // Matching file name
+            N_calibrations++;
         }
         dentry=dir_entry_list[i];  // Get next filename.
     }
-    
-    if(n==0)
+
+    if(N_calibrations==0)
     {
         YPrintf("No offset or factor calibration label files found\n");
         return -2;
     }
     
-    // Allocate memory for factor and offset structure arrays.
-    m->n=n;
+    //==============================================================================================================
+    // Allocate memory (arrays) for the calibration data structure (one component per offset calibration file pair)
+    //==============================================================================================================
+    m->n=N_calibrations;
     if((m->CF=(cf_type *)CallocArray(m->n,sizeof(cf_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of factor structures\n");        
@@ -5241,16 +5211,23 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
         free(m->CF);
         return -4;
     }
+    if((m->calib_info=(calib_info_type *)CallocArray(m->n,sizeof(calib_info_type)))==NULL)
+    {
+        YPrintf("Error allocating memory for array of calibration info structures\n");
+        free(m->CF);
+        return -5;
+    }
     
-    
-    //============================
-    // Iterate over all filenames
-    //============================
-    n=0;
+
+
+    //====================================================================================
+    // Iterate over all filenames - Read conversion factors and offset calibration tables
+    //====================================================================================
+    i_calib=0;
     for(i=0; i<N_dir_entries; i++)
     {
         dentry=dir_entry_list[i];
-        if(!Match(base,dentry->d_name)) // Match filename to pattern
+        if(!Match(filename_pattern,dentry->d_name))
         {
             // CASE: Filename matches pattern.
 
@@ -5265,7 +5242,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
-                return -5;
+                return -6;
             }
             
             WriteUpdatedLabelFile(&mc_lbl, file_path, 1);   // NOTE: Write back label file with new info.
@@ -5274,50 +5251,166 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
             // Extract calibration factors from the LBL file
             //===============================================
             FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_16B",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[n].v_cal_16b);
+            sscanf(property->value,"\"%le\"",&m->CF[i_calib].v_cal_16b);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_20B",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[n].v_cal_20b);
+            sscanf(property->value,"\"%le\"",&m->CF[i_calib].v_cal_20b);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_16B_G1",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_16b_hg1);
+            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_16b_hg1);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_20B_G1",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_20b_hg1);
+            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_20b_hg1);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_16B_G0_05",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_16b_lg);
+            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_16b_lg);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_20B_G0_05",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[n].c_cal_20b_lg);
-            
+            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_20b_lg);
+
             if(debug>2)
             {
-                printf("ROSETTA:LAP_VOLTAGE_CAL_16B %e\n",m->CF[n].v_cal_16b);
-                printf("ROSETTA:LAP_VOLTAGE_CAL_20B %e\n",m->CF[n].v_cal_20b);
-                printf("ROSETTA:LAP_CURRENT_CAL_16B_G1 %e\n",m->CF[n].c_cal_16b_hg1);
-                printf("ROSETTA:LAP_CURRENT_CAL_20B_G1 %e\n",m->CF[n].c_cal_20b_hg1);
-                printf("ROSETTA:LAP_CURRENT_CAL_16B_G0_05 %e\n",m->CF[n].c_cal_16b_lg);
-                printf("ROSETTA:LAP_CURRENT_CAL_20B_G0_05 %e\n",m->CF[n].c_cal_20b_lg);
+                printf("ROSETTA:LAP_VOLTAGE_CAL_16B       = %e\n", m->CF[i_calib].v_cal_16b);
+                printf("ROSETTA:LAP_VOLTAGE_CAL_20B       = %e\n", m->CF[i_calib].v_cal_20b);
+                printf("ROSETTA:LAP_CURRENT_CAL_16B_G1    = %e\n", m->CF[i_calib].c_cal_16b_hg1);
+                printf("ROSETTA:LAP_CURRENT_CAL_20B_G1    = %e\n", m->CF[i_calib].c_cal_20b_hg1);
+                printf("ROSETTA:LAP_CURRENT_CAL_16B_G0_05 = %e\n", m->CF[i_calib].c_cal_16b_lg);
+                printf("ROSETTA:LAP_CURRENT_CAL_20B_G0_05 = %e\n", m->CF[i_calib].c_cal_20b_lg);
             }
-            
-            if(ReadTableFile(&mc_lbl,&m->CD[n],rpath)<0) // Read data into array of data structures
+
+            //=======================================================
+            // Read calibration tables into array of data structures
+            //=======================================================
+            if(ReadTableFile(&mc_lbl, &m->CD[i_calib], rpath)<0)
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
-                return -6;
+                return -7;
             }
-            n++;
-            FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
+
+            m->calib_info[i_calib].LBL_filename = strdup(dentry->d_name);
+            m->calib_info[i_calib].calibration_file_used = FALSE;
+            m->calib_info[i_calib].intervals = NULL;
+
+            i_calib++;
+            FreePrp(&mc_lbl);  // Free linked property/value list for measured data offset
         }
         dentry=dir_entry_list[i];
     }
     
-    for (i = 0; i < N_dir_entries; i++)   // Need to free array of all “returns”.. some other time.
-    {
-        free(dir_entry_list[i]); //free pointer
+    FreeDirEntryList(dir_entry_list, N_dir_entries);
+
+
+
+    //=================================
+    // Read calibration selection list
+    //=================================
+
+    FILE *fd;
+    char tstr[256+PATH_MAX];
+    if((fd=fopen(cspath, "r"))==NULL) {
+        sprintf(tstr, "Can not open calibration selection file \"%s\"\n", cspath);
+        YPrintf(tstr);
+        perror(tstr);
+        return -10;
     }
-    free(dir_entry_list);   // Free pointer to array of pointers
-    
+
+    YPrintf("Reading calibration selection file: %s\n", cspath);
+    char line[1024];   // Line buffer
+    while (fgets(line, 1024, fd) != NULL)
+    {
+        if (line[0] == '\n') continue;  // Ignore empty line.
+        if (line[0] == '\r') continue;  // Ignore empty line ending with CR+LF.
+        if (line[0] == '#')  continue;  // Ignore comments.
+//         if (line[0] == ' ')  continue;  // Ignore whitespace line - DISABLED since contradicts permitting leading whitespace when parsing later.
+
+        TrimWN(line);   // Convert CR and LF to whitespace, then trim leading and trailing whitespace.
+        char str_t_begin[256], str_t_end[256], LBL_filename[256];
+
+        // NOTE: The format specifier %s includes comma. Must therefore specify something like
+        // %[^,] or %[^, ] instead (read all characters but comma, or whitespace). Cf regular expressions.
+        // NOTE: Better trim whitespace after sscanf for time strings so that they can contain whitespace.
+        // NOTE: Whitespace represents any sequence of whitespace and tab, incl. none at all.
+        if (sscanf(line, " %[^,], %[^,], %[^, ] ", str_t_begin, str_t_end, LBL_filename) != 3)
+        {
+            sprintf(tstr, "Error interpreting line in calibration selection file (sscanf): \"%s\"\n", line);
+            YPrintf(tstr);
+            perror(tstr);
+
+            fclose(fd);
+            return -11;
+        }
+        TrimWN(str_t_begin);
+        TrimWN(str_t_end);
+
+        TrimWN(LBL_filename);   // Remove leading and trailing whitespace, remove CR (if any). Can be important depending on the exact chosen file format (future PDS compliant).
+
+        time_t t_begin, t_end;
+        if ((TimeOfDatePDS(str_t_begin, &t_begin) < 0) || (TimeOfDatePDS(str_t_end, &t_end) < 0)) {
+            sprintf(tstr, "Error interpreting time in calibration selection file: \"%s\"\n", line);
+            YPrintf(tstr);
+            perror(tstr);
+
+            fclose(fd);
+            return -12;
+        }
+        if (difftime(t_end, t_begin) <= 0)
+        {
+            sprintf(tstr, "The stated time interval in calibration selection file has non-positive length: \"%s\"\n", line);
+            YPrintf(tstr);
+            perror(tstr);
+
+            fclose(fd);
+            return -13;
+        }
+
+        // Print the strings read and parsed by the code. Indentation to connect it to previous log message "title".
+        YPrintf("   Read strings \"%s\", \"%s\", \"%s\"\n", str_t_begin, str_t_end, LBL_filename);
+
+        //================================================================================================
+        // Add information about (one) interval to the linked list for the corresponding calibration file.
+        //================================================================================================
+        // Find index by searching for matching filename.
+        int found_matching_file = FALSE;
+        for (i=0; i<m->n; i++) {
+            if (!strcmp(LBL_filename, m->calib_info[i].LBL_filename)) {
+                found_matching_file = TRUE;
+                break;
+            }
+        }
+        if (found_matching_file) {
+            // Add link first in linked list.
+            calib_interval_type *new_interval = malloc(sizeof *new_interval);
+            new_interval->next = m->calib_info[i].intervals;
+            m->calib_info[i].intervals = new_interval;
+            new_interval->t_begin = t_begin;
+            new_interval->t_end   = t_end;
+        } else  {
+            sprintf(tstr, "Error interpreting filename in calibration selection file: \"%s\"\n", LBL_filename);
+            YPrintf(tstr);
+            perror(tstr);
+
+            fclose(fd);
+            return -14;
+        }
+
+    }
+    fclose(fd);
+
     return 0;
 }   // LoadOffsetCalibrationsTMConversion
 
 
+
+// Free all the allocated memory associated with the list of directory entries returned from a call to scandir.
+//
+// NOTE: Will also deallocate the array pointed to by dir_entry_list.
+void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
+{
+    int i;
+    for (i = 0; i < N_dir_entries; i++)
+    {
+        // IMPLEMENTATION NOTE: One does not need to free dir_entry_list[i]->d_name since it is presumably not separatly allocated on the heap;
+        // "The character array d_name is of unspecified size, but the number of bytes preceding the terminating null byte shall not exceed {NAME_MAX}."
+        free(dir_entry_list[i]);
+    }
+    free(dir_entry_list);   // Free pointer to array of pointers
+}
 
 /*
  * int  GetMCFiles_old(char *rpath,char *fpath,m_type *m)
@@ -5619,15 +5712,7 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
         }
     }
 
-
-    // Free allocated memory.
-    // NOTE: Uncertain if this code actually frees everything it should.
-    for (i = 0; i < N_files; i++)   // Need to free array of all “returns”.. some other time.
-    {
-        free(dir_entry_list[i]);
-    }
-    free(dir_entry_list);
-
+    FreeDirEntryList(dir_entry_list, N_files);
     return 0;
 }
 
@@ -5942,21 +6027,165 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
 //
 // dop : See "WritePTAB_File".
 // NOTE: The return type is chosen to agree with pds.h:curr_type_def#bias_mode1/2.
-char getBiasMode(curr_type *curr, int dop) {
+// NOTE: If the assertion error is ever triggered, and pds does NOT exit, then it might fill up the logs with far too many log messages.
+//
+char GetBiasMode(curr_type *curr, int dop) {
     if (curr->sensor==SENS_P1 || dop==1) {
         return curr->bias_mode1;
     } else if (curr->sensor==SENS_P2 || dop==2) {
         return curr->bias_mode2;
     } else if (curr->sensor==SENS_P1P2 && dop==0) {
         if (curr->bias_mode1 != curr->bias_mode2) {
-            CPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
-            YPrintf("ASSERTION ERROR: getBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+            CPrintf("ASSERTION ERROR: GetBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+            YPrintf("ASSERTION ERROR: GetBiasMode: curr->bias_mode1 != curr->bias_mode2 for dop=0.\n");
+            ExitPDS(1);
         }
         return curr->bias_mode1;
     }
     
-    CPrintf("Error: getBiasMode: Can not determine bias mode (curr->sensor=%i).\n", curr->sensor);
+    CPrintf("Error: GetBiasMode: Can not determine bias mode (curr->sensor=%i).\n", curr->sensor);
     return -1;
+}
+
+
+
+/*
+ * Function to select which calibration data to used for a given point in time.
+ *
+ * NOTE: The function will set the flag mc->calibration_used.
+ *
+ * t_data : The time for which we have science data.
+ * mc : Calibration data.
+ * Return value : An index into the corresponding arrays in "mc".
+ */
+int SelectCalibrationData(time_t t_data, m_type *mc)
+{
+    /*
+     * Algorithm for selecting the calibration nearest in time.
+     *
+     * ASSUMES: Calibrations are sorted in time (increasing).
+     *
+     * IMPLEMENTATION NOTE: This is potentially unnecessarily slow since every calibration data time stamp must be converted:
+     * mc->CD[i].validt: UTC string --> time_t --> scalar variable,
+     *
+     * Naming convention:
+     *    t_*  = Variable of type time_t.
+     *    tp_* = Variable of type double, representing the number of seconds after an arbitrary reference epoch (same for all tp_* variables).
+     */
+
+    //#######################################
+    /* FUNCTION: Return number of seconds since an arbitrary epoch (a constant reference point in time).
+     *
+     * ASSUMES: The refence epoch variable has been initialized.
+     * RATIONALE: According the time_t documentation, one should really avoid doing arithmetic with time_t variables since its meaning
+     * depends on the library implementation. There is also no proper(?) way of converting from time_t to a scalar time (e.g. seconds
+     * after some universal reference time, e.g. 1970-01-01, 00:00.00) more than difftime.
+     */
+    time_t t_ref;
+    TimeOfDatePDS(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
+    inline double GetSecondsTime(time_t t)
+    {
+        return difftime(t, t_ref);
+    }
+    //#######################################
+
+    double tp_calib2, tp_calib1, tp_data;
+    time_t t_calib;        // Calibration time for current calibration.
+    int i;
+
+    tp_data = GetSecondsTime(t_data);
+
+    // Check if t_data is covered by any of pre-defined time intervals in the calibration selection list.
+    for (i=0; i<mc->n; i++)   // Iterate over calibrations.
+    {
+        calib_interval_type *interval = mc->calib_info[i].intervals;
+
+        while (interval!=NULL) {
+            if ((GetSecondsTime(interval->t_begin) <= tp_data) && (tp_data <= GetSecondsTime(interval->t_end))) {
+                mc->calib_info[i].calibration_file_used = TRUE;
+                return i;
+            }
+            interval = interval->next;
+        }
+    }
+
+    // Derive the calibration which is is closest in time.
+    TimeOfDatePDS(mc->CD[0].validt, &t_calib);
+    tp_calib2 = GetSecondsTime(t_calib);
+    for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
+    {
+        tp_calib1 = tp_calib2;
+
+        TimeOfDatePDS(mc->CD[i+1].validt, &t_calib);
+        tp_calib2 = GetSecondsTime(t_calib);
+
+        double tp_middle = (tp_calib1 + tp_calib2) / 2.0;   // Middle between calibration times.
+        if (tp_data <= tp_middle) {
+            break;
+        }
+    }
+
+    mc->calib_info[i].calibration_file_used = TRUE;
+    return i;   // NOTE: Returns zero if there is only one calibration (i.e. no iterations in the for loop). The for loop will still initialize i=0.
+}
+
+
+
+/*
+ * Deletes offset calibration files (TAB & LBL) which are unused.
+ *
+ * ASSUMES: Assumes that the function can still call the log function YPrintf.
+ * (This important information for when to call this function during the shutdown process.)
+ *
+ * cpath : Path to calibration directory
+ * m : Data structure used for determining files to delete. The criterion is m->calib_info[i].calibration_file_used==false.
+ */
+int RemoveUnusedOffsetCalibrationFiles(char *cpathd, m_type *m)
+{
+    int exit_code = 0;
+    int i;
+
+    for (i=0; i<m->n; i++)   // Iterate over calibrations.
+    {
+        // Set LBL_file_path.
+        char LBL_file_path[PATH_MAX];
+        sprintf(LBL_file_path, "%s/%s", cpathd, m->calib_info[i].LBL_filename);
+
+        // Set TAB_filename, TAB_file_path.
+        prp_type lbl_info;
+        if (ReadLabelFile(&lbl_info, LBL_file_path)<0)  // Read offset and TM calibration LBL file
+        {
+            FreePrp(&lbl_info); // Free linked property/value list
+            return -6;
+        }
+        property_type *property;
+        char TAB_filename[PATH_MAX], TAB_file_path[PATH_MAX];
+        FindP(&lbl_info, &property, "^TABLE", 1, DNTCARE);
+        strncpy(TAB_filename, property->value, PATH_MAX);
+        TrimQN(TAB_filename);
+        sprintf(TAB_file_path, "%s/%s", cpathd, TAB_filename);
+
+        if (m->calib_info[i].calibration_file_used) {
+            // NOTE: Extra whitespace in log message so that the log messages line up nicely.
+            YPrintf("Keeping    used calibration files: %s, %s\n", m->calib_info[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
+        } else {
+            //=======================
+            // Delete files on disk.
+            //=======================
+//             YPrintf("Deleting unused calibration files: %s\n", LBL_file_path);
+//             YPrintf("                                   %s\n", TAB_file_path);
+            YPrintf("Deleting unused calibration files: %s, %s\n", m->calib_info[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
+            if ((remove(LBL_file_path)!=0) || (remove(TAB_file_path)!=0)) {
+                YPrintf("Error when deleting file\n");
+                exit_code = -1;
+                // NOTE: Does not return from function yet.
+            }
+
+            FreePrp(&lbl_info); // Free linked property/value list
+        }
+    }
+
+    return exit_code;
 }
 
 
@@ -6044,7 +6273,7 @@ int WritePTAB_File(
     int ibias2;                      // Temporary current variable
     int vbias2;                      // Temporary voltage variable
     
-    char bias_mode = getBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
+    char bias_mode = GetBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
     
     //  double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
     
@@ -6066,7 +6295,6 @@ int WritePTAB_File(
     
     time_t old_time;
     time_t stime;                   // Time of current data
-    time_t vtime;                   // Valid time of calibration data
     
     double utime;                  // Current time in UTC for test of extra bias settings.
     int valid=0;                   // Valid index into structure with calibration data.
@@ -6102,17 +6330,12 @@ int WritePTAB_File(
         //=============
         // CASE: CALIB
         //=============
-        
-        
-        
-        for(i=mc->n-1;i>=0;i--)
-        {
-            TimeOfDatePDS(mc->CD[i].validt,&vtime); // Convert valid time to seconds		  
-            if(vtime<stime) 
-            {
-                valid=i;
-                break;
-            }
+
+
+        // Figure out which calibration data to use for the given time of the data.
+        valid = SelectCalibrationData(stime, mc);
+        if (debug >= 1) {
+            CPrintf("    Calibration file %i: %s\n", valid, mc->calib_info[valid].LBL_filename);
         }
         
         
@@ -6744,7 +6967,7 @@ int WritePLBL_File(
     char tstr1[256];
     char tstr2[256];
     
-    char bias_mode = getBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
+    char bias_mode = GetBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
     
     int diff;   // Indicate if it is diff data.
     

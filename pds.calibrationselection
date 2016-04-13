@@ -1,0 +1,12 @@
+# Calibration selection list
+# --------------------------
+# Explicit time intervals for which pds will use specified TM and offset calibrations.
+# A default algorithm will be used for other time intervals.
+# 
+# NOTE: Must specify LBL filenames; not TAB files, and only filenames (no paths). The corresponding TAB file is implicit.
+# NOTE: It is possible to specify several time intervals for the same calibration.
+# NOTE: The file may have newline=LF or CR+LF.
+
+# On request from Anders Eriksson as interpreted from email 2016-04-07.
+# Covers exactly EAR1.
+2004-10-17T00:00:00, 2005-04-05T00:00:00, RPCLAP050307_CALIB_MEAS.LBL
