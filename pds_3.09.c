@@ -73,6 +73,9 @@
 //       /Erik P G Johansson 2016-03-21.
 //  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
 //      /Erik P G Johansson 2016-03-22
+//  * Updated to remove unused CALIB_MEAS files.
+//    NOTE: This algorithm has to be synced with code for chosing calibration files based on time of data.
+//      /Erik P G Johansson 2016-03-23.
 //  * Updated to update LBL files under DOCUMENT/ (recursively).
 //      /Erik P G Johansson 2016-04-04
 //  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
@@ -93,6 +96,9 @@
 // NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
 //       This is due to dysfunctional automatic indentation in the Kate editor.
 // NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
+// NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
+// Code concern includes (incomplete list): function E2Epoch (used only once), possibly the use of bias e.g. in LoadBias.
+// Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to
 // 
 //====================================================================================================================
 
@@ -168,11 +174,10 @@ int  AddPathsToSystemLog(pds_type *pds);			// Adds paths to system log
 // Program option functions
 //----------------------------------------------------------------------------------------------------------------------------------
 int  GetOption(char *opt,int argc, char *argv[],char *arg);        // Get an input option
+int  HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if argv[i] contains non-null components for i >= 1.
+
 // Pointer to file desc pointer pfd is needed and an error stream
-// Functions to load and test external information 
-
-int HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if argv[i] contains non-null components for i >= 1.
-
+// Functions to load and test external information
 //----------------------------------------------------------------------------------------------------------------------------------
 int  LoadConfig1(pds_type *p);                          // Loads configuration information first part
 int  LoadConfig2(pds_type *p,char *data_set_id);        // Loads configuration information second part
@@ -205,7 +210,9 @@ int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);                   
 char getBiasMode(curr_type *curr, int dop);
 
 // Write data to data product table file .tab
-int WritePTAB_File(unsigned char *buff,char *fname,int data_type,int samples,int id_code,int length,sweep_type *sw_info,curr_type *curr,int param_type,int dsa16_p1,int dsa16_p2,int dop,m_type *m_conv,unsigned int **bias,int nbias,unsigned int **mode,int nmode,int ini_samples,int samp_plateau);
+int WritePTAB_File(
+    unsigned char *buff, char *fname, int data_type, int samples, int id_code, int length, sweep_type *sw_info, curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
+    m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int ini_samples, int samp_plateau);
 
 // Write to data product label file .lbl
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type);
@@ -444,9 +451,9 @@ buffer_struct_type cbs;         // Circular in Science buffer
 buffer_struct_type cbh;         // Circular in HK buffer
 buffer_struct_type cmb;         // Circular mirror buffer
 
-c_type v_conv;                  // Coarse voltage conversion to TM data structure.
+c_type v_conv;                  // Coarse voltage    conversion to TM data structure.
 c_type f_conv;                  // Fine voltage bias conversion to TM data structure.
-c_type i_conv;                  // Current conversion to TM data structure.
+c_type i_conv;                  // Current           conversion to TM data structure.
 m_type m_conv;                  // Calibration of measured data offset and conversion to volts/ampere
 
 tc_type tcp={0,NULL,NULL,NULL}; // Time correlation packets structure
@@ -1027,6 +1034,8 @@ int main(int argc, char *argv[])
     // Go through all DDS archive files, if no new ones can be found we wait 10s and try again.
     TraverseDDSArchive(&pds);
     
+
+    // End this thread, while the other threads (most likely) continue.
     return 0;
 }   // main
 
@@ -1604,6 +1613,7 @@ void *DecodeScience(void *arg)
     int nmode=0;                    // Number of mode settings
     int nexcl=0;                    // Number of macros to exclude
     data_exclude_times_type *dataExcludeTimes;  // Data on which time intervals for which to exclude data.
+
     char lbl_fname[32];             // Data Science label file name complies to 27.3 file name standard
     char tab_fname[32];             // Data Science table file name complies to 27.3 file name standard
     
@@ -1664,8 +1674,8 @@ void *DecodeScience(void *arg)
         if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, dop, ini_samples,param_type)>=0)
         {
             WritePTAB_File(
-                buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, dop,
-                &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
+                buff, tab_fname, data_type, samples, id_code, length, &sw_info, &curr, param_type, dsa16_p1, dsa16_p2, dop,
+                &m_conv, bias, nbias, mode, nmode, ini_samples, samp_plateau);
             
             strncpy(tstr10,lbl_fname,29);
             tstr10[25]='\0';   // Remove the file type ".LBL".
@@ -1737,9 +1747,9 @@ void *DecodeScience(void *arg)
         YPrintf("Warning: Can not load data exclude times.\n");   // Write to "pds system log".
         printf( "Warning: Can not load data exclude times.\n");
     }
-    
-    
-    
+
+
+
     //####################
     // STATE MACHINE LOOP
     //####################
@@ -2661,7 +2671,7 @@ void *DecodeScience(void *arg)
                                                     if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)   // Set property1. Read many times afterwards with FindB(..).
                                                     {
                                                         if (debug>0) {
-                                                            printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);   // DEBUG
+                                                            printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);
                                                         }
                                                         
                                                         // Find downsampling value probe 1 in macro and if no ID value exists use macro desc. value
@@ -2799,7 +2809,7 @@ void *DecodeScience(void *arg)
                                                                                     curr.vbias1=0x007f;
                                                                                 }
                                                                                 if (debug>0) {
-                                                                                    printf("    Macro: Set fix voltage bias VBIAS1 = %04x (curr.vbias1; hex TM units)\n", curr.vbias1);  // DEBUG
+                                                                                    printf("    Macro: Set fix voltage bias VBIAS1 = %04x (curr.vbias1; hex TM units)\n", curr.vbias1);
                                                                                 }
                                                                             }
                                                                         }
@@ -2954,7 +2964,7 @@ void *DecodeScience(void *arg)
                                                                                     curr.vbias2=0x007f;
                                                                                 }
                                                                                 if (debug>0) {
-                                                                                    printf("    Macro: Set fix voltage bias VBIAS2 = %04x (curr.vbias2; hex TM units)\n", curr.vbias2);  // DEBUG
+                                                                                    printf("    Macro: Set fix voltage bias VBIAS2 = %04x (curr.vbias2; hex TM units)\n", curr.vbias2);
                                                                                 }
                                                                             }
                                                                         }
@@ -3136,7 +3146,7 @@ void *DecodeScience(void *arg)
                                                                     &tstr1[2], &tstr1[5], &tstr1[8],
                                                                     alphanum_s, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
                                                                     
-//                                                             CPrintf("    Tentative basis for filename & product ID: tstr2=\"%s\"\n", tstr2);    // DEBUG
+//                                                             CPrintf("    Tentative basis for filename & product ID: tstr2=\"%s\"\n", tstr2);
 
                                                             if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
                                                             if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
@@ -3398,48 +3408,9 @@ void *DecodeScience(void *arg)
                                                             // NOTE: P3 counts as one probe here.
                                                             //=====================================================
                                                             if (debug >= 1) {
-                                                                CPrintf("    Creating LBL/TAB file pair (dop=0) - There is data for exactly one probe (?).\n");    // DEBUG
+                                                                CPrintf("    Creating LBL/TAB file pair (dop=0) - There is data for exactly one probe (?).\n");
                                                             }                                                            
 
-                                                            /*// Modify filenames and product ID.
-                                                            {
-                                                                // Set to [E]-Field or keep [D]ensity.
-                                                                char tempChar;
-                                                                if(getBiasMode(&curr, 0)==E_FIELD) {
-                                                                    tempChar = 'E';
-                                                                } else {
-                                                                    tempChar = 'D';
-                                                                }
-                                                                lbl_fname[19]=tempChar;
-                                                                tab_fname[19]=tempChar;
-                                                                prod_id[19+1]=tempChar;
-                                                            }                                                            
-                                                            sprintf(tstr1, "%1d", curr.sensor);
-                                                            lbl_fname[21]=tstr1[0];
-                                                            tab_fname[21]=tstr1[0];
-                                                            prod_id[21+1]=tstr1[0];
-
-                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
-                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
-                                                            
-                                                            // Name changed
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
-                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
-                                                            sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
-                                                            
-                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 0, ini_samples,param_type)>=0)
-                                                            {
-                                                                WritePTAB_File(
-                                                                    buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, 0,
-                                                                    &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
-                                                                
-                                                                strncpy(tstr2,lbl_fname,29);
-                                                                tstr2[25]='\0';
-                                                                
-                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                            }*/
                                                             WriteTABLBL_FilePair(0, curr.sensor);
                                                         }
                                                         else // Split interleaved 20 Bit data into two pairs of label and tab files
@@ -3452,7 +3423,7 @@ void *DecodeScience(void *arg)
                                                             // Handle dop==1 (P1)
                                                             //====================
                                                             if (debug >= 1) {
-                                                                CPrintf("    Creating LBL/TAB file pair for P1 data (dop=1) - There is data for exactly two probes.\n");    // DEBUG
+                                                                CPrintf("    Creating LBL/TAB file pair for P1 data (dop=1) - There is data for exactly two probes.\n");
                                                             }
                                                             
                                                             /*// Modify filenames and product ID.
@@ -3501,7 +3472,7 @@ void *DecodeScience(void *arg)
                                                             // Handle dop==2 (P2)
                                                             //====================
                                                             if (debug >= 1) {
-                                                                CPrintf("    Creating LBL/TAB file pair for P2 data (dop=2) - There is data for exactly two probes.\n");    // DEBUG
+                                                                CPrintf("    Creating LBL/TAB file pair for P2 data (dop=2) - There is data for exactly two probes.\n");
                                                             }
                                                             
                                                             /*// Modify filenames and product ID.
@@ -3612,7 +3583,13 @@ static void ExitWithGrace(int signo)
 // Logging and exit functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Closes logging and exits with status
+/*
+ * Closes logging and exits with status (exit/error code).
+ * When a thread wants pds to quit (and all threads to quit), it calls this function.
+ * Also used for exiting without error.
+ *
+ * status : Exit error code
+ */
 void ExitPDS(int status)
 {
     char tstr1[8192]; // Temporary string
@@ -3680,7 +3657,6 @@ void ExitPDS(int status)
                 }
                 
             } while ((sc_buff_fill > (unsigned int) SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD) && (t_wait_elapsed < sc_thread_cancel_threshold_timeout));
-            //nanosleep(&dose,NULL);
             
             YPrintf("   Wait further %u s.\n", SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY);   // Disable log message?
             nanosleep(&SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY_struct, NULL); // Give the science thread some time to empty the remaining circular buffer contents.
@@ -3759,13 +3735,17 @@ void ExitPDS(int status)
                 if(i_conv.C!=NULL) FreeDoubleMatrix(i_conv.C,v_conv.rows,i_conv.cols);
                 if(f_conv.C!=NULL) FreeDoubleMatrix(f_conv.C,f_conv.rows,f_conv.cols);
                 
+                //=============================================
+                // Deallocate m_conv (entire m_type structure)
+                //=============================================
                 if(m_conv.CF!=NULL) free(m_conv.CF);
                 if(m_conv.CD!=NULL && m_conv.n!=0)
                 {
                     for(i=0;i<m_conv.n;i++)
                     {
-                        if(m_conv.CD[i].C!=NULL && m_conv.CD[i].rows!=0 && m_conv.CD[i].cols!=0)
+                        if(m_conv.CD[i].C!=NULL && m_conv.CD[i].rows!=0 && m_conv.CD[i].cols!=0) {
                             free(m_conv.CD[i].C);
+                        }
                     }
                     free(m_conv.CD);
                 }
@@ -4099,36 +4079,42 @@ int AddPathsToSystemLog(pds_type *p)
  * opt : Flag (string)
  * argv : (Remaining) command-line arguments.
  * argc : Number of command-line arguments (length of argv array)
- * arg : Iff non-null, then *arg will be assigned to the string value of the command-line argument that comes after the flag.
+ * arg : If-and-only-if non-null, then *arg will be assigned to the string value of the command-line argument that comes after the flag.
+ *
+ * Return value : 0=failed, 1=success.
  */
 int GetOption(char *opt, int argc, char *argv[], char *arg)
 {
     int i;
     for(i=1;i<argc;i++)
     {
-        if((argv[i] != NULL) && !strncmp(argv[i],opt,1024))   // Match option
+        if ((argv[i] != NULL) && !strncmp(argv[i], opt, 1024))
         {
-            if (arg==NULL) {   // We expect an argument to exist for this option if arg is non-null.
+            // CASE: Found the option.
+            if (arg==NULL)
+            {
+                // CASE: We do NOT expect an associated extra argument.
                 argv[i] = NULL;
-                return 1;     // CASE: Found option and expected no associated extra argument.
+                return 1;
             }
             else
             {
+                // CASE: We DO expect an extra associated argument.
                 if ((i+1<argc) && (argv[i+1]!=NULL))   // If the argument list contains an (unused) argument after this option (flag)...
                 {
                     strncpy(arg,argv[i+1],1024); // Copy next entry as argument
                     argv[i] = NULL;
                     argv[i+1] = NULL;
-                    return 1;     // CASE: Found option and both required and found associated extra argument.
+                    return 1;     // CASE: We found the extra argument.
                 }
                 else
                 {
-                    return 0;     // CASE: Found option and required associated extra argument but did not find it.
+                    return 0;     // CASE: We did NOT find the extra argument.
                 }
             }
         }
     }
-    return 0;     // CASE: Did not find the option.
+    return 0;     // CASE: Did NOT find the option.
 }
 
 
@@ -4396,7 +4382,9 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
         YPrintf("DDS decoding progress stored in: %s\n",PDS_LOG3);
     
     return 0;
-}
+} // LoadConfig2
+
+
 
 // Load anomaly description file into a linked list of properties.
 int  LoadAnomalies(prp_type *p,char *path)
@@ -4427,6 +4415,7 @@ int  LoadAnomalies(prp_type *p,char *path)
     fclose(fd);
     return 0;
 }
+
 
 
 // Load human mode descriptions into a linked list of properties.
@@ -4464,6 +4453,7 @@ int  LoadModeDesc(prp_type *p,char *path)
     fclose(fd);
     return 0;
 }
+
 
 
 int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt_s,char *path) // Load bias settings
@@ -4565,7 +4555,7 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
  * path : Path to text file to load.
  * exclude : List of macro numbers.
  * 
- * NOTE: Ignores lines beginning with "#", LF (empty lines), and whitespace
+ * NOTE: Ignores lines beginning with "#", LF (empty lines), and whitespace.
  */
 int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
 {
@@ -4635,8 +4625,8 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
 // 
 // NOTE: Current implementation does not return any information in the event of failure
 // making soft error harder for caller.
-// NOTE: One could remove time intervals that are outside the time limits of
-// the mission phase to speed up comparisons, but that has not been implemented (2015-03-26).
+// NOTE: One could remove time intervals that are outside the time limits of the current
+// mission phase to speed up comparisons, but that has not been implemented (2015-03-26).
 // Doubtful how useful that would be.
 //--------------------------------------------------------------------------------------------
 int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath) {
@@ -5119,7 +5109,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
     // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
     prp_type mc_lbl;            // Linked property/value list for measured data offset and conversion to volts/ampere.
     property_type *property;
-    
+
     char file_path[PATH_MAX];
     char *base;                 // Basename
     char tstr1[1024];
@@ -5214,7 +5204,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
     
     
     // FKJN sort it alphanumerically first. 2/9 2014
-    N_dir_entries=scandir(rpath, &dir_entry_list, 0, alphasort);    
+    N_dir_entries = scandir(rpath, &dir_entry_list, 0, alphasort);
     if (N_dir_entries <0)
     {
         printf("N_dir_entries = %i  \t rpath = %s\n",N_dir_entries,rpath);
@@ -5234,7 +5224,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
             n++;
             YPrintf("Offset and TM conversion file: %s - Kept\n", dentry->d_name);  // Matching file name
         }
-        dentry=dir_entry_list[i]; // Get next fiN_dir_entriesame 
+        dentry=dir_entry_list[i];  // Get next filename.
     }
     
     if(n==0)
@@ -5250,7 +5240,6 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
         YPrintf("Error allocating memory for array of factor structures\n");        
         return -3;
     }
-    
     if((m->CD=(c_type *)CallocArray(m->n,sizeof(c_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration structures\n");
@@ -5280,11 +5269,11 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
                 return -5;
             }
             
-            WriteUpdatedLabelFile(&mc_lbl, file_path, 1);   // Write back label file with new info
+            WriteUpdatedLabelFile(&mc_lbl, file_path, 1);   // NOTE: Write back label file with new info.
 
-            //==============================
-            // Extract values from LBL file
-            //==============================
+            //===============================================
+            // Extract calibration factors from the LBL file
+            //===============================================
             FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_16B",1,DNTCARE);
             sscanf(property->value,"\"%le\"",&m->CF[n].v_cal_16b);
             FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_20B",1,DNTCARE);
@@ -5327,7 +5316,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
     free(dir_entry_list);   // Free pointer to array of pointers
     
     return 0;
-}   // GetMCFiles
+}   // LoadOffsetCalibrationsTMConversion
 
 
 
@@ -5584,14 +5573,13 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
         sprintf(tstr, "Failed to scan directory for files: \"%s\"\n", dir_path);
         YPrintf(tstr);
         perror(tstr);
-        //printf("message: N_files = %i  \t dir_path = %s", N_files, dir_path);    // DEBUG
         return -1;
     }
 
     // Iterate over files/directories located in directory.
     for (i=0; i<N_files; i++)
     {
-        dir_entry=dir_entry_list[i];
+        dir_entry = dir_entry_list[i];
 
         // DT_REG : Regular file (not directory)
         if ((dir_entry->d_type==DT_REG) && !fnmatch(filename_pattern, dir_entry->d_name, 0))
@@ -5618,7 +5606,6 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
         {
             char subdir_path[PATH_MAX];
             sprintf(subdir_path, "%s/%s", dir_path, dir_entry->d_name);
-            //printf("subdir_path = %s\n", subdir_path);      // DEBUG
             int status = UpdateDirectoryODLFiles(subdir_path, filename_pattern, update_PUBLICATION_DATE);    // NOTE: RECURSIVE CALL
             if (status<0) {
                 // Free allocated memory.
@@ -5691,7 +5678,6 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
 
 
 
-
 // Read label file
 // 
 // NOTE: The function is implicitly used for modifying LBL/CAT files from the template directory
@@ -5700,6 +5686,8 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
 // NOTE: I _think_ this code can handle LBL and CAT files
 // with multiple line values. This is important for being able to modify *.CAT files
 // with long texts in the form of "values".   /Erik P G Johansson 2015-04-27.
+//
+// Return value : 0=(seems like) success, -1=failure
 int ReadLabelFile(prp_type *lb_data,char *file_path)
 {
     FILE *fd;
@@ -5733,7 +5721,7 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
     while(fgets(line,msubone,fd)!= NULL)   // Reads line into variable "line". Appears to include ending line feed.
     {
         if(line[0] == '\n') continue;     // Empty line.
-        if(line[0] == '\r') continue;
+        if(line[0] == '\r') continue;     // Empty line ending with CR+LF.
         if(line[0] == '#') continue;      // Remove comments.
         if(line[0] == '/') continue;      // Remove comments.
         
@@ -5818,24 +5806,26 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
 }
 
 
-// Read TABLE file described in "lbl_data" into the calibration structure "cal".
+// Read calibration TABLE file described in "lbl_data".
 // The table file's name is taken from ^TABLE in lbl_data, and the directory is taken from the function argument.
 //
 // I try to use the description in the label file as much as possible
 // but it could probably be done better.
 //
-// dir_path : Path to directory(!)
+// lbl_data : LBL file description from which some data will be taken, incl. TAB filename.
+// cal : Structure which will contain the data read from file.
+// dir_path : Path to parent _directory_ (not path to file!)
+// Return value : 0=(Seems like) success, Negative=Failure
 //
 int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
 {
     int i,j;
-    
     char file_path[PATH_MAX];
     
-    // Following arrays are taken to be large enough for their purposes
-    char format[256]; // A vector indicating column format, thus max 256 columns. We have 4 in reality.
-    char line[8192];  // Temporary buffer  to read a row into.
-    int start[256];   // A vector indicating start positions of columns
+    // The following arrays are taken to be large enough for their purposes
+    char format[256];  // A vector indicating column format, thus max 256 columns. We have 4 in reality.
+    char line[8192];   // Temporary buffer  to read a row into.
+    int start[256];    // A vector indicating start positions of columns
     
     // Pointers to properties
     property_type *property1;
@@ -5951,6 +5941,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
 
 
 // Return the bias mode for a given "dop" value as it used for when writing to file.
+//
 // dop : See "WritePTAB_File".
 // NOTE: The return type is chosen to agree with pds.h:curr_type_def#bias_mode1/2.
 char getBiasMode(curr_type *curr, int dop) {
@@ -5980,6 +5971,8 @@ char getBiasMode(curr_type *curr, int dop) {
  *  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
  *
  * We use the mode information from command logs here since it also contain off information
+ *
+ * NOTE: Conversion from TM units to physical units plus calibration is made here.
  *
  * Uncertain what "dop" means, and compared to curr->sensor. Compare "dop" in WritePLBL_File.
  *    NOTE: Check how dop is set in calls to WritePTAB_File and WritePLBL_File. It is always a literal.
@@ -6078,7 +6071,7 @@ int WritePTAB_File(
     time_t vtime;                   // Valid time of calibration data
     
     double utime;                  // Current time in UTC for test of extra bias settings.
-    int valid=0;                   // Valid time index
+    int valid=0;                   // Valid index into structure with calibration data.
     
     property_type *property1; 	// declare temporary property1
     int D20_MA_on;		//D20 Moving average bug boolean
@@ -7997,6 +7990,10 @@ int GetAlphaNum(char *n,char *path,char *pattern)
         return -1;
     
     rewinddir(de);       // Rewind directory
+
+    // NOTE: Documentation: "The pointer returned by readdir() points to data which may be overwritten by another call to readdir()
+    // on the same directory stream. This data is not overwritten by another call to readdir() on a different directory stream."
+    // ==> Results do (presumably) not need to be deallocated.
     dentry=readdir(de);  // Get first entry
     
     // Do a linear search through all filenames..
@@ -8312,15 +8309,24 @@ void FTSDump(FTSENT *fe)
     printf("stat(2) info     %p\n",fe->fts_statp);
 }
 
-// Match filename to pattern
-// If strb match stra zero is returned.s
-// stra may contain #, representing a digit 0 to 9. 
-int Match(char *stra,char *strb)
+
+
+/*
+ * Find out if a string matches a pattern string.
+ * Intended for filenames matched against filename patterns.
+ *
+ * stra : Pattern string. "#" matches any digit 0-9 in "strb".
+ * strb : String
+ * Return value : Returns 0 (!, compare Strcmp) if-and-only-if "strb" matches "stra".
+ */
+int Match(char *stra, char *strb)
 {
     int len;
     int i;
     
-    if((len=strlen(stra))!=strlen(strb)) return -1; // No match lengths not equal
+    if ((len=strlen(stra)) != strlen(strb)) {
+        return -1;   // No match - String lengths differ.
+    }
     
     for(i=0;i<len;i++) {
         if(stra[i]!=strb[i])
@@ -8331,7 +8337,7 @@ int Match(char *stra,char *strb)
                 return -2; // Chars don't match
         }
     }
-        return 0; // All matched
+    return 0; // All matched
 }
 
 
@@ -8609,10 +8615,11 @@ unsigned int GetBitF(unsigned int word,int nb,int sb)
 // Time related functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Compute number of seconds since
-// Epoch 1970 to time in PDS time string
-// without fractional seconds
+// Convert PDS time string (without fractional seconds) to number of seconds since epoch 1970.
 
+// ASSUMES: Relies on time_t being interpreted as number of seconds.
+//
+// Return value : Number of seconds.
 unsigned int E2Epoch(char *rtime)
 { 
     struct tm at; // Broken down time structure
@@ -8625,7 +8632,7 @@ unsigned int E2Epoch(char *rtime)
     at.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
     
     at.tm_wday=0;     // Day of week doesn't matter here
-    at.tm_yday=0;     // Day in year doesn't matter here
+    at.tm_yday=0;     // Day of year doesn't matter here
     at.tm_isdst=0;    // Daylight saving unknown
     
     t=mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
@@ -8748,7 +8755,7 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
     
     //CALIBRATE RAW
     
-    // Default coefficients
+    // Default coefficients in case no time calibration data is found.
     gradient=1.0; 
     offset=sec_epoch;
     
@@ -8948,10 +8955,11 @@ int Scet2Date_2(double raw,char *stime,int lfrac)
 }
 
 /*
- * Interprets a string, of format "YYYY-MM-DD" or "YYYY MM DD hh mm ss" and returns a time_t value.
- * NOTE: The function ignores the characters between the number fields and can therefore be set arbitrarily (only their absolute positions are important).
- * NOTE: The function will ignore characters after the end "ss" (two-digit seconds) and will therefore ignore decimals. Fractions can not be returned in time_t anyway.
- * NOTE: Can handle PDS compliant time.
+ * Interprets a string, of format "YYYY-MM-DD" or "YYYY-MM-DD hh:mm.ss" and returns a time_t value.
+ *
+ * NOTE: In reality, the function ignores the characters between the number fields and they can therefore be set arbitrarily (only their absolute positions are important).
+ * NOTE: The function will ignore characters after the final "ss" (two-digit seconds) and will therefore ignore decimals in seconds. Fractions can not be returned in time_t anyway.
+ * NOTE: Can handle PDS compliant UTC time strings.
  * NOTE: If no hour-minute-seconds are given, then they will take zero (i.e. midnight at beginning of day) as default value.
  * Values are fed into mktime. mktime calculates UTC time since 1970 1 Jan 00:00:00
  * Negative return value is an error.
@@ -9031,13 +9039,14 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     atime.tm_wday=0;     // Day of week doesn't matter here
     atime.tm_yday=0;     // Day in year doesn't matter here
     atime.tm_isdst=0;    // Daylight saving unknown
-    
-    if((*t=mktime(&atime))<0) { // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
+
+    // Calculates UTC time in seconds since 1970 1 Jan 00:00:00.
+    // NOTE: mktime interprets "atime" as a local time and hence ADDS a timezone shift (despite that what we input is UTC).
+    if((*t=mktime(&atime))<0) {
         return -8;              // Error couldn't calculate time
     }
     
-    
-    *t=*t-timezone; // Compensates for assuming that the input time was in the local computer timezone
+    *t=*t-timezone; // Compensates for assuming that the input time was in the local computer timezone.
     // timezone is defined as negative number for Sweden so thus it needs to be a minus sign.
     
     return 0; // Ok!
@@ -9841,4 +9850,5 @@ int main_DISABLED(int argc, char* argv[]) {
 
     return -1;
 }
+
 

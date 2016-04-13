@@ -7,7 +7,7 @@
 # the instrument, since that makes no sense.
 # 
 # All calibration macros to be excluded from CALIB
-# should therefore be listed here
+# should therefore be listed here.
 
 0x0104
 0x0105

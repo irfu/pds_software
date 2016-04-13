@@ -150,20 +150,22 @@
 typedef struct tc_type_def
 {
   int netries;        // Number of entries
-  double *SCET;        // Time correlated OBT from which correlation below is valid
+  double *SCET;       // Time correlated OBT from which correlation below is valid
   double *offset;     // Offset
   double *gradient;   // Gradient
 } tc_type;
 
+
+
 // Calibration data structure
+// NOTE: This structure is also used outside of/independently of m_type. Notably course/fine bias voltages and current bias calibrations.
 typedef struct c_type_def
 {
-  char validt[32];        // Valid from this time
+  char validt[32];        // Data is taken/valid at this time (UTC string).
   int rows;               // Rows
   int cols;               // Columns
-  double **C;              // Conversion matrix
+  double **C;             // Conversion matrix
 } c_type;
-
 
 // Calibration Factors for measured data TM to Physical units
 typedef struct cf_type_def
@@ -182,6 +184,8 @@ typedef struct m_type_def
   cf_type *CF;   // Array of calibration factor structures 
   c_type  *CD;   // Array of calibration data structures
 } m_type;
+
+
 
 typedef struct tid_type_def
 {
@@ -280,11 +284,11 @@ typedef struct pds_type_def
   char lpath[PATH_MAX];        // Log path
   char dpathse[PATH_MAX];      // Data path PDS science edited
   char dpathsc[PATH_MAX];      // Data path PDS science calibrated
-  char cpathd[PATH_MAX];       // Root path to calibration data
+  char cpathd[PATH_MAX];       // Root path to calibration data directory (d)
   char cpathf[PATH_MAX];       // Path to fine bias calibration data
   char cpathc[PATH_MAX];       // Path to coarse bias calibration data
   char cpathi[PATH_MAX];       // Path to current bias calibration data
-  char cpathm[PATH_MAX];       // Path to offset calibration data
+  char cpathm[PATH_MAX];       // Path to offset calibration data. The filename part is a filename pattern.
   char cpathdfp1[PATH_MAX];    // Path to density frequency response probe 1
   char cpathdfp2[PATH_MAX];    // Path to density frequency response probe 2
   char cpathefp1[PATH_MAX];    // Path to e-field frequency response probe 1
@@ -370,7 +374,7 @@ typedef struct hk_lbl_info_struct
 // Erik P G Johansson 2015-03-25: Created struct.
 // Struct for storing intervals of time for which data is to be excluded.
 // NOTE: Only uses the reset counter value at beginning of interval.
-// Assumes the same reset counter value for start and stop.
+// Assumes the same reset counter value for start and stop time.
 //------------------------------------------------------------------------
 typedef struct data_exclude_times_struct
 {
