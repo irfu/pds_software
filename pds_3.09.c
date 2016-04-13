@@ -197,8 +197,7 @@ void DeriveDSIandDSN(
     char* DATA_SET_ID, char* DATA_SET_NAME,
     char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float dataSetVersion, char* targetName_dsn);
 
-// returns updated mission phase structure.
-void TestDumpMacs();						// Test dump of macro descriptions
+// void TestDumpMacs();   // Test dump of macro descriptions
 
 // Label and Table functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -2872,10 +2871,6 @@ void *DecodeScience(void *arg)
 
                                                         
                                                         
-                                                        if (debug>0) {   // DEBUG
-                                                            printf("    property1: %s = \"%s\"\n", property1->name, property1->value);
-                                                            printf("    param_type = %i\n", param_type);
-                                                        }
                                                         if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
                                                         {
                                                             //========================
@@ -2926,10 +2921,6 @@ void *DecodeScience(void *arg)
                                                                     
                                                                     if(curr.bias_mode2==DENSITY)   // Current mode according to ID is DENSITY
                                                                     {
-                                                                        if (debug>0) {   // DEBUG
-                                                                            printf("    property2: %s = \"%s\"\n", property2->name, property2->value);
-                                                                            printf("    macro_priority = %i\n", macro_priority);
-                                                                        }
                                                                         // Is it so according to macro description, or macro description has high priority
                                                                         if(!strcmp(property2->value,"\"DENSITY\"") || macro_priority) {                                                                                        
                                                                             InsertTopK(&dict,property2->name,property2->value);   // Yes, let's set it
@@ -4640,14 +4631,17 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     char   l_tok[256]; // Left token
     char   r_tok[256]; // Right token  
     data_exclude_times_type dataExcludeTimes_temp;
-    
-    YPrintf("Loading data exclude times file: %s\n", depath);  // Print to "pds system log".
-    printf( "Loading data exclude times file: %s\n", depath);
+
+    sprintf(line, "Loading data exclude times file: %s\n", depath);
+    YPrintf(line);  // Print to "pds system log".
+    perror(line);
     
     *dataExcludeTimes = (data_exclude_times_type*) NULL;   // Default value to be returned to the caller in case of error.
     
     if((fd=fopen(depath, "r"))==NULL) {
-        perror(depath);
+        sprintf(line, "LoadDataExcludeTimes: ERROR: Can not find file: \"%s\"\n", depath);
+        YPrintf(line);
+        perror(line);
         return -1;
     }
     
@@ -4667,33 +4661,34 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     dataExcludeTimes_temp.t_end_list                = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
     
     i = 0;
-    YPrintf("LoadDataExcludeTimes: Ingested data exclude time intervals: file contents strings and interpretations (true decimals)\n");  // Print to "pds system log".
+    YPrintf("Ingested data exclude time intervals: file contents strings and interpretations (true decimals)\n");  // Print to "pds system log".
     while(fgets(line, 255, fd) != NULL)  // NOTE: "line" will end with a \n.
     {      
         if (line[0] == '\n') continue; // Ignore empty line.
         if (line[0] == '#')  continue; // Ignore comments.
         //if (line[0] == ' ')  continue; // Ignore whitespace line
+
         if (sscanf(line, " %s %s ", l_tok, r_tok) != 2)   // Whitespace represent any sequence of whitespace and tab (incl. empty).
         {
-            YPrintf("LoadDataExcludeTimes: ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
-            printf( "LoadDataExcludeTimes: ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
+            YPrintf("ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
+            printf( "ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
             return -1;
         }
         
         if (OBT_Str2Raw(l_tok, &SCResetCounter1, &t_begin)) {
-            YPrintf("LoadDataExcludeTimes: ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
-            printf( "LoadDataExcludeTimes: ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
+            YPrintf("ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
+            printf( "ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
             return -1;
         }
         if (OBT_Str2Raw(r_tok, &SCResetCounter2, &t_end)) {    // NOTE: temp_int2 never used.
-            YPrintf("LoadDataExcludeTimes: ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
-            printf( "LoadDataExcludeTimes: ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
+            YPrintf("ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
+            printf( "ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             return -1;
         }
         
         if (t_begin > t_end) {
-            YPrintf("LoadDataExcludeTimes: ERROR: Found time interval runs backwards (t_begin > t_end) in data exclude times file.\n");
-            printf( "LoadDataExcludeTimes: ERROR: Found time interval runs backwards (t_begin > t_end) in data exclude times file.\n");
+            YPrintf("ERROR: Found time interval runs backwards (t_begin > t_end) in data exclude times file.\n");
+            printf( "ERROR: Found time interval runs backwards (t_begin > t_end) in data exclude times file.\n");
         }
         dataExcludeTimes_temp.SCResetCounter_begin_list[i] = SCResetCounter1;
         dataExcludeTimes_temp.t_begin_list[i]              = t_begin;
@@ -5008,7 +5003,7 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
         {
             sprintf(path,"%sPRG_B%d_M%d.mds",home,m_bl,m_n);
             if((mac_fd=fopen(path,"r"))==NULL) continue;
-            YPrintf("Loading detailed macro desc: %s Length: %d\n",path,FileLen(mac_fd));
+            YPrintf("Loading detailed macro desc: %s, Length: %d\n",path,FileLen(mac_fd));
             
             n_macs++;
             while (fgets(line,255,mac_fd) != NULL)
@@ -5242,7 +5237,7 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
     }
     if((m->CD=(c_type *)CallocArray(m->n,sizeof(c_type)))==NULL)
     {
-        YPrintf("Error allocating memory for array of calibration structures\n");
+        YPrintf("Error allocating memory for array of calibration table structures\n");
         free(m->CF);
         return -4;
     }
@@ -5257,6 +5252,10 @@ int GetMCFiles(char *rpath, char *fpath, m_type *m)
         dentry=dir_entry_list[i];
         if(!Match(base,dentry->d_name)) // Match filename to pattern
         {
+            // CASE: Filename matches pattern.
+
+            YPrintf("Reading offset and TM conversion file: %s\n", dentry->d_name);  // Matching file name
+
             //================================================
             // Read and update (rewrite) calibration LBL file
             //================================================
@@ -5533,15 +5532,15 @@ void DeriveDSIandDSN(
 
 
 // Dump macros. This is for debugging.
-void TestDumpMacs()
-{
-    int i,j;
-    for(i=0;i<10;i++) {
-        for(j=0;j<8;j++) {
-            DumpPrp(&macros[i][j]);
-        }
-    }
-}
+// void TestDumpMacs()
+// {
+//     int i,j;
+//     for(i=0;i<10;i++) {
+//         for(j=0;j<8;j++) {
+//             DumpPrp(&macros[i][j]);
+//         }
+//     }
+// }
 
 
 
@@ -5588,7 +5587,6 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
             sprintf(file_path, "%s/%s", dir_path, dir_entry->d_name); // Construct full path
 
             YPrintf("Modifying: %s\n", file_path);
-            printf( "Modifying: %s\n", file_path);
 
             prp_type temp_odl;
             InitP(&temp_odl);
@@ -5853,7 +5851,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
     TrimQN(line);                                         // Trim quotes away.
     sprintf(file_path,"%s%s",dir_path,line);              // Construct file_path = dir_path + filename
 
-    YPrintf("Reading table file: %s\n",file_path);
+    YPrintf("Reading table file: %s\n", line);
     // Open calibration table file
     if((fd=fopen(file_path,"r"))==NULL)
     {
