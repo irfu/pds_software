@@ -212,7 +212,7 @@ int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);                   
 // Miscellaneous functions
 //----------------------------------------------------------------------------------------------------------------------------------
 char GetBiasMode(curr_type *curr, int dop);
-int  SelectCalibrationData(time_t, m_type*);
+int  SelectCalibrationData(time_t, char*, m_type*);
 int  RemoveUnusedOffsetCalibrationFiles(char*, m_type*);
 
 // Write data to data product table file .tab
@@ -315,6 +315,7 @@ int Scet2Date_2(double raw,char *stime,int lfrac);					// Decodes SCET (Spacecra
 int TimeOfDatePDS(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970) for a PDS date string
 // NOTE: This is not the inverse of Scet2Date!
 
+int TimeOfDatePDS_midday(char *sdate, time_t *t);
 int GetUTime(char *);									// Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
 
 // LAP Logarithmic decompression functions
@@ -5866,10 +5867,11 @@ char GetBiasMode(curr_type *curr, int dop) {
  * NOTE: The function will set the flag mc->calibration_used.
  *
  * t_data : The time for which we have science data.
+ * UTC_data : The time for which we have science data as a UTC string.
  * mc : Calibration data.
  * Return value : An index into the corresponding arrays in "mc".
  */
-int SelectCalibrationData(time_t t_data, m_type *mc)
+int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 {
     /*
      * Algorithm for selecting the calibration nearest in time.
@@ -5920,7 +5922,14 @@ int SelectCalibrationData(time_t t_data, m_type *mc)
         }
     }
 
-    // Derive the calibration which is is closest in time.
+    /* IMPLEMENTATION NOTE: Rounds off data time to the middle of the day so that all data for any given day uses the same calibration.
+     * ==> Every day (midnight-to-midnight) gets the same data time. This is to ensure that any change of used calibration (due to the
+     * default algorithm) only happens at midnight.
+     */
+    TimeOfDatePDS_midday(UTC_data, &t_data);
+    tp_data = GetSecondsTime(t_data);
+
+    // Derive the calibration which is closest in time.
     TimeOfDatePDS(mc->CD[0].validt, &t_calib);
     tp_calib2 = GetSecondsTime(t_calib);
     for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
@@ -6058,11 +6067,11 @@ int WritePTAB_File(
     int ini_samples,
     int samp_plateau)
 {
-    char tstr1[256];                // Temporary string
-    char tstr2[256];
+    char tstr2[256];                // Temporary string
     char tstr3[256];
-    
-    
+
+    char UTC_str[256];
+
     int curr_step=3;                // Current sweep step, default value just there to get rid of compilation warning
     
     double td1;                     // Temporary double
@@ -6132,9 +6141,9 @@ int WritePTAB_File(
     vcalf=1.0; // Assume 1 to begin with
     ccalf=1.0; // Assume 1 to begin with
     
-    DecodeRawTime(curr->seq_time,tstr1,0); // First convert spacecraft time to UTC to get time calibration right
+    DecodeRawTime(curr->seq_time, UTC_str, 0); // First convert spacecraft time to UTC to get time calibration right
     
-    TimeOfDatePDS(tstr1,&stime);            // Convert back to seconds
+    TimeOfDatePDS(UTC_str, &stime);            // Convert back to seconds
     
     if(calib)
     {
@@ -6142,9 +6151,8 @@ int WritePTAB_File(
         // CASE: CALIB
         //=============
 
-
         // Figure out which calibration data to use for the given time of the data.
-        valid = SelectCalibrationData(stime, mc);
+        valid = SelectCalibrationData(stime, UTC_str, mc);
         if (debug >= 1) {
             CPrintf("    Calibration file %i: %s\n", valid, mc->calib_info[valid].LBL_filename);
         }
@@ -6487,7 +6495,7 @@ int WritePTAB_File(
                         if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
                         {
                             extra_bias_setting = 0;
-                            YPrintf("Forbidden bias setting found at %s. Macro %x\n", tstr1, macro_id);
+                            YPrintf("Forbidden bias setting found at %s. Macro %x\n", UTC_str, macro_id);
                             // Add some way of detecting that this is the first macro loop with extra_bias_settings?
                         }
                     }
@@ -9089,6 +9097,27 @@ int TimeOfDatePDS(char *sdate, time_t *t)
     
     return 0; // Ok!
 }
+
+
+
+// Like TimeOfDatePDS, but always sets the time of day to 12:00:00.
+int TimeOfDatePDS_midday(char *sdate, time_t *t)
+{
+    char tstr[20];
+    const char * midday_str = "12:00.00";
+
+    // YYYY-MM-DD hh:mm.ss  (length: 19 bytes excl. \0)
+    // 0123456789012345678
+    //
+    // Construct new string with time of day overwritten.
+    strncpy(tstr, sdate, 10);           // Copy YYYY-MM-DD to bytes 0-9.
+    strncpy(&(tstr[11]), midday_str, 8);   // (Skip byte 10.) Copy hh:mm.ss to bytes 11-18.
+    tstr[19] = '\0';
+
+    return TimeOfDatePDS(tstr, t);
+}
+
+
 
 
 // Returns current UTC time in CCYY-MM-DDThh:mm:ss  format
