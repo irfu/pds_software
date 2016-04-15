@@ -98,9 +98,9 @@
  *       This is due to dysfunctional automatic indentation in the Kate editor.
  * NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
  * NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
- * Code concern includes (incomplete list): function E2Epoch (used only once), possibly the use of bias e.g. in LoadBias.
- * Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to
- *
+ * (Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to)
+ * Code that uses this includes (incomplete list): function E2Epoch (used only once), WritePTAB_File, possibly the use of bias e.g. in LoadBias.
+ * Empirically (playing with TimeOfDatePDS, pds' default compiler), time_t appears correspond to seconds after 1970-01-01 00:00.00.
  *====================================================================================================================
  */
 
@@ -351,6 +351,11 @@ void FreeDoubleMatrix(double ** C, int rows, int cols);                         
 // Set thread priority and scheduling policy, for RT version of PDS (not needed anymore, keep anyway)
 int SetPRandSched(pthread_t thread,int priority,int policy); 
 
+// Test code
+//----------------------------------------------------------------------------------------------------------------------------------
+int main_TEST(int argc, char* argv[]);
+
+
 
 //-=SOME GLOBAL VARIABLES AND STRUCTURES=- 
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -478,9 +483,10 @@ static pthread_mutex_t protect_log=PTHREAD_MUTEX_INITIALIZER;
 
 // -=MAIN FUNCTION=-
 //----------------------------------------------------------------------------------------------------------------------------------
-// int main_DISABLED(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
+//     return main_TEST(argc, argv);   // TEST CODE
+
     struct sigaction act;
     int status;           // Just a temporary status/error code variable
     char tstr1[1024];     // Temporary string
@@ -3402,14 +3408,16 @@ void *DecodeScience(void *arg)
                                                         //##########################################################################
                                                         // WRITE TO DATA LABEL FILE (.LBL), TABLE FILE (.TAB), and add to INDEX.TAB
                                                         //##########################################################################
-                                                        // NOTE: data_type!=D20 && data_type!=D20T
-                                                        // <=>   (curr.sensor != SENS_P1P2 || data_type==D16)
-                                                        // <=>   Not (ADC20 and both probes).
-                                                        // NOTE: The if condition _APPEARS_TO_BE_ a very crude way of determining
-                                                        // if-and-only-if there is data from exactly one probe (P3 counts as one probe).
-                                                        // Not sure why it must should work, but it does seem to be consistent with id.h: no subheaders read ADC16 from both probes.
-                                                        // Why not use (curr.sensor==SENS_P1 || curr.sensor==SENS_P2), or curr.sensor!=SENS_P1P2?
-                                                        // /Erik P G Johansson 2016-03-10
+                                                        /* NOTE: data_type!=D20 && data_type!=D20T
+                                                         * <=>   (curr.sensor != SENS_P1P2 || data_type==D16)
+                                                         * <=>   Not (ADC20 and both probes).
+                                                         * NOTE: The if condition _APPEARS_TO_BE_ a very crude way of determining
+                                                         * if-and-only-if there is data from exactly one probe (P3 counts as one probe).
+                                                         * Not sure why it must should work, but it does seem to be consistent with id.h:
+                                                         * no subheaders read ADC16 from both probes.
+                                                         * Why not use (curr.sensor==SENS_P1 || curr.sensor==SENS_P2), or curr.sensor!=SENS_P1P2?
+                                                         * /Erik P G Johansson 2016-03-10
+                                                         */
                                                         if(data_type!=D20 && data_type!=D20T)
                                                         {
                                                             //=====================================================
@@ -3435,45 +3443,6 @@ void *DecodeScience(void *arg)
                                                             if (debug >= 1) {
                                                                 CPrintf("    Creating LBL/TAB file pair for P1 data (dop=1) - There is data for exactly two probes.\n");
                                                             }
-                                                            
-                                                            /*// Modify filenames and product ID.
-                                                            {
-                                                                // Set to [E]-Field or keep [D]ensity.
-                                                                char tempChar;
-                                                                if(GetBiasMode(&curr, 1)==E_FIELD) {
-                                                                    tempChar = 'E';
-                                                                } else {
-                                                                    tempChar = 'D';
-                                                                }
-                                                                lbl_fname[19]=tempChar;
-                                                                tab_fname[19]=tempChar;
-                                                                prod_id[19+1]=tempChar;
-                                                            }
-                                                            lbl_fname[21]='1';
-                                                            tab_fname[21]='1';
-                                                            prod_id[21+1]='1';
-                                                            
-                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
-                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
-                                                            
-                                                            // Name changed
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
-                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
-                                                            sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
-                                                            
-                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 1, ini_samples,param_type)>=0)
-                                                            {
-                                                                WritePTAB_File(
-                                                                    buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, 1,
-                                                                    &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
-                                                                
-                                                                strncpy(tstr2,lbl_fname,29);
-                                                                tstr2[25]='\0';
-                                                                
-                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                            }*/
                                                             WriteTABLBL_FilePair(1, 1);
                                                             
 
@@ -3484,44 +3453,6 @@ void *DecodeScience(void *arg)
                                                             if (debug >= 1) {
                                                                 CPrintf("    Creating LBL/TAB file pair for P2 data (dop=2) - There is data for exactly two probes.\n");
                                                             }
-                                                            
-                                                            /*// Modify filenames and product ID.
-                                                            {
-                                                                // Set to [E]-Field or keep [D]ensity.
-                                                                char tempChar;
-                                                                if(GetBiasMode(&curr, 2)==E_FIELD) {
-                                                                    tempChar = 'E';
-                                                                } else {
-                                                                    tempChar = 'D';
-                                                                }
-                                                                lbl_fname[19]=tempChar;
-                                                                tab_fname[19]=tempChar;
-                                                                prod_id[19+1]=tempChar;
-                                                            }
-                                                            lbl_fname[21]='2';
-                                                            tab_fname[21]='2';
-                                                            prod_id[21+1]='2';
-                                                            
-                                                            sprintf(tstr2,"%s%s",&pds.spaths[ti1],lbl_fname); // Put together file name without base path.
-                                                            ExtendStr(tstr4,tstr2,58,' ');                    // Make a new string extended with whitespace to 58 characters.
-                                                            
-                                                            // Name changed
-                                                            SetP(&comm,"PRODUCT_ID",prod_id,1);   // Change PRODUCT ID in common PDS parameters.
-                                                            sprintf(tstr1,"\"%s\"",lbl_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"FILE_NAME",tstr1,1);      // Set filename in common PDS parameters
-                                                            sprintf(tstr3,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
-                                                            SetP(&comm,"^TABLE",tstr3,1);         // Set link to table in common PDS parameters
-                                                            
-                                                            if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, 2, ini_samples,param_type)>=0)
-                                                            {
-                                                                WritePTAB_File(buff,tab_fname,data_type,samples,id_code,length,&sw_info,&curr,param_type,dsa16_p1,dsa16_p2, 2,
-                                                                    &m_conv,bias,nbias,mode,nmode,ini_samples,samp_plateau);
-                                                                
-                                                                strncpy(tstr2,lbl_fname,29);
-                                                                tstr2[25]='\0';
-                                                                
-                                                                WriteToIndexTAB(tstr4, tstr2, property2->value);
-                                                            }*/
                                                             WriteTABLBL_FilePair(2, 2);
                                                         }
                                                         
@@ -4093,6 +4024,7 @@ int AddPathsToSystemLog(pds_type *p)
 }
 
 
+
 // Program option functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
@@ -4149,6 +4081,7 @@ int GetOption(char *opt, int argc, char *argv[], char *arg)
 }
 
 
+
 // Return true if-and-only-if argv[i] contains non-null components (for i >= 1).
 int HasMoreArguments(int argc, char *argv[])
 {
@@ -4161,6 +4094,7 @@ int HasMoreArguments(int argc, char *argv[])
     }
     return 0;
 }
+
 
 
 // Functions to load and test external information 
@@ -4637,29 +4571,28 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
 
 
 
-//--------------------------------------------------------------------------------------------
-// Erik P G Johansson 2015-03-25: Created function
-// Load file with time intervals for which data should be excluded.
-// Every line in the data exclude file specifies one time interval.
-// 
-// NOTE: Time is given in the form of spacecraft clock counts,
-// like SPACECRAFT_CLOCK_START_COUNT and SPACECRAFT_CLOCK_STOP_COUNT.
-// The reasons for using this format are:
-// 1) Makes bugs more unlikely
-// 2) One wants to use a time designation that is as absolute/permanent as possible
-//    and therefore independent of time conversions, in particular time corrections,
-//    and therefore as close to the packet data times as possible.
-//    If one had not and the time conversions changed, then one would have to update
-//    the data exclude list.
-// 3) The code only partly contain functions for conversion from human-readable
-//    strings to spacecraft clock counter (TimeOfDatePDS)?
-// 
-// NOTE: Current implementation does not return any information in the event of failure
-// making soft error harder for caller.
-// NOTE: One could remove time intervals that are outside the time limits of the current
-// mission phase to speed up comparisons, but that has not been implemented (2015-03-26).
-// Doubtful how useful that would be.
-//--------------------------------------------------------------------------------------------
+/* Erik P G Johansson 2015-03-25: Created function
+ * Load file with time intervals for which data should be excluded.
+ * Every line in the data exclude file specifies one time interval.
+ *
+ * NOTE: Time is given in the form of spacecraft clock counts,
+ * like SPACECRAFT_CLOCK_START_COUNT and SPACECRAFT_CLOCK_STOP_COUNT.
+ * The reasons for using this format are:
+ * 1) Makes bugs more unlikely
+ * 2) One wants to use a time designation that is as absolute/permanent as possible
+ *    and therefore independent of time conversions, in particular time corrections,
+ *    and therefore as close to the packet data times as possible.
+ *    If one had not and the time conversions changed, then one would have to update
+ *    the data exclude list.
+ * 3) The code only partly contain functions for conversion from human-readable
+ *    strings to spacecraft clock counter (TimeOfDatePDS)?
+ *
+ * NOTE: Current implementation does not return any information in the event of failure
+ * making soft error harder for caller.
+ * NOTE: One could remove time intervals that are outside the time limits of the current
+ * mission phase to speed up comparisons, but that has not been implemented (2015-03-26).
+ * Doubtful how useful that would be.
+ */
 int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath) {
     FILE   *fd;
     char   line[256]; // Line buffer
@@ -5944,7 +5877,8 @@ int SelectCalibrationData(time_t t_data, m_type *mc)
      * ASSUMES: Calibrations are sorted in time (increasing).
      *
      * IMPLEMENTATION NOTE: This is potentially unnecessarily slow since every calibration data time stamp must be converted:
-     * mc->CD[i].validt: UTC string --> time_t --> scalar variable,
+     * mc->CD[i].validt: UTC string --> time_t --> scalar variable
+     * (and t_data: time_t --> scalar variable)
      *
      * Naming convention:
      *    t_*  = Variable of type time_t.
@@ -5958,16 +5892,15 @@ int SelectCalibrationData(time_t t_data, m_type *mc)
      * RATIONALE: According the time_t documentation, one should really avoid doing arithmetic with time_t variables since its meaning
      * depends on the library implementation. There is also no proper(?) way of converting from time_t to a scalar time (e.g. seconds
      * after some universal reference time, e.g. 1970-01-01, 00:00.00) more than difftime.
+     * --
+     * Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway?
      */
     time_t t_ref;
     TimeOfDatePDS(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
-    inline double GetSecondsTime(time_t t)
-    {
-        return difftime(t, t_ref);
-    }
+    inline double GetSecondsTime(time_t t)    {   return difftime(t, t_ref);   }
     //#######################################
 
-    double tp_calib2, tp_calib1, tp_data;
+    double tp_calib1, tp_calib2, tp_data;
     time_t t_calib;        // Calibration time for current calibration.
     int i;
 
@@ -9054,19 +8987,25 @@ int Scet2Date_2(double raw,char *stime,int lfrac)
 }
 
 /*
- * Interprets a string, of format "YYYY-MM-DD" or "YYYY-MM-DD hh:mm.ss" and returns a time_t value.
+ * Converts a string of format "YYYY-MM-DD" or "YYYY-MM-DD hh:mm.ss" to a time_t value.
  *
  * NOTE: In reality, the function ignores the characters between the number fields and they can therefore be set arbitrarily (only their absolute positions are important).
  * NOTE: The function will ignore characters after the final "ss" (two-digit seconds) and will therefore ignore decimals in seconds. Fractions can not be returned in time_t anyway.
  * NOTE: Can handle PDS compliant UTC time strings.
  * NOTE: If no hour-minute-seconds are given, then they will take zero (i.e. midnight at beginning of day) as default value.
- * Values are fed into mktime. mktime calculates UTC time since 1970 1 Jan 00:00:00
- * Negative return value is an error.
+ * Values are fed into mktime. mktime calculates UTC time since 1970 1 Jan 00:00:00 (For POSIX and UNIX systems).
+ * NOTE: Empirically (playing with TimeOfDatePDS, pds' default compiler), time_t appears to correspond to seconds after 1970-01-01 00:00.00,
+ * but only for times beginning at 1970-01-01 01:00.00 (!).
+ *
+ *
+ * QUESTION: How does this function handle leap seconds?! (Probably not, if one interprets time_t=seconds since 1970.)
+ *
+ * Return value : 0=Success; Negative value indicates error.
  * 
  * 01234567890123456789012
  * CCYY-MM-DDThh:mm:ss.fff
  */
-int TimeOfDatePDS(char *sdate,time_t *t)
+int TimeOfDatePDS(char *sdate, time_t *t)
 {
     char mday[3];
     char month[3];
@@ -9089,29 +9028,29 @@ int TimeOfDatePDS(char *sdate,time_t *t)
     month[2]='\0'; // Terminate
     mday[2]='\0';  // Terminate  
     
-    // Set default values in case they are not supplied by the caller (sdate).
-    atime.tm_sec=0;  // Choose
-    atime.tm_min=0;  // time
-    atime.tm_hour=0; // at midnight.
+    // Set default values (midnight) in case they are not supplied by the caller (sdate).
+    atime.tm_sec=0;
+    atime.tm_min=0;
+    atime.tm_hour=0;
     
     if((len=strlen(sdate))>10) // If we have a full PDS time string with more than just YYYY-MM-DD (year-month-day). Assume hour-minute-second.
     {
-        strncpy(min,&sdate[14],2);      // Copy minutes from sdate
-        min[2]='\0';                   // Terminate
-        if(!sscanf(min,"%d",&(atime.tm_min))) {
-            return -1;// Error couldn't resolve minutes
+        strncpy(hour,&sdate[11], 2);    // Copy HOURS from sdate
+        hour[2] = '\0';                  // Terminate
+        if(!sscanf(hour, "%d", &(atime.tm_hour))) {
+            return -2;    // Error couldn't resolve minutes
+        }
+
+        strncpy(min, &sdate[14], 2);      // Copy MINUTES from sdate
+        min[2] = '\0';                   // Terminate
+        if(!sscanf(min, "%d", &(atime.tm_min))) {
+            return -1;    // Error couldn't resolve minutes
         }
         
-        strncpy(hour,&sdate[11],2);    // Copy hours from sdate
-        hour[2]='\0';                  // Terminate
-        if(!sscanf(hour,"%d",&(atime.tm_hour))) {
-            return -2;// Error couldn't resolve minutes
-        }
-        
-        strncpy(sec,&sdate[17],2); // Copy seconds to sec
-        sec[2]='\0';               // Terminate
-        if(!sscanf(sec,"%d",&(atime.tm_sec))) {
-            return -3;// Error couldn't resolve seconds
+        strncpy(sec, &sdate[17], 2); // Copy SECONDS to sec
+        sec[2] = '\0';               // Terminate
+        if(!sscanf(sec, "%d", &(atime.tm_sec))) {
+            return -3;   // Error couldn't resolve seconds
         }
     }
     
@@ -9355,9 +9294,8 @@ int HighestBit(unsigned int value)
 //----------------------------------------------------------------------------------------------------------------------------------
 
 // Traverse through DDS archive
-// If end is reached it will wake up every 10th second
+// If the end is reached, then it will wake up every 10th second
 // and look for new data.
-
 void TraverseDDSArchive(pds_type *p)
 {
     FTS *af;               // Archive file structure
@@ -9419,7 +9357,7 @@ void TraverseDDSArchive(pds_type *p)
                                                 DPrintf("Error allocating in buffer for DDS file");
                                             else
                                             {
-                                                slen=0; // Summ of lengths
+                                                slen=0; // Sum of lengths
                                                 // Read file loop 
                                                 // Most of the time only one read will be done
                                                 // but if an error occurs we do try again to read the rest!
@@ -9925,13 +9863,13 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
 // The real main function can conveniently be renamed (not commented out, not deleted) when using this function.
 // This is useful for having test code that has access to other pds-internal functions.
 //int main(int argc, char* argv[]) {
-int main_DISABLED(int argc, char* argv[]) {
+int main_TEST(int argc, char* argv[]) {
     printf("###################################################################################\n");
     printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
     printf("###################################################################################\n");
     ProtectPlnkInit();
 
-    RunShellCommand("echo \"SADQWRDSDF\"");
+//     RunShellCommand("echo \"SADQWRDSDF\"");
     
     /*
     prp_type p;
@@ -9947,7 +9885,32 @@ int main_DISABLED(int argc, char* argv[]) {
     printf("errorCode = %i\n", errorCode);
     //*/
 
+    const int N = 9+5;
+    char * s[N];
+    time_t t1, t2;
+    int i = 0;
+
+    s[i++] = "1970-01-01 00:00:00";
+    s[i++] = "1970-01-01 00:00:01";
+    s[i++] = "1970-01-01 00:59:59";
+    s[i++] = "1970-01-01 01:00:00";
+    s[i++] = "1970-01-01 01:00:01";
+    s[i++] = "1970-01-01 12:00:00";
+    s[i++] = "1970-01-01 23:59:59";
+    s[i++] = "1970-01-02 00:00:00";
+    s[i++] = "1970-01-02 00:00:01";
+
+    s[i++] = "2016-01-01 12:00:00";
+    s[i++] = "2016-01-01 23:00:00";
+    s[i++] = "2016-01-02 00:00:00";
+    s[i++] = "2016-01-02 00:00:01";
+    s[i++] = "2016-01-02 12:00:00";
+
+    for (i=0; i<N; i++) {
+        TimeOfDatePDS(       s[i], &t1);
+        TimeOfDatePDS_midday(s[i], &t2);
+        printf("%s ==> %i, %i\n", s[i], (int) t1, (int) t2);
+    }
+
     return -1;
 }
-
-
