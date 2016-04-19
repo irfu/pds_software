@@ -4,10 +4,13 @@
 #       The limit has been raised and pds should be able to handle string lengths (incl. CR,LF) up to 1023 bytes. /Erik P G Johansson 2016-01-07
 #       Not sure, but my memory tells me that the string lengths referred to is the entire length of each row in this file. /Erik P G Johansson 2016-03-08
 # NOTE: Older version of pds (before commit 017971e, 2015-12-17) can not handle ":" in descriptions.
-#       Colon yields absent quote in pds. /Erik P G Johansson 2015-12-16
-#       Updated pds should be able to handle ":".  /Erik P G Johansson 2016-01-07
+#       Colon in descriptions yields absent quote in pds. /Erik P G Johansson 2015-12-16
+#       Updated pds should be able to handle ":" in descriptions.  /Erik P G Johansson 2016-01-07
 # NOTE: The quotes are the quotes that end up in the LBL files.
 #       If they are wrong, then the LBL files will be wrong. /Erik P G Johansson 2015-12-17
+#
+# NOTE: Macros are mostly in sorted order. Does that make sense? (Which digit is the macro version number?
+#       If it is no the last digit, then maybe that should, ideally, be the last character to be used in sorting.)
 #
 0x0000:"Instrument not running any mode"
 0x0100:"Transmitting Probe 1 5 KHz"
@@ -83,8 +86,7 @@
 0x0812:"As MCID0X212, Density, normal mode alternating sweeps and time series."
 0x0803:"Density Cont. 20 bit trunc down 32,LDL NM,16 bit P1 every 3rd AQP"
 0x0804:"Density Cont. 20 bit trunc, LDL BM, 16 bit P1 every AQP"
-0x0805:"Density P1 Burst Mode, LDL, Fix Bias -22V, Cont. 20 Bit full, Sweeps P1 +-30V"
-0x0806:"Empty"
+0x0805:"Density P1 NM, LDL, Fix Bias -22V, Cont. A20 down 64, Sweeps P1 +-30V" 
 0x0806:"Minimum TM,Normal LDL or mixed LDL"
 0x0807:"Density,Cont. 20 bit trun, LDL BM, 16 bit and Sweep P1"
 0x0814:"Density P1 NM, LDL, Vb -30V, Cont. 20 Bit trunc down 32, Sweeps +-30V, short HF"
