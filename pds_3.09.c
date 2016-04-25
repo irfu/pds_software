@@ -2171,8 +2171,10 @@ void *DecodeScience(void *arg)
                                             //TrimQN(property1->value);
                                             if(!sscanf(property1->value,"\"%x\"",&val)) 
                                             {
-                                                CPrintf("    MACRO ID corrupt in macro description\n");
-                                                
+                                                // CASE: Can NOT parse string as macro number.
+//                                                 CPrintf("    MACRO ID corrupt in macro description\n");
+                                                CPrintf("    MACRO ID corrupt in macro description. Stated macro ID: \"%s\" (string)\n", property1->value);
+
                                                 if(finger_printing) // Are we fingerprinting ?
                                                 {
                                                     finger_printing=0;
@@ -2216,7 +2218,7 @@ void *DecodeScience(void *arg)
 
                                 if(macro_descr_NOT_found)
                                 {
-                                    CPrintf("    Error: Could not find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
+                                    CPrintf("    ERROR: Could not find a matching macro description for MACRO ID: 0x%.4x\n", macro_id);
                                 }
                                 else {
                                     mb--; // mb is one step to much here since break above only breaks out of inner loop!
@@ -2231,7 +2233,6 @@ void *DecodeScience(void *arg)
                                     state=S04_GET_ID_CODE;
                                 }
                                 break;
-                                    
                                     //##############################################
                                     // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
                                     //##############################################
@@ -4760,8 +4761,16 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
     }
     SPACECRAFT_CLOCK_START_COUNT = property1->value;
     SPACECRAFT_CLOCK_STOP_COUNT  = property2->value;
-    OBT_Str2Raw(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &file_t_begin);
-    OBT_Str2Raw(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &file_t_end  );
+    if (OBT_Str2Raw(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &file_t_begin)) {
+        YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
+        printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
+        return -2;
+    }
+    if (OBT_Str2Raw(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &file_t_end  )) {
+        YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
+        printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
+        return -2;
+    }
     
     if (
         (FindP(file_properties, &property1, "START_TIME", 1, DNTCARE) < 0) ||
@@ -5027,9 +5036,9 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                             break;
                         }
                         
-                        Separate(line,l_tok,t_tok,'\t',1);    // NOTE: Requires (exactly one) tab between first and second column.
-                        Separate(t_tok,n_tok,v_tok,'=',1);
-                        TrimWN(l_tok);   // Meaningless? l_tok is never used(?)
+                        Separate(line, l_tok, t_tok, '\t', 1);    // NOTE: Requires (exactly one) tab between first and second column.
+                        Separate(t_tok, n_tok, v_tok, '=', 1);
+                        //TrimWN(l_tok);   // Meaningless? l_tok is never used(?)
                         TrimWN(n_tok);
                         TrimWN(v_tok);
 
@@ -5905,7 +5914,7 @@ char GetBiasMode(curr_type *curr, int dop) {
         return curr->bias_mode1;
     }
     
-    CPrintf("Error: GetBiasMode: Can not determine bias mode (curr->sensor=%i).\n", curr->sensor);
+    CPrintf("ERROR: GetBiasMode: Can not determine bias mode (curr->sensor=%i).\n", curr->sensor);
     return -1;
 }
 
@@ -8950,8 +8959,10 @@ int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime)
     if (   (3 != sscanf(s,      "%i/%[^.].%lf", &resetCounter_temp, s_temp, &false_frac))
         || (1 != sscanf(s_temp, "%lf",          &sec)))
     {
-        YPrintf("ERROR: OBT_Str2Raw: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
-        printf( "ERROR: OBT_Str2Raw: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
+        // Error messages are unnecessary if all the calls to this function give error messages instead (which they do).
+        // If the calling code also gives context in the error messages, that is even better.
+//         YPrintf("ERROR: OBT_Str2Raw: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
+//         printf( "ERROR: OBT_Str2Raw: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
         return -1;
     }
     
