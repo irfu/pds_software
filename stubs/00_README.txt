@@ -2,12 +2,22 @@
 Footnote 1: pds (which reads the *.mds files), requires that all variable values are surrounded by quotes. An older version of MEDS (the macro editor) which generates *.mds files, mistakenly generates *.mds files WITHOUT quotes. Add quotes manually to prevent pds from hanging/crashing when reading new *.mds files. There is a newer version of MEDS which does add quotes.
 
 Footnote 2: 
-a) Most *.mds files contain the variable name "LAP_P1_EFIELD_FIX_DURATION" and some contain the variable name "LAP_P1_E-FIELD_FIX_DURATION" INSTEAD.
-b) The forgotten bash/sed script "repl2" in this directory appears to replace the former with the latter in files.
+a) Most *.mds files originally contained the variable name "LAP_Px_E-FIELD_FIX_DURATION" and some contained the variable name "LAP_Px_EFIELD_FIX_DURATION" INSTEAD.
+b) The forgotten bash/sed script "repl2" (rewritten to "replace_E-FIELD") in this directory appeared to replace the former with the latter in files.
 It appears, based on this, that one variable name has been replaced by the other manually in the past (after generation in MEDS). It also appears that this has not caused pds to crash since pds searches for the former variable name, and the latter variable name only occurs in macros which do not use this variable, and if pds does not ask for it, it does not notice the name change and does not crash.
+c) pds looks for the former (EFIELD) but not the latter (E-FIELD) keyword.
+
+SUMMARY: Substitute LAP_Px_E-FIELD_FIX_DURATION --> LAP_Px_EFIELD_FIX_DURATION in .mds files (x=probe number).
+         Testing (comparing otherwise identical data sets) reveals that if one
+         uses .mds files without this, the corresponding keyword will not show up in the LBL files.
 
 /Erik P G Johansson, Fredrik Johansson 2014-10-30
-/Erik P G Johansson, update 2014-12-08
+/Erik P G Johansson, update 2014-12-08, 2016-04-25
+
+
+
+Made all substitutions LAP_Px_E-FIELD_FIX_DURATION --> LAP_Px_EFIELD_FIX_DURATION for ALL .mds files (x=probe number)
+/Erik P G Johansson, 2016-04-25
 
 
 
