@@ -80,7 +80,10 @@
  *  * Updated the way offset calibrations and TM conversion factors are selected.
  *    Uses the nearest calibration by default. Added a manual "calibration selection" list (override).
  *    Removes unused calibration files (replaces the previous functionality for removing unused calibration files).
- *      /Erik P G Johansson 2016-04-13
+ *       /Erik P G Johansson 2016-04-13
+ *  * Added tests for erroneous .mds files/macro descriptions to warn the user that he/she is probably using (incompatible) files generated
+ *    with the older version of MEDS.
+ *       /Erik P G Johansson 2016-04-25
  *
  *
  *
@@ -4961,9 +4964,10 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
     FILE *mac_fd;   // File desc
     int m_bl,m_n;   // macro block & macro number
     char path[256];  // Path + filename
-    char line[256]; // Line buffer
-    
-    int state=0;    // State variable
+    char line[256];  // Line buffer
+
+    int macro_descr_error = 0;
+    int state=0;     // State variable: 0=Not found <START> tag yet. 1=Found <START> tag, but not <END> tag. 2=Found <START> tag and an <END> tag afterwards.
     char l_tok[80];  // line nr token
     char t_tok[80]; //  temp    token
     char n_tok[80];  // name    token
@@ -5006,7 +5010,19 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                         TrimWN(l_tok);   // Meaningless? l_tok is never used(?)
                         TrimWN(n_tok);
                         TrimWN(v_tok);
-                        sprintf(line,"ROSETTA:%s",n_tok); // New PDS standard! Add ROSETTA:
+
+                        /** 1) Specifically check for values NOT beginning with quote. An old version of MEDS, used for generating .mds files,
+                         * generates faulty .mds files without quotes (plus other things).
+                         * pds can crash(!) if a faulty macro description (with unquoted values) is used by the data.
+                         * 2) Checks for .mds keywords generated with older version of MEDS. The keywords have since been replaced (E-FIELD --> EFIELD).
+                         * Not substituting them leads to pds not being able to explicitly read the value and not putting the keyword in the LBL files
+                         * (empirically, from testing to generate otherwise identical data sets).
+                         */
+                        if ((v_tok[0] != '"') || !strcmp(n_tok, "LAP_P1_E-FIELD_FIX_DURATION") || !strcmp(n_tok, "LAP_P2_E-FIELD_FIX_DURATION")) {
+                            macro_descr_error = 1;
+                        }
+
+                        sprintf(line, "ROSETTA:%s", n_tok);   // New PDS standard! Add prefix "ROSETTA:" to key value.
                         if((&macs[m_bl][m_n])!=NULL) {
                             Append(&macs[m_bl][m_n],line,v_tok);
                         }
@@ -5015,9 +5031,14 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                 }
             }
             
-            if(state==0) YPrintf("Warning: couldn't find start tag\n");
-            if(state==1) YPrintf("Warning: couldn't find end tag\n");
-            state=0; // Restore state
+            if(state==0) YPrintf("Warning: couldn't find <START> tag\n");
+            if(state==1) YPrintf("Warning: couldn't find <END> tag\n");
+            if(macro_descr_error) {
+                YPrintf("    WARNING: Erroneous file contents. Hint: Could be .mds files generated with old version of MEDS.\n");
+            }
+
+            state = 0; // Restore state
+            macro_descr_error = 0;
             fclose(mac_fd);
         }
         return n_macs;
