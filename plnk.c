@@ -510,6 +510,17 @@ int UnCheck(property_type *prop)
     return -1;
 }
 
+
+
+/**
+ * Prints all the properties as key = value.
+ * Presumably intended for debugging, maybe logging.
+ *
+ * NOTE: Prints nothing (empty string) as value for value pointer=NULL.
+ * NOTE: Does not quote strings. Note that some values may, by themselves, contain quotes.
+ *
+ * Return value : 0=Ok, 1=Something wrong with linked list
+ */
 int DumpPrp(prp_type *p)
 {
     int i;
@@ -525,8 +536,9 @@ int DumpPrp(prp_type *p)
             if(tmp!=NULL && tmp->name!=NULL)
             {
                 printf("%s",tmp->name);
-                if(tmp->value!=NULL)
+                if(tmp->value!=NULL) {
                     printf("= %s",tmp->value);
+                }
                 printf("\n");
             }
             tmp=tmp->next_p;
@@ -538,6 +550,8 @@ int DumpPrp(prp_type *p)
     pthread_mutex_unlock(&protect_plnk);
     return -1; // Error empty
 }
+
+
 
 // Write properties to file, as an ODL file.
 int FDumpPrp(prp_type *p,FILE *fd)
@@ -639,10 +653,13 @@ int GetNo(prp_type *p,property_type **prop,int no)
 
 
 
-// Return pointer ("*prop") to instance of property_type within *p where *prop->name matches *name.
-// Of those matches that have the specified "check" value matching [property_type]->check, the functions returns the "occ:th" one.
-// 
-// check = DNTCARE, CHECKED, or UNCHECKED
+/**
+ * Return pointer ("*prop") to instance of property_type within *p where *prop->name matches *name.
+ * Of those matches that have the specified "check" value matching [property_type]->check, the functions returns the "occ:th" one.
+ *
+ * check = DNTCARE, CHECKED, or UNCHECKED
+ * Return value : 1=Found it, 0=Did not find it (but otherwise OK), -2=Error (Something is wrong with the linked list)
+*/
 int FindP(prp_type *p, property_type **prop, char *name, int occ, char check)
 {
     int i;

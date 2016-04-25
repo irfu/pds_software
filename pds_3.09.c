@@ -14,49 +14,49 @@
  * ...
  * CHANGES FROM VERSION 3.07 TO 3.08
  *  * Fixed bug that assigns command-line argument specified configuration file paths to the wrong string variables.
- *       Erik P G Johansson 2015-02-xx
+ *       /Erik P G Johansson 2015-02-xx
  *  * Changed the name of three PDS keywords to being probe-specific (in addition to four previously renamed PDS keywords).
- *       Erik P G Johansson 2015-03-xx
+ *       /Erik P G Johansson 2015-03-xx
  *  * Implemented functionality for ignoring data within specific time intervals (pds.dataexcludetimes).
- *       Erik P G Johansson 2015-03-31
+ *       /Erik P G Johansson 2015-03-31
  *  * Corrected typos in PDS DESCRIPTION fields in LBL files.
- *       Erik P G Johansson 2015-03-30
+ *       /Erik P G Johansson 2015-03-30
  *  * Fixed bug that sometimes terminates the DecodeScience thread prematurely thus omitting the last hour(s) of data.
- *       Erik P G Johansson 2015-03-31
+ *       /Erik P G Johansson 2015-03-31
  *  * Specifically permit the faulty macro 515 to set new vbias2 in every macro loop (not just the first loop) thus
  *    permitting vbias2 to change value in every macro loop cycle, as described in the .mds file.
- *       Erik P G Johansson 2015-04-10
+ *       /Erik P G Johansson 2015-04-10
  *  * Modified and simplified code that updates certain PDS keyword values in LBL/CAT files copied from
  *    the template directory so that it now updates more PDS keyword values.
  *    Thus modified WriteLabelFile and renamed it WriteUpdatedLabelFile.
- *       Erik P G Johansson 2015-05-04
+ *       /Erik P G Johansson 2015-05-04
  *  * Fixed bug that made INDEX.LBL not adjust to the DATA_SET_ID column changing width.
- *       Erik P G Johansson 2015-05-12
+ *       /Erik P G Johansson 2015-05-12
  *
  * CHANGES FROM VERSION 3.08 TO 3.09
  *  * Fixed bug that made ADC20 always choose high-gain.
- *       Erik P G Johansson 2015-06-03
+ *       /Erik P G Johansson 2015-06-03
  *  * Added code for calibrating ADC20 data relative to ADC16
  *    See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
  *    Also see added constants in "pds.h".
- *       Erik P G Johansson 2015-06-10
+ *       /Erik P G Johansson 2015-06-10
  *  * Fixed bug that multiplied ccalf_ADC16 by 16 for non-truncated ADC20 data, density mode, P1/P2.
  *    This led to calibration offsets being multiplied by 16.
  *    (Braces surrounding the statements after two if-then were missing.)
- *       Erik P G Johansson 2015-08-31
+ *       /Erik P G Johansson 2015-08-31
  *  * Fixed potential bug that interpreted macro ID strings as decimal numbers rather than hexadecimal numbers.
  *    Code still worked since the result was only used to compare with decimal macro ID numbers
  *    and the code (seemed to) fail well for hexadecimal string representations.
- *       Erik P G Johansson 2015-12-07
+ *       /Erik P G Johansson 2015-12-07
  *  * Added extra flags for overriding the MISSION_PHASE_NAME, period start date & duration, and description
  *    string used in DATA_SET_ID and DATA_SET_NAME.
- *       Erik P G Johansson 2015-12-09
+ *       /Erik P G Johansson 2015-12-09
  *  * Start time & duration can now be specified with higher accuracy than days using CLI parameters.
  *  * All logs now display wall time the same way ("3pds_dds_progress.log" was previously different).
  *  * Bug fix: pds.modes can now handle colons in the description string.
  *  * Raised permitted string length for code interpreting "pds.modes". Can now (probably) handle all rows up
  *    to 1024 characters, including CR & LF.
- *       Erik P G Johansson 2015-12-17
+ *       /Erik P G Johansson 2015-12-17
  *  * Bug fix: Reading LBL files failed to add CR at end-of-line for first line of multiline keyword values.
  *    Bug was in ReadLabelFile(..).
  *    This caused newlines without CR when pds modified
@@ -72,11 +72,11 @@
  *    Every HK LBL file with only one row (in TAB file): STOP_TIME was only a year.
  *       /Erik P G Johansson 2016-03-21.
  *  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
- *      /Erik P G Johansson 2016-03-22
+ *       /Erik P G Johansson 2016-03-22
  *  * Updated to update LBL files under DOCUMENT/ (recursively).
- *      /Erik P G Johansson 2016-04-04
+ *       /Erik P G Johansson 2016-04-04
  *  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
- *      /Erik P G Johansson 2016-04-11
+ *       /Erik P G Johansson 2016-04-11
  *  * Updated the way offset calibrations and TM conversion factors are selected.
  *    Uses the nearest calibration by default. Added a manual "calibration selection" list (override).
  *    Removes unused calibration files (replaces the previous functionality for removing unused calibration files).
@@ -819,7 +819,7 @@ int main(int argc, char *argv[])
     
     Scet2Date_2((double)mp.start,tstr2,0);                // Decode raw time into PDS compliant UTC time
     YPrintf("Mission phase start         : %s\n",tstr2);
-    printf("Mission phase start         : %s\n",tstr2);
+    printf( "Mission phase start         : %s\n",tstr2);
     SetP(&cat,"START_TIME",tstr2,1);                      // Set START_TIME
     
     Scet2Date_2((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
@@ -946,8 +946,9 @@ int main(int argc, char *argv[])
         YPrintf("Error loading macros\n");
         ExitPDS(1);
     }
-    else
+    else {
         YPrintf("Loaded %d macro descriptions\n",status);
+    }
     
     
     // Initialize inverse log table to decode logarithm sweeps
@@ -1736,14 +1737,14 @@ void *DecodeScience(void *arg)
     if(LoadAnomalies(&anom,pds.apath)<0)
     {
         YPrintf("Warning: anomaly correction can not be done\n");
-        printf("Warning: anomaly correction can not be done\n");
+        printf( "Warning: anomaly correction can not be done\n");
     }
     
     // Load bias settings from bias file
     if((LoadBias(&bias,&mode,&nbias,&nmode,pds.bpath))<0) 
     {
         YPrintf("Warning: Extra bias settings can not be done\n");
-        printf("Warning: Extra bias settings can not be done\n");
+        printf( "Warning: Extra bias settings can not be done\n");
     }
     
     if(nbias>0 && bias!=NULL && debug>1) {
@@ -1765,7 +1766,7 @@ void *DecodeScience(void *arg)
         if((nexcl=LoadExclude(&exclude, pds.epath))<0)
         {
             YPrintf("Warning: Calibration macros will not be excluded\n");
-            printf("Warning: Calibration macros will not be excluded\n");
+            printf( "Warning: Calibration macros will not be excluded\n");
         }
     }
     
@@ -2160,8 +2161,9 @@ void *DecodeScience(void *arg)
                                 SetP(&comm,"PROCESSING_LEVEL_ID",tstr1,1);  // Set processing level ID.
                                 
                                 // Search for macro with right macro ID in macs matrix
-                                macro_descr_NOT_found=1; // Indicate that we haven't found the macro 
+                                macro_descr_NOT_found=1;   // Indicate that we haven't found the macro
                                 for(mb=0;macro_descr_NOT_found && mb<MAX_MACRO_BLCKS;mb++)
+                                {
                                     for(ma=0;macro_descr_NOT_found && ma<MAX_MACROS_INBL;ma++)
                                     {
                                         if(FindP(&macros[mb][ma], &property1, "ROSETTA:LAP_MACRO_ID_TAG", 1, DNTCARE)>0)
@@ -2183,6 +2185,7 @@ void *DecodeScience(void *arg)
                                             }
                                             else
                                             {
+                                                // CASE: Can parse string as macro number.
                                                 if(val==macro_id)
                                                 {
                                                     // Move temporary buffer to it's end, This buffer will be used to dump
@@ -2200,24 +2203,34 @@ void *DecodeScience(void *arg)
                                                     break;
                                                 }
                                             }
+                                        } else {
+                                            /** Can be useful to print error message when the property ROSETTA:LAP_MACRO_ID_TAG can not be found, which indicates
+                                             * something wrong with the macro description (read from the .mds file).
+                                             * The downside is that if one macro description is wrong, then this error message comes up everytime
+                                             * a macro description needs to be looked up.
+                                             */
+                                            //CPrintf("Could not find ROSETTA:LAP_MACRO_ID_TAG in the macro description. (Hint: Is the .mds file correcty formatted?\n");
                                         }
-                                    }      
-                                    
-                                    if(macro_descr_NOT_found) 
-                                    {
-                                        CPrintf("    Error: Could not find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
-                                    }
-                                    else
-                                        mb--; // mb is one step to much here since break above only breaks out of inner loop!
-                                        
-                                        if(finger_printing) // Are we fingerprinting ?
-                                        {
-                                            finger_printing=0;
-                                            state=S09_COMPARE_PARAMS;
-                                        }
-                                        else
-                                            state=S04_GET_ID_CODE;
-                                        break;
+                                    }   // for
+                                }   // for
+
+                                if(macro_descr_NOT_found)
+                                {
+                                    CPrintf("    Error: Could not find a matching macro description for MACRO ID: 0x%.4x\n",macro_id);
+                                }
+                                else {
+                                    mb--; // mb is one step to much here since break above only breaks out of inner loop!
+                                }
+
+                                if(finger_printing) // Are we fingerprinting ?
+                                {
+                                    finger_printing=0;
+                                    state=S09_COMPARE_PARAMS;
+                                }
+                                else {
+                                    state=S04_GET_ID_CODE;
+                                }
+                                break;
                                     
                                     //##############################################
                                     // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
@@ -3331,7 +3344,8 @@ void *DecodeScience(void *arg)
                                                     // 
                                                     // Determine whether to include/exclude entire TAB&LBL file pair.
                                                     // Can be compared with the (CALIB) macro exclusion check.
-                                                    // NOTE: DecideWhetherToExcludeData requires SPACECRAFT_CLOCK_START_COUNT, SPACECRAFT_CLOCK_STOP_COUNT to have been set.
+                                                    // NOTE: DecideWhetherToExcludeData requires SPACECRAFT_CLOCK_START_COUNT,
+                                                    // SPACECRAFT_CLOCK_STOP_COUNT to have been set.
                                                     //------------------------------------------------------------------------
                                                     int excludeData = 0;   // Boolean flag.
                                                     if (dataExcludeTimes != NULL) {
@@ -3360,7 +3374,7 @@ void *DecodeScience(void *arg)
                                                         {
                                                             for(i=0;i<nexcl;i++)
                                                             {
-                                                                if(exclude[i]==macro_id) // Exclude current macro..in case of calibration macro
+                                                                if(exclude[i]==macro_id)
                                                                 {
                                                                     CPrintf("Excluding calibration macro: 0x%04x\n",macro_id);
                                                                     state=S04_GET_ID_CODE;
@@ -3858,7 +3872,7 @@ int DPrintf(const char *fmt, ...)
 {
     int status;
     va_list args;
-    char  strp[32];
+    char strp[32];
     
     int oldstate;
     
@@ -4733,8 +4747,7 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
     double file_t_begin = -1;
     double file_t_end   = -1;    
     
-    // NOTE: int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime)
-    
+
     
     if (
         (FindP(file_properties, &property1, "SPACECRAFT_CLOCK_START_COUNT", 1, DNTCARE) < 0) ||
@@ -4957,37 +4970,46 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
     return 0;
 }
 
-// Load all macro descriptions into memory
-// NOTE: *.mds files: The left-most numbers appear to be ignored, but a tab is still required before the actual "variable assignment".
+
+
+/**
+ * Load all macro descriptions into memory
+ *
+ * NOTE: Iterates over all possible filenames (that fit pattern) and tries to load each one of them.
+ * NOTE: *.mds files: The left-most numbers appear to be ignored, but a tab is still required before the actual "variable assignment".
+*/
 int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro descriptions
 {
-    FILE *mac_fd;   // File desc
-    int m_bl,m_n;   // macro block & macro number
+    FILE *mac_fd;    // File desc
+    int m_bl,m_n;    // macro block & macro number
     char path[256];  // Path + filename
     char line[256];  // Line buffer
 
     int macro_descr_error = 0;
     int state=0;     // State variable: 0=Not found <START> tag yet. 1=Found <START> tag, but not <END> tag. 2=Found <START> tag and an <END> tag afterwards.
     char l_tok[80];  // line nr token
-    char t_tok[80]; //  temp    token
+    char t_tok[80];  // temp    token
     char n_tok[80];  // name    token
     char v_tok[80];  // value   token
     
     int n_macs=0;
     
     printf("Loading detailed macro descriptions\n");
-    for(m_bl=0;m_bl<MAX_MACRO_BLCKS;m_bl++) // All macro blocks
+    for(m_bl=0;m_bl<MAX_MACRO_BLCKS;m_bl++)   // All macro blocks
+    {
         for(m_n=0;m_n<MAX_MACROS_INBL;m_n++)   // All macro numbers
         {
-            sprintf(path,"%sPRG_B%d_M%d.mds",home,m_bl,m_n);
-            if((mac_fd=fopen(path,"r"))==NULL) continue;
-            YPrintf("Loading detailed macro desc: %s, Length: %d\n",path,FileLen(mac_fd));
+            sprintf(path, "%sPRG_B%d_M%d.mds", home, m_bl, m_n);
+            if((mac_fd=fopen(path,"r"))==NULL) {
+                continue;
+            }
+            YPrintf("Loading detailed macro desc: %s, Length: %d\n", path, FileLen(mac_fd));
             
             n_macs++;
             while (fgets(line,255,mac_fd) != NULL)
             {
-                if(line[0] == '\n') continue; //Empty line.
-                if (line[0] == '#') continue; //Remove comments.
+                if(line[0] == '\n') continue;   // Empty line.
+                if(line[0] == '#' ) continue;   // Remove comments.
                 
                 switch(state)
                 {
@@ -5001,7 +5023,7 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                     case 1: 
                         if (!strncmp(line,"<END>",5))  // Found END tag
                         {
-                            state=2;		
+                            state=2;
                             break;
                         }
                         
@@ -5024,7 +5046,10 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
 
                         sprintf(line, "ROSETTA:%s", n_tok);   // New PDS standard! Add prefix "ROSETTA:" to key value.
                         if((&macs[m_bl][m_n])!=NULL) {
-                            Append(&macs[m_bl][m_n],line,v_tok);
+                            // Print what was read.
+                            //YPrintf("   %-30s = %s\n", n_tok, v_tok);     // NOTE: Does not print prefix "ROSETTA:" since it only repeats.
+
+                            Append(&macs[m_bl][m_n],line, v_tok);
                         }
                         
                         break;
@@ -5041,7 +5066,8 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
             macro_descr_error = 0;
             fclose(mac_fd);
         }
-        return n_macs;
+    }
+    return n_macs;
 }
 
 
@@ -5369,7 +5395,8 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
 }
 
 
-// Given a path (p->mcpath) and mission phase abbreviation (m->abbrev), initialize an instance of mp_type with data from the mission calendar file.
+// Given a path (p->mcpath) and mission phase abbreviation (m->abbrev),
+// initialize an instance of mp_type with data from the mission calendar file.
 // Function previously called "GetMissionP".
 int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
 {
@@ -5416,8 +5443,9 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
         if(!strcmp(m->abbrev,abbrev)) // Matching mission phase abbreviation
         {
             // Get new time from mission calendar, convert to seconds
-            if((stat=TimeOfDatePDS(sdate,&(m->start)))<0)
+            if((stat=TimeOfDatePDS(sdate,&(m->start)))<0) {
                 CPrintf("    Error mission phase time conversion: %02d\n",stat);
+            }
             
             sscanf(duration,"%d",&dur);
             
@@ -5458,16 +5486,17 @@ void DeriveDSIandDSN(
 
 
 // Dump macros. This is for debugging.
-// void TestDumpMacs()
-// {
-//     int i,j;
-//     for(i=0;i<10;i++) {
-//         for(j=0;j<8;j++) {
-//             DumpPrp(&macros[i][j]);
-//         }
-//     }
-// }
-
+/*
+void TestDumpMacs()
+{
+    int i,j;
+    for(i=0;i<10;i++) {
+        for(j=0;j<8;j++) {
+            DumpPrp(&macros[i][j]);
+        }
+    }
+}
+//*/
 
 
 /* Update certain fields LBL/CAT files in a given directory, recursively.
@@ -5883,7 +5912,7 @@ char GetBiasMode(curr_type *curr, int dop) {
 
 
 /*
- * Function to select which calibration data to used for a given point in time.
+ * Function to select which offset calibration data to used for a given point in time.
  *
  * NOTE: The function will set the flag mc->calibration_used.
  *
@@ -5908,7 +5937,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      *    tp_* = Variable of type double, representing the number of seconds after an arbitrary reference epoch (same for all tp_* variables).
      */
 
-    //#######################################
+    //######################################################################################################
     /* FUNCTION: Return number of seconds since an arbitrary epoch (a constant reference point in time).
      *
      * ASSUMES: The refence epoch variable has been initialized.
@@ -5918,10 +5947,10 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      * --
      * Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway?
      */
-    time_t t_ref;
+    time_t t_ref;                               // Variable used by function.
     TimeOfDatePDS(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
     inline double GetSecondsTime(time_t t)    {   return difftime(t, t_ref);   }
-    //#######################################
+    //######################################################################################################
 
     double tp_calib1, tp_calib2, tp_data;
     time_t t_calib;        // Calibration time for current calibration.
@@ -5977,6 +6006,8 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
  *
  * ASSUMES: Assumes that the function can still call the log function YPrintf.
  * (This important information for when to call this function during the shutdown process.)
+ *
+ * NOTE: This should DELETE ALL offset calibration files for EDITED, but it still leaves the other calibration files.
  *
  * cpath : Path to calibration directory
  * m : Data structure used for determining files to delete. The criterion is m->calib_info[i].calibration_file_used==false.
@@ -6176,8 +6207,9 @@ int WritePTAB_File(
         valid = SelectCalibrationData(stime, UTC_str, mc);
         if (debug >= 1) {
             CPrintf("    Calibration file %i: %s\n", valid, mc->calib_info[valid].LBL_filename);
+            //CPrintf("        mc->calib_info[valid].calibration_file_used = %i\n", mc->calib_info[valid].calibration_file_used);
         }
-        
+
         
         
         //######################################################################################
@@ -6358,11 +6390,12 @@ int WritePTAB_File(
             
             if(param_type==SWEEP_PARAMS)
             {
-                if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) // Decode the four sweep types
+                if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) { // Decode the four sweep types
                     curr_step=-sw_info->height; // Store height of step and set sign to a down sweep 
-                    else
-                        curr_step=sw_info->height;  // Store height of step and set sign to a up sweep
-                        ti2=sw_info->start_bias;      // Get start bias 
+                } else {
+                    curr_step=sw_info->height;  // Store height of step and set sign to a up sweep
+                }
+                ti2=sw_info->start_bias;      // Get start bias
             }
             
             //============
@@ -7783,8 +7816,9 @@ void DispState(int s,char *str)
  * Routine to separate a string into left and right substrings separated
  * by the k_sep'th occurrence of "separator".
  * The right substring is bounded by both occurrences of "separator" and of end-of-string.
- * 
- * Return value = min(occurs, <nbr of separators in str>)
+ *
+ * k_sep :
+ * Return value : min(occurs, <nbr of separators in str>)
  */
 int Separate(char *str, char *left, char *right, char separator, int k_sep)
 {
@@ -8881,18 +8915,20 @@ int Raw2OBT_Str(double raw, int rcount, char *stime)
 
 
 
-//--------------------------------------------------------------------------------------------------
-// Erik P G Johansson 2015-03-25: Created function.
-//
-// Converts
-// from string representation of spacecraft clock counter ("OBT_Str", "stime"; uses false decimals)
-// to   double representation of spacecraft clock counter ("raw"; true decimals).
-// 
-// NOTE: Opposite conversion of Raw2OBT_Str (hence the name) with the difference that this function
-// does accepts strings both with and without surrounding quotes.
-// The former is used when reading the data exclusion file, the latter is used for reading
-// SPACECRAFT_CLOCK_START/STOP_COUNT values in property lists (property_type).
-//--------------------------------------------------------------------------------------------------
+/**--------------------------------------------------------------------------------------------------
+ * Erik P G Johansson 2015-03-25: Created function.
+ *
+ * Converts
+ * from STRING representation of spacecraft clock counter ("OBT_Str", "stime"; uses false decimals)
+ * to   DOUBLE representation of spacecraft clock counter ("raw"; true decimals).
+ *
+ * NOTE: Opposite conversion of Raw2OBT_Str (hence the name) with the difference that this function
+ * does accepts strings both with and without surrounding quotes.
+ * The former is used when reading the data exclusion file, the latter is used for reading
+ * SPACECRAFT_CLOCK_START/STOP_COUNT values in property lists (property_type).
+ *
+ * PROPOSAL: Change name? OBT_SCET2Scalar? (SCET/SCT correct term?)
+--------------------------------------------------------------------------------------------------*/
 int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime)
 {
     int resetCounter_temp;
@@ -9343,9 +9379,14 @@ int HighestBit(unsigned int value)
 // DDS Archive functions (input archive)
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Traverse through DDS archive
-// If the end is reached, then it will wake up every 10th second
-// and look for new data.
+/**
+ * Traverse through DDS archive
+ * If the end is reached, then it will wake up every 10th second
+ * and look for new data.
+ *
+ * NOTE: Will search all DDS files regardless over mission phase time coverage.
+ * ==> Still a bit slow for very short data sets.
+ */
 void TraverseDDSArchive(pds_type *p)
 {
     FTS *af;               // Archive file structure

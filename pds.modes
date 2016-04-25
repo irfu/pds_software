@@ -9,8 +9,8 @@
 # NOTE: The quotes are the quotes that end up in the LBL files.
 #       If they are wrong, then the LBL files will be wrong. /Erik P G Johansson 2015-12-17
 #
-# NOTE: Macros are mostly in sorted order. Does that make sense? (Which digit is the macro version number?
-#       If it is no the last digit, then maybe that should, ideally, be the last character to be used in sorting.)
+# NOTE: Macros are mostly in sorted numeric order, but not entirely. Third digit (of four) = macro version, so it can also make sense to use that
+#       as the last character to be used in sorting, i.e. not exactly numeric sorting order. Sorting is inconsistent.
 #
 0x0000:"Instrument not running any mode"
 0x0100:"Transmitting Probe 1 5 KHz"
