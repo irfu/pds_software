@@ -84,6 +84,8 @@
  *  * Added tests for erroneous .mds files/macro descriptions to warn the user that he/she is probably using (incompatible) files generated
  *    with the older version of MEDS.
  *       /Erik P G Johansson 2016-04-25
+ *  * ~Bug fix: Modified misconfigured SAMP_FREQ_ADC20 60.0 --> 57.8 (pds.h).
+ *       /Erik P G Johansson 2016-04-26
  *
  *
  *
@@ -3247,7 +3249,7 @@ void *DecodeScience(void *arg)
                                                                         break;
                                                                 } 
                                                             }
-                                                            curr.stop_time=curr.seq_time+(samples-1)*curr.factor;   // Calculate current stop time.
+                                                            curr.stop_time = curr.seq_time + (samples-1)*curr.factor;   // Calculate current STOP time.
                                                             
                                                             Raw2OBT_Str(curr.stop_time, pds.SCResetCounter, tstr5);   // Compile OBT string and add reset number of S/C clock.
                                                             
@@ -6505,9 +6507,9 @@ int WritePTAB_File(
                         j+=2;
                 }
                 
-                td1=i*curr->factor; // Time to add
+                td1 = i*curr->factor;   // Calculate current time relative to first time (first data point).
                 
-                td2=curr->seq_time+td1;
+                td2 = curr->seq_time + td1;   // Calculate current time.
                 DecodeRawTime(td2,tstr3,1); // Decode raw time to UTC
                 
                 if(nbias>0 && bias!=NULL)

@@ -49,8 +49,8 @@
 #define SENS_P1P2    3
 
 // ADC sampling frequencies.
-#define SAMP_FREQ_ADC16 18750.0
-#define SAMP_FREQ_ADC20 60.0
+#define SAMP_FREQ_ADC16   18750.0
+#define SAMP_FREQ_ADC20      57.8
 
 #define DENSITY 1
 #define E_FIELD 2
