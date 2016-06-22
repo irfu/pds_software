@@ -1,5 +1,7 @@
-# id.c ?
-#
 bin/
 *.o
 *~
+
+
+# Is re-generated when compiling.
+id.c

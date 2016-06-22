@@ -15,12 +15,13 @@
 #define LAP_HK_LEN 12
 
 
-// Manually set values for determining when to cancel the science (SC) thread.
-// ---------------------------------------------------------------------------
-// NOTE: The optimal time (timeout & delay) values depend on the speed of execution, i.e. on (1) the speed
-// of the host computer itself (the specification) and (2) whether other processor-intensive applications are running at the same time.
-// PROPOSAL: Move these definitions to nice.h.
-// 
+/**
+ * Manually set values for determining when to cancel the science (SC) thread.
+ * ---------------------------------------------------------------------------
+ * NOTE: The optimal time (timeout & delay) values depend on the speed of execution, i.e. on (1) the speed
+ * of the host computer itself (the specification) and (2) whether other processor-intensive applications are running at the same time.
+ * PROPOSAL: Move these definitions to nice.h.
+ */
 // When exiting, try to terminate the science thread only after the science buffer fill value goes below this value
 // (or when exceeding timeout).
 #define SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD        3000   // [bytes]
@@ -119,37 +120,41 @@
 #define FINITE_YIELDS         5
 
 
-// Constants used for calibration of ADC20 data ("relative" to ADC16).
-// --------------------------------------------------------------------
-// To be multiplied with
-//    ROSETTA:LAP_VOLTAGE_CAL_16B, or
-//    ROSETTA:LAP_CURRENT_CAL_16B_G1 or
-//    ROSETTA:LAP_CURRENT_CAL_16B_G0_05,
-// depending on mode and high/low-gain to
-// produce "Delta", the constant difference between ADC20 and ADC16 for the same physical signal.
-// Values have been derived through a one-time calibration using LAP data from 2015-05-28.
-// See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
-// Values have been taken from Table 4.
-// 
-// NOTE: Current (2015-06-04) calibration values were obtained using HIGH-GAIN ("G1") so values are strictly speaking
-//       ONLY VALID FOR HIGH-GAIN data.
-//       Lacking low-gain values, the high-gain values might or might not be used also for low-gain data in the actual
-//       implementation that uses these values. See the actual use of these constants in pds_x.xx.c:WritePTABFile.
-//
-// NOTE: DELTA values (as defined here) are to be multipled with the ADC16 conversion factors (LAP_CURRENT_CAL_16B_G1), not ADC20 factors.
-//
-// NOTE: DELTA values refer to ADC20 data after truncation. ==> Must be multiplied by 16 for non-truncated ADC20 data(?)
-// 
-// /Erik P G Johansson 2015-06-11
+
+/**
+ * Constants used for calibration of ADC20 data ("relative" to ADC16).
+ * --------------------------------------------------------------------
+ * To be multiplied with
+ *    ROSETTA:LAP_VOLTAGE_CAL_16B, or
+ *    ROSETTA:LAP_CURRENT_CAL_16B_G1 or
+ *    ROSETTA:LAP_CURRENT_CAL_16B_G0_05,
+ * depending on mode and high/low-gain to
+ * produce "Delta", the constant difference between ADC20 and ADC16 for the same physical signal.
+ * Values have been derived through a one-time calibration using LAP data from 2015-05-28.
+ * See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
+ * Values have been taken from Table 4.
+ *
+ * NOTE: Current (2015-06-04) calibration values were obtained using HIGH-GAIN ("G1") so values are strictly speaking
+ *       ONLY VALID FOR HIGH-GAIN data.
+ *       Lacking low-gain values, the high-gain values might or might not be used also for low-gain data in the actual
+ *       implementation that uses these values. See the actual use of these constants in pds_x.xx.c:WritePTABFile.
+ *
+ * NOTE: DELTA values (as defined here) are to be multipled with the ADC16 conversion factors (LAP_CURRENT_CAL_16B_G1), not ADC20 factors.
+ *
+ * NOTE: DELTA values refer to ADC20 data after truncation. ==> Must be multiplied by 16 for non-truncated ADC20 data(?)
+ *
+ * /Erik P G Johansson 2015-06-11
+*/
 #define CALIB_ADC_G1_TM_DELTA_P1     77.9601
 #define CALIB_ADC_G1_TM_DELTA_P2     84.8991
+
+
 
 // Time correlation structure
 //
 // 1) UTC_TIME=OBT_TIME*gradient(n)+offset(n) 
 // 2) Valid correction if SCET(n) <= UTC_TIME <= SCET(n+1)
 // 3) If no SCET(n+1) exists yet, it is considered to be infinite.
-//
 //
 typedef struct tc_type_def
 {
@@ -162,7 +167,8 @@ typedef struct tc_type_def
 
 
 // Calibration data structure
-// NOTE: This structure is also used outside of/independently of m_type. Notably course/fine bias voltages and current bias calibrations.
+// NOTE: This structure is used inside m_type, but is ALSO used outside of and independently
+// of m_type, notably course/fine bias voltages and current bias calibrations.
 typedef struct c_type_def
 {
   char validt[32];        // Data is taken/valid at this time (UTC string).
@@ -190,12 +196,12 @@ typedef struct calib_interval_struct
     time_t  t_end;
 } calib_interval_type;
 
-// Could probably be merged with cf_type but want to avoid renaming variable m_type.CF (used in many places).
+// Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming variable m_type.CF (it us used in many places).
 typedef struct calibration_info_struct
 {
-    char                 *LBL_filename;            // Needed for (possibly) deleting unused calibration files and for matching calibration selection time intervals.
+    char                 *LBL_filename;            // Needed for (possibly) deleting unused calibration files and for matching offset calibration exceptions time intervals.
     int                  calibration_file_used;    // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
-    calib_interval_type  *intervals;   // Array of linked list of time intervals.
+    calib_interval_type  *intervals;               // Array of linked list of time intervals.
 } calib_info_type;
 
 
@@ -286,6 +292,7 @@ typedef struct curr_type_def
 
 // PDS structure containing PDS archive information and path, file descriptors.
 // Note that in structure below we often use path to refer to both path and filename.
+// Prefix c = calibration(?)
 typedef struct pds_type_def
 {
   int  SCResetCounter;         // Number of times the spacecraft clock has been reset
@@ -318,7 +325,7 @@ typedef struct pds_type_def
   char cpathdfp2[PATH_MAX];    // Path to density frequency response probe 2
   char cpathefp1[PATH_MAX];    // Path to e-field frequency response probe 1
   char cpathefp2[PATH_MAX];    // Path to e-field frequency response probe 2
-  char cpathcs[PATH_MAX];      // Path to calibration selection (cs) data. May or may not be under the CALIB/ directory.
+  char cpathoce[PATH_MAX];     // Path to offset calibration exceptions (OCE) data (LBL file)
   char spaths[PATH_MAX];       // Data subdirectory path for PDS science
   char dpathh[PATH_MAX];       // Data path PDS HK
   char spathh[PATH_MAX];       // Data subdirectory path for PDS HK

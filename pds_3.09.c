@@ -77,8 +77,8 @@
  *       /Erik P G Johansson 2016-04-04
  *  * Bug fix: Corrected incorrect catching of errors when reading (some) calibration files: =+ --> +=
  *       /Erik P G Johansson 2016-04-11
- *  * Updated the way offset calibrations and TM conversion factors are selected.
- *    Uses the nearest calibration by default. Added a manual "calibration selection" list (override).
+ *  * Updated the way offset calibrations and TM conversion factors are selected, i.e. RPCLAPyymmdd_CALIB_MEAS.LBL/.TAB files.
+ *    Uses the nearest calibration by default. Added a manual "calibration selection" list (override; later renamed).
  *    Removes unused calibration files (replaces the previous functionality for removing unused calibration files).
  *       /Erik P G Johansson 2016-04-13
  *  * Added tests for erroneous .mds files/macro descriptions to warn the user that he/she is probably using (incompatible) files generated
@@ -86,6 +86,9 @@
  *       /Erik P G Johansson 2016-04-25
  *  * ~Bug fix: Modified misconfigured SAMP_FREQ_ADC20 60.0 --> 57.8 (pds.h).
  *       /Erik P G Johansson 2016-04-26
+ *  * Renamed the functionality "calibration selection" to "offset calibration exceptions" (OCE).
+ *    Modified code to read the data from LBL+TAB file pair under CALIB/. Picks TAB file from LBL file.
+ *       /Erik P G Johansson 2016-06-22
  *
  *
  *
@@ -115,12 +118,12 @@
 
 #include <string.h>       // String handling
 #include <ctype.h>        // Character types
-#include <sys/stat.h>     // POSIX Standard file charateristics, fstat()..
-#include <errno.h>        // Used for error handling, perror()..
+#include <sys/stat.h>     // POSIX Standard file charateristics, fstat()
+#include <errno.h>        // Used for error handling, perror()
 #include <sys/types.h>    // POSIX Primitive System Data Types 
 #include <dirent.h>       // POSIX Directory operations
 #include <sys/wait.h>     // POSIX Wait for process termination
-#include <sys/time.h>     // Time definitions, nanosleep()..0
+#include <sys/time.h>     // Time definitions, nanosleep()
 #include <stdio.h>        // Standard Input/output 
 #include <stdlib.h>       // Standard General utilities
 #include <limits.h>       // Standard limits of integer types
@@ -196,9 +199,9 @@ int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depa
 int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData);
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
-int  LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m_type *m);             // Get measured data calibration files
+int  LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, m_type *m);             // Get measured data calibration files
 void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries);
-int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp,pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
+int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp, pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
 
 // Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
 void DeriveDSIandDSN(
@@ -413,34 +416,34 @@ pds_type pds =
     0,          // DPL Number
     0.0,        // Data Set Version
     "",         // Label revision note
-    "",         // Release date       
-    "",         // Path to configuration file	    
-    "",         // Path to anomaly file		    
-    "",         // Path to bias settings file	    
+    "",         // Release date
+    "",         // Path to configuration file
+    "",         // Path to anomaly file
+    "",         // Path to bias settings file
     "",         // Path to (CALIB macro) exclude file
-    "",         // Path to data exclude file    // Erik P G Johansson 2015-03-25: Added
-    "",         // Path to macro description file	    
+    "",         // Path to data exclude file
+    "",         // Path to macro description file
     "",         // Mission calendar path and file name
     "",         // Archive path PDS (Out data)
     "",         // Archive path DDS (In data)
     "",         // Path to time correlation packets
     "",         // Log path
-    "",         // Data path PDS science edited		
-    "",         // Data path PDS science calibrated		
-    "",         // Root path to calibration data.		
-    "",         // Path to fine bias calibration data	
-    "",         // Path to coarse bias calibration data	
-    "",         // Path to current bias calibration data	
-    "",         // Path to offset calibration data		
+    "",         // Data path PDS science edited
+    "",         // Data path PDS science calibrated
+    "",         // Root path to calibration data.
+    "",         // Path to fine bias calibration data
+    "",         // Path to coarse bias calibration data
+    "",         // Path to current bias calibration data
+    "",         // Path to offset calibration data
     "",         // Path to density frequency response probe 1
     "",         // Path to density frequency response probe 2
     "",         // Path to e-field frequency response probe 1
     "",         // Path to e-field frequency response probe 2
-    "",         // Calibration selection data.
+    "",         // Offset calibration exceptions data
     "",         // Data subdirectory path for PDS science
-    "",         // Data path PDS HK			       
-    "",         // Data subdirectory path for PDS HK	       
-    "",         // Path to data that has not been accepted	       
+    "",         // Data path PDS HK
+    "",         // Data subdirectory path for PDS HK
+    "",         // Path to data that has not been accepted
     "",         // Index table file path.
     NULL,       // Log file descriptor LAP PDS System log   
     NULL,       // S/C packet filtering log
@@ -448,7 +451,7 @@ pds_type pds =
     NULL,       // Log file descriptor HK Decoding log
     NULL,       // Log file descriptor dds packet filter log
     NULL,       // File descriptor to recoverfile
-    NULL,       // Science archive PDS data file descriptor	
+    NULL,       // Science archive PDS data file descriptor
     NULL,       // Science data table file descriptor
     NULL,       // HK archive PDS data file descriptor
     NULL,       // HK data table file descriptor
@@ -604,10 +607,6 @@ int main(int argc, char *argv[])
 
 
 
-    sprintf(pds.cpathcs, "%s/%s", getenv("HOME"), "pds.calibrationselection");
-
-
-
     //=============================================
     // Get volume ID option
     //=============================================
@@ -670,7 +669,9 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Mangled configuration file (part 1): %d\n",status);
         exit(1);
     }
-    
+
+
+
     if(calib) {
         pds.DPLNumber=3;			// Calibrated data has DPL number 3
     } else {
@@ -742,8 +743,9 @@ int main(int argc, char *argv[])
     strcpy(tstr1,mp.data_set_id);		// Make temporary copy
     TrimQN(tstr1);			// Remove quotes in temporary copy
     
-    // Loads second part of configuration information into the PDS structure and opens some log/status files
-    if((status=LoadConfig2(&pds,tstr1))<0) 
+    // Loads second part of configuration information into the PDS structure and opens some log/status files.
+    // NOTE: Creates data set directory!!
+    if((status=LoadConfig2(&pds, tstr1))<0)
     {
         fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
         exit(1);
@@ -754,6 +756,13 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Warning: No time correlation packets found.\n"); 
         fprintf(stderr,"All UTC times from this point are estimates.\n");
     }
+
+
+
+    // Choose file for offset calibration exceptions.
+    // NOTE: pds.templp   is loaded in LoadConfig1.
+    // NOTE: pds.apathpds is loaded in LoadConfig2,.
+    sprintf(pds.cpathoce, "%s/CALIB/%s", pds.apathpds, "RPCLAP_CALIB_MEAS_EXCEPTIONS.LBL");
 
 
 
@@ -800,6 +809,8 @@ int main(int argc, char *argv[])
         YPrintf("Using %d as \"Science thread cancel timeout\" value instead of the default (%d).\n", sc_thread_cancel_threshold_timeout, SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
     }
     
+
+
     //========================================================================================
     // CHECK ASSERTION that there are no "unused" arguments left.
     // This implicitly checks for misspelled options/flags and options/flags occurring twice.
@@ -811,6 +822,7 @@ int main(int argc, char *argv[])
         //printUserHelpInfo(stderr, argv[0]);    // NOTE: Prints to stderr.
         exit(1);
     }
+
 
 
     //===========================================
@@ -836,13 +848,16 @@ int main(int argc, char *argv[])
     
     
     
-    //======================================================
+    //================================================================================
     // Update LBL files copied from the template directory.
     //
     // NOTE: There are no *.CAT files under DOCUMENT/
     // NOTE: It is unnecessary to update CATALOG/ since the only file to modify is
     // DATASET.CAT, which is modified elsewhere (including some additional fields).
-    //======================================================
+    //
+    // PROPOSAL: Update LBL files in the CALIB/ directory too?
+    //    NOTE: They currently appear to be updated (selected) manually, or when reading offset calibration files.
+    //================================================================================
     sprintf(tstr1,"%sDOCUMENT",pds.apathpds);     // Get full path to subdirectory.
     UpdateDirectoryODLFiles(tstr1, "*.LBL", 0);
 
@@ -916,10 +931,10 @@ int main(int argc, char *argv[])
         ExitPDS(1);
     }
 
-    status = LoadOffsetCalibrationsTMConversion(pds.cpathd, pds.cpathm, pds.cpathcs, &m_conv);        // Get measurement calibration files
+    status = LoadOffsetCalibrationsTMConversion(pds.cpathd, pds.cpathm, pds.cpathoce, &m_conv);        // Get measurement calibration files
     if(status<0)
     {
-        YPrintf("Can not load offset calibration TM conversion files, and or calibration selection file. Function error code %i. Exiting.\n", status);
+        YPrintf("Can not load offset calibration TM conversion files or the offset calibration exceptions files. Function error code %i. Exiting.\n", status);
         ExitPDS(1);
     }
 
@@ -1487,7 +1502,7 @@ void *DecodeHK(void *arg)
         
         // Write to the index file (We have at least one HK line otherwise GetHKPacket would not have returned.
         //----------------------------------------------------------------------------------------------------------------------------------------------------
-        ti=strlen(pds.apathpds);                            // Find position there the root of the PDS archive starts
+        ti=strlen(pds.apathpds);                            // Find position where the root of the PDS archive starts
         sprintf(tstr2,"%s%s",&pds.spathh[ti],lbl_fname);    // Set path and file name together
         ExtendStr(tstr3,tstr2,58,' ');                      // Make a new string extended with whitespace to 58 characters
         ExtendStr(tstr2,stub_fname,25,' ');                 // Make a new string extended with whitespace to 25 characters
@@ -2318,16 +2333,16 @@ void *DecodeScience(void *arg)
                                                 // Edit 2015-02-17, 2015-02-23, Erik P G Johansson:
                                                 // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
                                                 InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_START_BIAS",       sw_info.start_bias);
-                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEP_HEIGHT",      sw_info.height);		  
-                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEPS",            sw_info.steps);		  
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEP_HEIGHT",      sw_info.height);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEPS",            sw_info.steps);
                                                 InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_RESOLUTION",       sw_info.resolution);
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_FORMAT",           sw_info.format);
                                                 
                                                 // Insert fine offset for P1 into dictionary
-                                                InsertTopQV(&dict,"ROSETTA:LAP_P1_FINE_SWEEP_OFFSET",sw_info.p1_fine_offs); 
-                                                // Insert who's sweeping into PDS dictionary 
-                                                InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P1",sw_info.p1); 
+                                                InsertTopQV(&dict,"ROSETTA:LAP_P1_FINE_SWEEP_OFFSET",sw_info.p1_fine_offs);
+                                                // Insert who's sweeping into PDS dictionary
+                                                InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P1",sw_info.p1);
                                             }
                                             
                                             if(!strcmp("YES",sw_info.p2)) // If sweeping P2
@@ -2342,9 +2357,9 @@ void *DecodeScience(void *arg)
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_FORMAT",           sw_info.format);
                                                 
                                                 // Insert fine offset for P2 into dictionary
-                                                InsertTopQV(&dict,"ROSETTA:LAP_P2_FINE_SWEEP_OFFSET",sw_info.p2_fine_offs); 
+                                                InsertTopQV(&dict,"ROSETTA:LAP_P2_FINE_SWEEP_OFFSET",sw_info.p2_fine_offs);
                                                 // Insert who's sweeping into PDS dictionary
-                                                InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P2",sw_info.p2); 
+                                                InsertTopQ(&dict,"ROSETTA:LAP_SWEEPING_P2",sw_info.p2);
                                             }
                                         }
                                         
@@ -3245,9 +3260,9 @@ void *DecodeScience(void *arg)
                                                                             curr.factor=dsa16_p2/SAMP_FREQ_ADC16; 
                                                                         break;
                                                                     default:
-                                                                        curr.factor=1/SAMP_FREQ_ADC16; 
+                                                                        curr.factor=1/SAMP_FREQ_ADC16;
                                                                         break;
-                                                                } 
+                                                                }
                                                             }
                                                             curr.stop_time = curr.seq_time + (samples-1)*curr.factor;   // Calculate current STOP time.
                                                             
@@ -3545,6 +3560,8 @@ static void ExitWithGrace(int signo)
 // Logging and exit functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
+
+
 /*
  * Closes logging and exits with status (exit/error code).
  * When a thread wants pds to quit (and all threads to quit), it calls this function.
@@ -3588,7 +3605,7 @@ void ExitPDS(int status)
             // Erik P G Johansson 2015-03-31: Added functionality for delaying the termination of the DecodeScience thread until
             //                                it has actually finished, or almost finished.
             //
-            // It has been previously observed (pds v3.07/c3.08) that the DecodeScience thread may otherwise sometimes be terminated
+            // It has been previously observed (pds v3.07/v3.08) that the DecodeScience thread may otherwise sometimes be terminated
             // too early and thus the last hours of data in an archive are never written to disk. Even with this bug fix, small
             // amounts of data (minutes) have still been observed to be missing from the end of the last day in an archive but this
             // might have other explanations.
@@ -4126,11 +4143,11 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
 { 
     FILE *fd;
     
-    char line[PATH_MAX];  // Text line
-    char l_str[PATH_MAX]; // left string
-    char r_str[PATH_MAX]; //  right string
+    char line[PATH_MAX];    // Text line
+    char l_str[PATH_MAX];   // Left string
+    char r_str[PATH_MAX];   // Right string
     
-    printf("Loading first part of configuration file: %s\n\n",p->cpath);
+    printf( "Loading first part of configuration file: %s\n\n",p->cpath);
     YPrintf("Loading first part of configuration file: %s\n\n",p->cpath);
     
     if((fd=fopen(p->cpath,"r"))==NULL)
@@ -4140,40 +4157,38 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
     }
     
     // Remove initial comments..
-    while(fgets(line,PATH_MAX,fd) != NULL)
-        if (line[0] == '%') 
+    while(fgets(line,PATH_MAX,fd) != NULL) {
+        if (line[0] == '%') {
             continue; 
-        else
+        } else {
             break;
-        
-        
-        Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
-    sscanf(l_str,"%d",&p->SCResetCounter);printf("SCResetCounter              : %d\n",p->SCResetCounter);
+        }
+    }
+
+    Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
+    sscanf(l_str,"%d",&p->SCResetCounter);   printf("SCResetCounter              : %d\n",p->SCResetCounter);
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);	
-    strncpy(p->SCResetClock,l_str,20);    printf("ResetClock                  : %s\n",p->SCResetClock);
+    fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
+    strncpy(p->SCResetClock,l_str,20);   printf("ResetClock                  : %s\n",p->SCResetClock);
     
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
+    fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
     strncpy(p->templp,l_str,PATH_MAX);
     if(SetupPath("Path to PDS archive template",p->templp)<0)  return -2;  // Test if path exists
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
+    fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);  TrimWN(l_str);
     strncpy(p->macrop,l_str,PATH_MAX);
     if(SetupPath("LAP Macro descriptions path ",p->macrop)<0)  return -3;  // Test if path exists
     
-    //fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
-    //sscanf(l_str,"%f",&p->DataSetVersion);printf("DataSetVersion              : %3.1f\n",p->DataSetVersion);
+    fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
+    strncpy(p->LabelRevNote,l_str,PATH_MAX);   printf("Label Revision Note         : %s\n",p->LabelRevNote);
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
-    strncpy(p->LabelRevNote,l_str,PATH_MAX);printf("Label Revision Note         : %s\n",p->LabelRevNote);
-    
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
+    fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
     
     l_str[10]='\0';
-    strncpy(p->ReleaseDate,l_str,11);printf("Release Date                : %s\n",p->ReleaseDate);
+    strncpy(p->ReleaseDate,l_str,11);   printf("Release Date                : %s\n",p->ReleaseDate);
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
+    fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
     strncpy(p->mcpath,l_str,PATH_MAX);    printf("Mission calendar file       : %s\n",p->mcpath);
     
     fclose(fd); // Close config file
@@ -4183,24 +4198,28 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
 
 
 
-// Load second part of configuration file
-//
-// NOTE: Does more than just read configuration file.
-// Also creates dataset directory and copies files from template directory, and probably more.
+/**
+ * Load second part of configuration file
+ *
+ * Sets among others: p->apathpds
+ *
+ * NOTE: The function name is deceiving. The function does more than just read configuration file.
+ * NOTE: COPIES TEMPLATE DIRECTORY TO CREATE THE DATA SET DIRECTORY, and probably more.
+ */
 int  LoadConfig2(pds_type *p,char *data_set_id) 
 { 
     FILE *fd;
     FILE *pipe_fp;
     int len;
     
-    char line[PATH_MAX];  // Text line
-    char l_str[PATH_MAX]; // left string
-    char r_str[PATH_MAX]; //  right string
+    char line[PATH_MAX];    // Text line
+    char l_str[PATH_MAX];   // Left string
+    char r_str[PATH_MAX];   // Right string
     char tstr[PATH_MAX];
     
     struct timespec dose={0,DOSE_TIME};  
     
-    printf("\nLoading second part of configuration file: %s\n",p->cpath);
+    printf( "\nLoading second part of configuration file: %s\n",p->cpath);
     YPrintf("\nLoading second part of configuration file: %s\n",p->cpath);
     
     if((fd=fopen(p->cpath,"r"))==NULL)
@@ -4210,14 +4229,15 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     }
     
     // Remove initial comments..
-    while(fgets(line,PATH_MAX,fd) != NULL)
+    while(fgets(line,PATH_MAX,fd) != NULL) {
         if (line[0] == '%') 
             continue; 
         else
             break;
+    }
         
-        // Skip first part already loaded in LoadConfig1
-        fgets(line,PATH_MAX,fd);
+    // Skip first part already loaded in LoadConfig1
+    fgets(line,PATH_MAX,fd);
     fgets(line,PATH_MAX,fd);
     fgets(line,PATH_MAX,fd);
     fgets(line,PATH_MAX,fd);
@@ -4225,29 +4245,29 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     fgets(line,PATH_MAX,fd);
     
     fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
-    strncpy(p->apathpds,l_str,PATH_MAX);
+    strncpy(p->apathpds,l_str,PATH_MAX);   // NOTE: Uses field variable as temporary variable. Is later overwritten.
     
     if(SetupPath("PDS Archives base path      ",p->apathpds)<0) return -2; // Test if path exists
     
     sprintf(p->apathpds,"%s%s/",l_str,data_set_id);
     
     
-    printf("\nCreate archive path: %s\n",p->apathpds);
+    printf( "\nCreate archive path: %s\n",p->apathpds);
     YPrintf("\nCreate archive path: %s\n",p->apathpds);
     
     if(mkdir(p->apathpds,0775)<0)
     {
-        printf("Can not create archive path: %s\n",p->apathpds);
+        printf( "Can not create archive path: %s\n",p->apathpds);
         YPrintf("Can not create archive path: %s\n",p->apathpds);
         return -3;
     }
     
     
-    printf("Copying template archive to:  %s\n",p->apathpds);
+    printf( "Copying template archive to:  %s\n",p->apathpds);
     YPrintf("Copying template archive to:  %s\n",p->apathpds);
     
-    sprintf(tstr,"cp -r %s* %s",p->templp,p->apathpds); // Setup shell command line.
-    printf("%s\n",tstr);
+    sprintf(tstr,"cp -r %s* %s", p->templp, p->apathpds); // Setup shell command line.
+    printf( "%s\n",tstr);
     YPrintf("%s\n",tstr);
     
     pipe_fp = popen(tstr,"r");  // Runs shell commands
@@ -4984,10 +5004,11 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
 
 
 /**
- * Load all macro descriptions into memory
+ * Load all macro descriptions (.mds files) into memory.
  *
- * NOTE: Iterates over all possible filenames (that fit pattern) and tries to load each one of them.
+ * NOTE: Iterates over all possible filenames (that fit the filename pattern) and tries to load each one of them.
  * NOTE: *.mds files: The left-most numbers appear to be ignored, but a tab is still required before the actual "variable assignment".
+ * NOTE: Adds prefix "ROSETTA:" to all keys (in property lists).
 */
 int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro descriptions
 {
@@ -5124,22 +5145,22 @@ void RunShellCommand(char *command_str)
 
 
 /*
- * Reads measured offset calibration files and the "calibration selection" list file.
- * The calibration selection file contains manually selected time intervals which should specific calibrations..
+ * Reads measured offset calibration files and the offset calibration exceptions list.
+ * The offset calibration exceptions file contains manually selected time intervals which specify
+ * calibrations to use for specific time intervals when the default algorithm does not apply.
  * Returns data in data structure "m".
  *
  * MC = Measurement/measured calibration(?)
  *
- * IMPLEMENTATION NOTE: The code should be able to handle a future PDS compliant calibration selection LBL file.
- * It should therefore be able to handle newline=CR+LF.
  * NOTE: The function rewrites the offset calibration LBL files with some updated information.
  * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills the data structure used by that algorithm.
  *
- * rpath : Path to directory where the CALIB_MEAS files are (LBL+TAB).
- * fpath : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS filenames must match the pattern. The rest of the string/path is unused(!).
- * cspath : Path to calibration selection file.
+ * rpath   : Path to directory where the CALIB_MEAS files are (LBL+TAB).
+ * fpath   : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS.LBL filenames must match the pattern. The rest of the string/path is unused(!).
+ * pathoce : Path to offset calibration exceptions (OCE) LBL file.
+ * m       : Structure in which the calibration data is stored.
  */
-int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m_type *m)
+int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, m_type *m)
 {
     // FKJN 2014-09-04
     // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
@@ -5158,6 +5179,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
 
 
     // Get the name of the file/directory (the part of the path after the last "/"). Is used as a filename pattern for measured data calib files.
+    // NOTE: The rest of the string fpath is never used(!).
     filename_pattern=basename(fpath);
 
     // Read files in CALIB directory.
@@ -5229,9 +5251,9 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
             //================================================
             // Read and update (rewrite) calibration LBL file
             //================================================
-            sprintf(file_path,"%s%s",rpath,dentry->d_name); // Construct full path
+            sprintf(file_path, "%s%s", rpath, dentry->d_name);   // Construct full path
             InitP(&mc_lbl);
-            if(ReadLabelFile(&mc_lbl,file_path)<0) // Read offset and TM calibration file
+            if(ReadLabelFile(&mc_lbl, file_path)<0) // Read offset and TM calibration file
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
@@ -5243,18 +5265,18 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
             //===============================================
             // Extract calibration factors from the LBL file
             //===============================================
-            FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_16B",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[i_calib].v_cal_16b);
-            FindP(&mc_lbl,&property,"ROSETTA:LAP_VOLTAGE_CAL_20B",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[i_calib].v_cal_20b);
-            FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_16B_G1",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_16b_hg1);
-            FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_20B_G1",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_20b_hg1);
-            FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_16B_G0_05",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_16b_lg);
-            FindP(&mc_lbl,&property,"ROSETTA:LAP_CURRENT_CAL_20B_G0_05",1,DNTCARE);
-            sscanf(property->value,"\"%le\"",&m->CF[i_calib].c_cal_20b_lg);
+            FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_16B",       1, DNTCARE);
+            sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
+            FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_20B",       1, DNTCARE);
+            sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_20b);
+            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G1",    1, DNTCARE);
+            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_hg1);
+            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G1",    1, DNTCARE);
+            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_hg1);
+            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G0_05", 1, DNTCARE);
+            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_lg);
+            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G0_05", 1, DNTCARE);
+            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_lg);
 
             if(debug>2)
             {
@@ -5276,9 +5298,9 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
                 return -7;
             }
 
-            m->calib_info[i_calib].LBL_filename = strdup(dentry->d_name);
+            m->calib_info[i_calib].LBL_filename          = strdup(dentry->d_name);
             m->calib_info[i_calib].calibration_file_used = FALSE;
-            m->calib_info[i_calib].intervals = NULL;
+            m->calib_info[i_calib].intervals             = NULL;
 
             i_calib++;
             FreePrp(&mc_lbl);  // Free linked property/value list for measured data offset
@@ -5290,38 +5312,60 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
 
 
 
-    //=================================
-    // Read calibration selection list
-    //=================================
-
-    FILE *fd;
+    //====================================================
+    // Read offset calibration exceptions list - LBL file
+    //
+    // (1) Write back file with updated keywords (DATA_SET_ID etc.).
+    // (2) Extract name of TAB file.
+    //====================================================
     char tstr[256+PATH_MAX];
-    if((fd=fopen(cspath, "r"))==NULL) {
-        sprintf(tstr, "Can not open calibration selection file \"%s\"\n", cspath);
+    InitP(&mc_lbl);
+    if (ReadLabelFile(&mc_lbl, pathoce)<0)                // Read offset calibration exceptions LBL file
+    {
+        FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
+        YPrintf("Can not open offset calibration exceptions label file \"%s\".\n", pathoce);
+        return -15;
+    }
+    WriteUpdatedLabelFile(&mc_lbl, pathoce, 1);            // Write back label file with new info
+    FindP(&mc_lbl, &property, "^TABLE", 1, DNTCARE);       // Get TAB file name (not path).
+    sscanf(property->value, "\"%[^\"]\"", tstr);
+
+    // NOTE: dirname() (1) can apparently modify its argument, and (2) returns a pointer to something that should NOT later be freed (some internal variable?).
+    sprintf(file_path, "%s/%s", dirname(pathoce), tstr);    // Construct full path, using the same parent directory as for the LBL file.
+    FreePrp(&mc_lbl);
+
+
+
+    //====================================================
+    // Read offset calibration exceptions list - TAB file
+    //====================================================
+    FILE *fd;
+    if((fd=fopen(file_path, "r"))==NULL) {
+        sprintf(tstr, "Can not open offset calibration exceptions table file \"%s\"\n", file_path);
         YPrintf(tstr);
         perror(tstr);
         return -10;
     }
 
-    YPrintf("Reading calibration selection file: %s\n", cspath);
+    YPrintf("Reading offset calibration exceptions table file: %s\n", file_path);
     char line[1024];   // Line buffer
     while (fgets(line, 1024, fd) != NULL)
     {
-        if (line[0] == '\n') continue;  // Ignore empty line.
-        if (line[0] == '\r') continue;  // Ignore empty line ending with CR+LF.
-        if (line[0] == '#')  continue;  // Ignore comments.
-//         if (line[0] == ' ')  continue;  // Ignore whitespace line - DISABLED since contradicts permitting leading whitespace when parsing later.
+        // NOTE: Ignores a wider syntax than PDS (the format) permits.
+        //if (line[0] == '\n') continue;   // Ignore empty line.
+        //if (line[0] == '\r') continue;   // Ignore empty line ending with CR+LF.
+        //if (line[0] == '#' ) continue;   // Ignore comments.
 
         TrimWN(line);   // Convert CR and LF to whitespace, then trim leading and trailing whitespace.
         char str_t_begin[256], str_t_end[256], LBL_filename[256];
 
-        // NOTE: The format specifier %s includes comma. Must therefore specify something like
-        // %[^,] or %[^, ] instead (read all characters but comma, or whitespace). Cf regular expressions.
-        // NOTE: Better trim whitespace after sscanf for time strings so that they can contain whitespace.
+        // NOTE: The format specifier %s will read over comma. Must therefore specify something like
+        // %[^,] or %[^, ], %[^, "] instead (read ALL characters EXCEPT comma, or whitespace, or double quote). Cf regular expressions.
+        // NOTE: It is better trim whitespace after sscanf for time strings so that they can contain whitespace.
         // NOTE: Whitespace represents any sequence of whitespace and tab, incl. none at all.
-        if (sscanf(line, " %[^,], %[^,], %[^, ] ", str_t_begin, str_t_end, LBL_filename) != 3)
+        if (sscanf(line, " %[^,], %[^,], \"%[^, \"]\" ", str_t_begin, str_t_end, LBL_filename) != 3)
         {
-            sprintf(tstr, "Error interpreting line in calibration selection file (sscanf): \"%s\"\n", line);
+            sprintf(tstr, "Error interpreting line in offset calibration exceptions table file (sscanf): \"%s\"\n", line);
             YPrintf(tstr);
             perror(tstr);
 
@@ -5335,7 +5379,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
 
         time_t t_begin, t_end;
         if ((TimeOfDatePDS(str_t_begin, &t_begin) < 0) || (TimeOfDatePDS(str_t_end, &t_end) < 0)) {
-            sprintf(tstr, "Error interpreting time in calibration selection file: \"%s\"\n", line);
+            sprintf(tstr, "Error interpreting time in offset calibration exceptions file: \"%s\"\n", line);
             YPrintf(tstr);
             perror(tstr);
 
@@ -5344,7 +5388,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
         }
         if (difftime(t_end, t_begin) <= 0)
         {
-            sprintf(tstr, "The stated time interval in calibration selection file has non-positive length: \"%s\"\n", line);
+            sprintf(tstr, "The stated time interval in offset calibration exceptions file has non-positive length: \"%s\"\n", line);
             YPrintf(tstr);
             perror(tstr);
 
@@ -5355,9 +5399,14 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
         // Print the strings read and parsed by the code. Indentation to connect it to previous log message "title".
         YPrintf("   Read strings \"%s\", \"%s\", \"%s\"\n", str_t_begin, str_t_end, LBL_filename);
 
-        //================================================================================================
-        // Add information about (one) interval to the linked list for the corresponding calibration file.
-        //================================================================================================
+        //=============================================================================
+        // Add information about one (offset calibration exception) time interval to
+        // the (linked) list of such intervals for the corresponding calibration file.
+        // ----------------------------------------------------------------------------
+        // NOTE: Checks that the file names in the offset calibration exceptions list
+        // actually match real offset calibration LBL files. This checks for
+        // misspellings in the TAB files, which is very important!!
+        //=============================================================================
         // Find index by searching for matching filename.
         int found_matching_file = FALSE;
         for (i=0; i<m->n; i++) {
@@ -5374,7 +5423,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
             new_interval->t_begin = t_begin;
             new_interval->t_end   = t_end;
         } else  {
-            sprintf(tstr, "Error interpreting filename in calibration selection file: \"%s\"\n", LBL_filename);
+            sprintf(tstr, "Error interpreting filename in offset calibration exceptions file: \"%s\"\n", LBL_filename);
             YPrintf(tstr);
             perror(tstr);
 
@@ -5386,7 +5435,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *cspath, m
     fclose(fd);
 
     return 0;
-}   // LoadOffsetCalibrationsTMConversion
+}  // LoadOffsetCalibrationsTMConversion
 
 
 
@@ -5404,6 +5453,7 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
     }
     free(dir_entry_list);   // Free pointer to array of pointers
 }
+
 
 
 // Given a path (p->mcpath) and mission phase abbreviation (m->abbrev),
@@ -5510,6 +5560,7 @@ void TestDumpMacs()
 //*/
 
 
+
 /* Update certain fields LBL/CAT files in a given directory, recursively.
  * Ths is in practise meant to be used for updating LBL/CAT (maybe TXT) files copied from templates.
  *
@@ -5596,7 +5647,7 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
  * "updated" refers to certain keyword values being set by the function.
  * The function is in practise used for updating LBL/CAT files copied from the template.
  *
- * update_PUBLICATION_DATE : true iff PUBLICATION_DATE should be updated.
+ * update_PUBLICATION_DATE : true iff keyword PUBLICATION_DATE should be updated.
  */
 int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION_DATE)
 {
@@ -5796,18 +5847,18 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
     
     FILE *fd;   // File descriptor
     
-    int startpos; // Start position of a column
-    int tmp1;     // Temporary data value
+    int startpos;  // Start position of a column
+    int tmp1;      // Temporary data value
     double tmp2;   // Temporary data value
     
     // Interpreting label file data
-    FindP(lbl_data,&property1,"^TABLE",1,DNTCARE);        // Get file name (TAB file name).
-    FindP(lbl_data,&property2,"START_TIME",1,DNTCARE);    // Get start time
-    FindP(lbl_data,&property3,"ROWS",1,DNTCARE);          // Number of rows 
-    FindP(lbl_data,&property4,"COLUMNS",1,DNTCARE);       // Number of columns
-    strncpy(line,property1->value,8192);                  // Copy so we don't modify the real property list
-    TrimQN(line);                                         // Trim quotes away.
-    sprintf(file_path,"%s%s",dir_path,line);              // Construct file_path = dir_path + filename
+    FindP(lbl_data,&property1, "^TABLE",     1, DNTCARE);   // Get file name (TAB file name).
+    FindP(lbl_data,&property2, "START_TIME", 1, DNTCARE);   // Get start time
+    FindP(lbl_data,&property3, "ROWS",       1, DNTCARE);   // Number of rows
+    FindP(lbl_data,&property4, "COLUMNS",    1, DNTCARE);   // Number of columns
+    strncpy(line,property1->value,8192);                    // Copy so we don't modify the real property list
+    TrimQN(line);                                           // Trim quotes away.
+    sprintf(file_path,"%s%s",dir_path,line);                // Construct file_path = dir_path + filename
 
     YPrintf("Reading table file: %s\n", line);
     // Open calibration table file
@@ -5927,9 +5978,9 @@ char GetBiasMode(curr_type *curr, int dop) {
  *
  * NOTE: The function will set the flag mc->calibration_used.
  *
- * t_data : The time for which we have science data.
+ * t_data   : The time for which we have science data.
  * UTC_data : The time for which we have science data as a UTC string.
- * mc : Calibration data.
+ * mc       : Calibration data.
  * Return value : An index into the corresponding arrays in "mc".
  */
 int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
@@ -5945,7 +5996,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      *
      * Naming convention:
      *    t_*  = Variable of type time_t.
-     *    tp_* = Variable of type double, representing the number of seconds after an arbitrary reference epoch (same for all tp_* variables).
+     *    tp_* = Variable of type double, representing the number of seconds after a common arbitrary reference epoch (same for all tp_* variables).
      */
 
     //######################################################################################################
@@ -5956,7 +6007,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      * depends on the library implementation. There is also no proper(?) way of converting from time_t to a scalar time (e.g. seconds
      * after some universal reference time, e.g. 1970-01-01, 00:00.00) more than difftime.
      * --
-     * Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway?
+     * QUESTION: Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway?
      */
     time_t t_ref;                               // Variable used by function.
     TimeOfDatePDS(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
@@ -5969,13 +6020,15 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 
     tp_data = GetSecondsTime(t_data);
 
-    // Check if t_data is covered by any of pre-defined time intervals in the calibration selection list.
+    //============================================================================================================
+    // Check if t_data is covered by any of pre-defined time intervals in the offset calibration exceptions list.
+    //============================================================================================================
     for (i=0; i<mc->n; i++)   // Iterate over calibrations.
     {
         calib_interval_type *interval = mc->calib_info[i].intervals;
 
         while (interval!=NULL) {
-            if ((GetSecondsTime(interval->t_begin) <= tp_data) && (tp_data <= GetSecondsTime(interval->t_end))) {
+            if ((GetSecondsTime(interval->t_begin) <= tp_data) && (tp_data <= GetSecondsTime(interval->t_end))) {   // NOTE: Covers equals at both interval beginning and interval end.
                 mc->calib_info[i].calibration_file_used = TRUE;
                 return i;
             }
@@ -5983,14 +6036,16 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
         }
     }
 
-    /* IMPLEMENTATION NOTE: Rounds off data time to the middle of the day so that all data for any given day uses the same calibration.
+
+    //=========================================================
+    // Derive the offset calibration which is closest in time.
+    //=========================================================
+    /* IMPLEMENTATION NOTE: Rounds off data time to the middle of the day (noon) so that all data for any given day uses the same calibration.
      * ==> Every day (midnight-to-midnight) gets the same data time. This is to ensure that any change of used calibration (due to the
      * default algorithm) only happens at midnight.
      */
     TimeOfDatePDS_midday(UTC_data, &t_data);
     tp_data = GetSecondsTime(t_data);
-
-    // Derive the calibration which is closest in time.
     TimeOfDatePDS(mc->CD[0].validt, &t_calib);
     tp_calib2 = GetSecondsTime(t_calib);
     for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
@@ -6073,14 +6128,14 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, m_type *m)
 
 
 
-/*
- * Write TAB file, CALIB or EDITED.
+/*===============================================================================================================================
+ * Write TAB file, EDITED or CALIB.
  * Convert from TM units to physical units (i.e. calibrate) in CALIB.
  *
  *  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
  *  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
  *
- * We use the mode information from command logs here since it also contain off information
+ * We use the mode information from command logs here since it also contain off information.
  *
  * NOTE: Conversion from TM units to physical units plus calibration is made here.
  *
@@ -6107,8 +6162,7 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, m_type *m)
  *          curr.sensor=SENS_P1, SENS_P1P2 : P1
  *       dop=2
  *          curr.sensor=SENS_P2, SENS_P1P2 : P2
- * 
- */
+ ===============================================================================================================================*/
 int WritePTAB_File(
     unsigned char *buff,
     char *fname,
@@ -7597,7 +7651,7 @@ int SetupIndex(prp_type *p)
         Append(p,"COLUMN_NUMBER", "4");
         sprintf(tempstr, "%i", DATA_SET_ID_length);
         Append(p,"BYTES",       tempstr);
-        Append(p,"DESCRIPTION",   "\"An identifier unique for this dataset\""); 
+        Append(p,"DESCRIPTION",   "\"An identifier unique for this data set\"");
         Append(p,"END_OBJECT",    "COLUMN");
         
         Append(p,"OBJECT",        "COLUMN");
@@ -7967,7 +8021,8 @@ int TrimWN(char *str)
 
 
 
-// Trim initial and trailing quotes and all newlines away.
+// Trim away (1) leading and trailing quotes, and (2) all newlines (and CR and LF).
+// Or something very similar.
 int TrimQN(char *str)
 {
     int len,nlen,i;
