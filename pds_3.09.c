@@ -740,7 +740,7 @@ int main(int argc, char *argv[])
     printf( "DATA_SET_ID                 : %s\n",mp.data_set_id);
     
     // Create unquoted data set ID
-    strcpy(tstr1,mp.data_set_id);		// Make temporary copy
+    strcpy(tstr1, mp.data_set_id);		// Make temporary copy
     TrimQN(tstr1);			// Remove quotes in temporary copy
     
     // Loads second part of configuration information into the PDS structure and opens some log/status files.
@@ -3806,8 +3806,11 @@ void ExitPDS(int status)
                 fclose(pds.ddsp_fd);    // Close progress file
             }
             
-            
+
+
+            //================================
             // Changing group and permissions
+            //================================
             printf("Changing archive permissions and group info\n");  
             sprintf(tstr1,"chown -R :rosetta %s;chmod -R g+rw %s",pds.apathpds,pds.apathpds); // Setup shell command line.
             printf("%s\n",tstr1);
@@ -3825,12 +3828,21 @@ void ExitPDS(int status)
             }
             pclose(pipe_fp); // Close pipeline
             
-            // Start to compress log files. External shell commands cd, tar and gzip must exist!
+            //======================================================
+            // Start to compress log files.
+            //
+            // NOTE: External shell commands cd, tar and gzip must exist!
+            // NOTE: Using data set ID in compressed logs file name makes the application a little bit more
+            // fragile in case of error, since mp.data_set_id must have been successfully initialized.
+            //======================================================
             printf("Compressing log files, please wait\n");
             GetUTime(tstr3);                                                    // Get local UTC time.
             ReplCh(tstr3,':','#');                                              // Replace : in time string with #, since 
             // : is not allowed in a file name.
-            sprintf(tstr1,"cd %s;tar -czvf logs_%s.tgz *.log",pds.lpath,tstr3); // Setup shell command line.
+
+            strncpy(tstr2, mp.data_set_id, PATH_MAX);   // Copy to temporary variable.
+            TrimQN(tstr2);
+            sprintf(tstr1, "cd %s ; tar -czvf logs_%s___%s.tgz *.log", pds.lpath, tstr3, tstr2);   // Construct shell command line.
             printf("%s\n",tstr1);
             
             pipe_fp = popen(tstr1,"r"); // Runs shell commands
@@ -5531,7 +5543,7 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
     printf("Could not find the mission phase in the mission calendar file.\n");
     CPrintf("    Could not find the mission phase in the mission calendar file.\n");
     return -3; // No phase found
-}
+}  // InitMissionPhaseStructFromMissionCalendar
 
 
 
@@ -8040,7 +8052,7 @@ int TrimQN(char *str)
     pos=str;
     
     nlen=len;
-    for(i=0;i<len;i++) // Remove all initial quotes
+    for(i=0;i<len;i++) // Remove all leading quotes
     {
         if(state==0)
         {
@@ -8052,10 +8064,10 @@ int TrimQN(char *str)
             else
                 state=1;
         }
-        *(pos++)=str[i];
+        *(pos++)=str[i];   // Copy/"move" character N step back. (pos is incremented AFTER returning its value.)
     }
     
-    for(i=nlen-1;i>=0;i--) // Remove all trailing quotes
+    for(i=nlen-1;i>=0;i--)  // Remove all trailing quotes. Iterate from the back to the front.
     {
         if(str[i]=='\"') 
         {
@@ -8065,7 +8077,7 @@ int TrimQN(char *str)
         else
         {
             if(str[i]==' ') continue;
-            str[i+1]='\0'; //Set new end of string
+            str[i+1]='\0';   // Set new end of string
             break;
         }
     }
