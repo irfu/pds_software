@@ -2636,17 +2636,25 @@ void *DecodeScience(void *arg)
                                                 
                                                 curr.bias_mode1=DENSITY;   // Assume density mode unless there is a reason not to.
                                                 curr.bias_mode2=DENSITY;
-                                                if((tp=strstr(IDList[id_code],"E_"))!=NULL)     // Check if IDList[id_code] (human-readable string!!) indicates E-FIELD mode.
+
+                                                // Check if IDList[id_code] (human-readable string!!) indicates E-FIELD mode.
+                                                if((tp=strstr(IDList[id_code],"E_"))!=NULL)
                                                 {
                                                     curr.bias_mode1=E_FIELD;
                                                     curr.bias_mode2=E_FIELD;                                                    
                                                 }
                                                 
-                                                // NOTE: Special case for id_code==E_P1_D_P2_INTRL_20_BIT_RAW_BIP since it does not fit in with any other rule,
-                                                // and can not be easily fitted into the switch(id_code) segment.
-                                                if (id_code==E_P1_D_P2_INTRL_20_BIT_RAW_BIP) {
+                                                // NOTE: Special case for id_code==E_P1_D_P2_INTRL_20_BIT_RAW_BIP since it does not fit in
+                                                // with any other rule, and can not be easily fitted into the switch(id_code) segment.
+                                                //if (id_code==E_P1_D_P2_INTRL_20_BIT_RAW_BIP) {
+                                                // NOTE: Modified special case to be broader /2016-07-11.
+                                                if ((tp=strstr(IDList[id_code],"E_P1_D_P2"))!=NULL) {
                                                     curr.bias_mode1=E_FIELD;
-                                                    curr.bias_mode2=DENSITY;                                                    
+                                                    curr.bias_mode2=DENSITY;
+                                                }
+                                                if ((tp=strstr(IDList[id_code],"D_P1_E_P2"))!=NULL) {
+                                                    curr.bias_mode1=DENSITY;
+                                                    curr.bias_mode2=E_FIELD;
                                                 }
                                                 
                                                 
