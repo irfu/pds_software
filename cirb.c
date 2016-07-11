@@ -75,9 +75,18 @@ int Get(buffer_struct_type *buff,unsigned char *data)
   return status;
 }
 
-// Get n bytes of data from circular buffer, oldest data first
-// Assumes data buffer is large enough!
-int GetB(buffer_struct_type *buff,unsigned char *data,unsigned int n)
+
+
+/*
+ * Get n bytes of data from circular buffer, oldest data first
+ *
+ * buff : Circular buffer
+ * data : Destination buffer
+ * n    : Number of bytes to retrieve
+ *
+ * Assumes data buffer is large enough!
+ */
+int GetB(buffer_struct_type *buff, unsigned char *data, unsigned int n)
 {
   unsigned int outp;
   int i;  
@@ -85,18 +94,18 @@ int GetB(buffer_struct_type *buff,unsigned char *data,unsigned int n)
   
   pthread_mutex_lock(&protect_cbuff);	
 
-    if(buff->fill>n)
-      {
-         for(i=0;i<n;i++)
-	  {
+  if(buff->fill>n)
+  {
+    for(i=0;i<n;i++)
+	{
 	    outp=(buff->inp+buff->max-buff->fill) & buff->mask;
 	    data[i]=buff->data[outp];
 	    buff->fill--;
-	  }
-	  data[n]='\0';
-      }
-    else 
-      status=-2;
+	}
+	data[n]='\0';
+  }
+  else
+    status=-2;
 
   pthread_mutex_unlock(&protect_cbuff);
   return status;

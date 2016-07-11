@@ -89,6 +89,8 @@
  *  * Renamed the functionality "calibration selection" to "offset calibration exceptions" (OCE).
  *    Modified code to read the data from LBL+TAB file pair under CALIB/. Picks TAB file from LBL file.
  *       /Erik P G Johansson 2016-06-22
+ *  * Modified the compressed output logs file name to contain the data set ID.
+ *       /Erik P G Johansson 2016-06-22
  *
  *
  *
@@ -99,6 +101,9 @@
  * "BUG": The code still does not update the LBL files in the DOCUMENT/ directory.
  * BUG: HK label files do not use "fingerprinting" for identifying macros (only DecodeScience does) and can therefor
  *      not recognize all macros.
+ * BUG?: HK LBL files and INDEX.LBL have PRODUCT_ID without quotes. Uncertain if it is required but (1) the examples
+ * in "Planetary Data System Standards Referense, Version 3.6" imply that one probably should, and (2) it is
+ * inconsistent with the SCI LBL files and the CALIB/RPCLAP*.LBL files which do have quotes.
  *
  *
  *
@@ -223,7 +228,7 @@ char GetBiasMode(curr_type *curr, int dop);
 int  SelectCalibrationData(time_t, char*, m_type*);
 int  RemoveUnusedOffsetCalibrationFiles(char*, m_type*);
 
-// Write data to data product table file .tab
+// Write data to data product table file.
 int WritePTAB_File(
     unsigned char *buff, char *fname, int data_type, int samples, int id_code, int length, sweep_type *sw_info, curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
     m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int ini_samples, int samp_plateau);
@@ -238,7 +243,7 @@ int  GetBuffer(buffer_struct_type *cs,unsigned char *buff,int len);			// Get dat
 int  LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len);			// Look ahead in circular buffer
 int  GetHKPacket(buffer_struct_type *,unsigned char *,double *);			// Get one packet of HK data
 void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id);			// Dump the non interesting SC TM packets
-int  SyncAhead(buffer_struct_type *cb,int len);						// Test data syncronisation ahead.
+int  SyncAhead(buffer_struct_type *cb,int len);						// Test data synchronisation ahead.
 
 // Functions handling/working with linked lists of property/value pairs
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -1119,7 +1124,15 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
 // Thread functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
+
+
 // Decodes S/C TM (RPC TM) thread
+//
+// cs : arg_type*
+//    .arg1 : buffer_struct_type* = Circular buffer
+//
+// Reads all TM, both SCI and HK packets, from all instruments.
+//
 void *SCDecodeTM(void *arg)
 {
     char tstr[64];
@@ -1365,6 +1378,9 @@ void *SCDecodeTM(void *arg)
 
 
 // -= THREAD TO DECODE HK =-
+//
+// arg : arg_type*; .arg1 = HK circular buffer.
+//
 // 
 // IMPORTANT NOTE: It appears that HK TAB/LBL file pairs group together up to HK_NUM_LINES subsequent HK packets.
 // Exactly which HK packets that are grouped together with which depend depends on when the previous group
@@ -1452,7 +1468,7 @@ void *DecodeHK(void *arg)
         sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
         SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
 
-        AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble first HK line (HK_NUM_LINES per TAB file)
+        AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble the very first HK line (of HK_NUM_LINES per TAB file).
         
         sprintf(tstr1, "MCID0X%04x", macro_id);
         SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
@@ -1481,7 +1497,7 @@ void *DecodeHK(void *arg)
         // (Any matching days from previous runs are not overwritten until alphanum wraps.)
         //
         sprintf(tstr3,"RPCLAP%s%s*_*_*H.LBL",&tstr2[2],&tstr2[5]);
-        GetAlphaNum(alphanum_h,pds.spathh,tstr3); 
+        GetAlphaNum(alphanum_h,pds.spathh,tstr3);
         IncAlphaNum(alphanum_h); // Increment alphanumeric value
         
         sprintf(stub_fname,"RPCLAP%s%s%s_%s_H",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);
@@ -1567,7 +1583,7 @@ void *DecodeHK(void *arg)
             
             // Write to the HK Label file
             //------------------------------------------------------------------------------------------------------------------------------------------------
-            FDumpPrp(&hkl,pds.hlabel_fd); // Dump hkl to HK label file
+            FDumpPrp(&hkl, pds.hlabel_fd);   // Dump hkl to HK label file
             fprintf(pds.hlabel_fd,"END\r\n");
             fclose(pds.hlabel_fd);
             pds.hlabel_fd=NULL;
@@ -1584,9 +1600,14 @@ void *DecodeHK(void *arg)
 
 
 // -=THREAD TO DECODE SCIENCE STREAM=-
+//
+// Only handles SCI packets.
 // Programmed in state machine style.
-// 
-
+//
+// arg : arg_type*
+//     .arg1 : buffer_struct_type *cb;         // Pointer to circular buffer structure type, for science decoding
+//     .arg2 : buffer_struct_type *ct;         // Pointer to circular buffer structure type, for temporary science storage
+//
 void *DecodeScience(void *arg)
 { 
     char alphanum_s[4]="000";       // Default starting alpha numeric value for unique sience data file name and product ID
@@ -2154,7 +2175,7 @@ void *DecodeScience(void *arg)
                                 hb=buff[0]<<8;      // Extract hi byte
                                 lb=buff[1];         // Extract lo byte
                                 macro_id=(hb | lb); // Put together hi and lo byte
-                                CPrintf("    Executed macro was, MACRO ID: 0x%.4x\n",macro_id);	
+                                CPrintf("    Executed macro was, MACRO ID: 0x%.4x\n",macro_id);
                                 state=S06_GET_MACRO_DESC;
                                 break;
                                 
@@ -3433,12 +3454,12 @@ void *DecodeScience(void *arg)
                                                             // Furthermore, one sample is always missing at the end of a sweep!
                                                             
                                                             if(curr.sensor==SENS_P1) {
-                                                                samp_plateau=sw_info.plateau_dur/dsa16_p1; // Samples on one plateau
+                                                                samp_plateau=sw_info.plateau_dur/dsa16_p1;   // Samples on one plateau
                                                             } else {
-                                                                samp_plateau=sw_info.plateau_dur/dsa16_p2; // Samples on one plateau
+                                                                samp_plateau=sw_info.plateau_dur/dsa16_p2;   // Samples on one plateau
                                                             }
                                                             
-                                                            ini_samples=samples+1-(sw_info.steps+1)*samp_plateau; // Initial samples before sweep starts
+                                                            ini_samples=samples+1-(sw_info.steps+1)*samp_plateau;   // Initial samples before sweep starts
                                                         }
                                                         
                                                         //##########################################################################
@@ -4765,6 +4786,13 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
  * NOTE: Uncertain whether to only look at checked or unchecked properties, or both, in property list.
  * Appears that SPACECRAFT_CLOCK_START/STOP_COUNT are set using UNCHECKED (default for SetP).
  * NOTE: Uncertain whether to assume exactly one occurrence of SPACECRAFT_CLOCK_START/STOP_COUNT in property list.
+ * 
+ * ASSUMES: Spacecraft reset counter is the same for all times involved in the algorithm (or something in that direction...).
+ * ALGORITHM: Keeps data if-and-only-if
+ *     SPACECRAFT_CLOCK_STOP_COUNT<=t_exclude_begin
+ *     and
+ *     t_exclude_end<=SPACECRAFT_CLOCK_STOP_COUNT.
+ *     Note the less-than-or-EQUAL.
  *--------------------------------------------------------------------------------------------*/
 int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData) {
     // PROPOSAL: Reverse exclude/include return result?
@@ -4806,6 +4834,10 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
         return -2;
     }
     
+    //=============================================
+    // Read START_TIME & STOP_TIME
+    // Will only be used for logging their values.
+    //=============================================
     if (
         (FindP(file_properties, &property1, "START_TIME", 1, DNTCARE) < 0) ||
         (FindP(file_properties, &property2, "STOP_TIME",  1, DNTCARE) < 0)
@@ -4842,7 +4874,6 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
     *excludeData = 0;  // Assign "false".
     return 0;
 }
-//*/
 
 
 
@@ -5582,6 +5613,8 @@ void TestDumpMacs()
  * NOTE: Does not follow symlinks.
  * NOTE: This does not work for *.TXT files where the first part is ODL keywords & values, and the last part is pure text,
  *       since ReadLabelFile & WriteUpdatedLabelFile can not handle that file format.
+ * NOTE: ReadLabelFile can not handle comments, as in some *.CAT files, and can therefore not handle CATALOG/.
+ * Even if it could, it would still alter PSA supplied .CAT files (with comments) which should not(?) be altered. Could maybe alter only RPCLAP_*.CAT?
  */
 int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, char update_PUBLICATION_DATE)
 {
@@ -5656,7 +5689,7 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
 
 /* Write updated label file
  *
- * "updated" refers to certain keyword values being set by the function.
+ * "updated" refers to certain keyword values being set by the function IF THEY ARE ALREADY PRESENT.
  * The function is in practise used for updating LBL/CAT files copied from the template.
  *
  * update_PUBLICATION_DATE : true iff keyword PUBLICATION_DATE should be updated.
@@ -5697,16 +5730,18 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
 
 
 
-// Read label file
-// 
-// NOTE: The function is implicitly used for modifying LBL/CAT files from the template directory
-// by first reading a file into linked list, then modifying the linked property values list,
-// then writing the linked list as LBL file.
-// NOTE: I _think_ this code can handle LBL and CAT files
-// with multiple line values. This is important for being able to modify *.CAT files
-// with long texts in the form of "values".   /Erik P G Johansson 2015-04-27.
-//
-// Return value : 0=(seems like) success, -1=failure
+/* Read label file
+ *
+ * NOTE: The function is implicitly used for modifying LBL/CAT files from the template directory
+ * by first reading a file into linked list, then modifying the linked property values list,
+ * then writing the linked list as LBL file.
+ * NOTE: I _think_ this code can handle LBL and CAT files
+ * with multiple line values. This is important for being able to modify *.CAT files
+ * with long texts in the form of "values".   /Erik P G Johansson 2015-04-27.
+ * NOTE: Can not(?) handle PDS comments.
+ *
+ * Return value : 0=(seems like) success, -1=failure
+ */
 int ReadLabelFile(prp_type *lb_data,char *file_path)
 {
     FILE *fd;
@@ -5721,10 +5756,12 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
     int i;
     
     int msubone;
-    char *bcross;    // Dynamic buffer for keywords that cross several lines
-    // such as description fields, they can be very large
+
+    // Dynamic buffer for keywords that cross several lines
+    // such as description fields. They can be very large.
+    char *bcross;
     
-    InitP(lb_data);     // Initialize linked property/value list
+    InitP(lb_data);   // Initialize linked property/value list
     
     bcross  = NULL;
     msubone = (MAX_STR-1);
@@ -5737,7 +5774,7 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
         return -1;
     }
     
-    while(fgets(line,msubone,fd)!= NULL)   // Reads line into variable "line". Appears to include ending line feed.
+    while(fgets(line,msubone,fd)!= NULL)   // Reads line into variable "line". Appears to include the ending line feed.
     {
         if(line[0] == '\n') continue;     // Empty line.
         if(line[0] == '\r') continue;     // Empty line ending with CR+LF.
@@ -7196,8 +7233,12 @@ int WritePLBL_File(
 // Buffer and TM functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Free circular buffers 
-void FreeBuffs(buffer_struct_type *b0,buffer_struct_type *b1,buffer_struct_type *b2,buffer_struct_type *b3)
+// Free circular buffers
+// Do nothing if they contain no data.
+void FreeBuffs(buffer_struct_type *b0,
+               buffer_struct_type *b1,
+               buffer_struct_type *b2,
+               buffer_struct_type *b3)
 {
     YPrintf("Freeing up circular buffers\n");
     if(b0->data!=NULL) FreeBuffer(b0); // Free circular buffer
@@ -7206,10 +7247,17 @@ void FreeBuffs(buffer_struct_type *b0,buffer_struct_type *b1,buffer_struct_type 
     if(b3->data!=NULL) FreeBuffer(b3); // Free circular buffer
 }
 
+
+
 // Get data from circular buffer
 // 
-// NOTE: Does NOT RETURN until it has all the requested data.
-int GetBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
+// bs   : Circular buffer
+// buff : Destination buffer
+// len  : Number of bytes to retrieve
+//
+// NOTE: Effectively a wrapper around GetB but this one waits for the circular buffer to be filled with (enough) data
+// if the requested amount of data can not be retrieved immediately.
+int GetBuffer(buffer_struct_type *bs, unsigned char *buff, int len)
 {
     if(len>0)
     {
@@ -7221,6 +7269,8 @@ int GetBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
     }
     return 0;
 }
+
+
 
 // Look ahead in circular buffer
 int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
@@ -7236,10 +7286,17 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
     return 0;
 }
 
+
+
 // Return data for one HK packet.
+//
+// ch   : Circular buffer, source of data
+// buff : Destination buffer for (some) packet data.
+// rawt : Time derived from HK packet.
 // 
 // NOTE: Does NOT RETURN until it has all the requested data.
-int GetHKPacket(buffer_struct_type *ch,unsigned char *buff,double *rawt)
+// NOTE: Some buffer data is thrown away.
+int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *rawt)
 {
     unsigned int length; // Length variable
     
@@ -7262,7 +7319,10 @@ int GetHKPacket(buffer_struct_type *ch,unsigned char *buff,double *rawt)
     return 0;
 }     
 
-// Skips current TM packet
+
+
+// Reads packet from (arbitrary!) circular buffer, logs its existence but otherwise ignores it.
+//
 void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id)
 {
     unsigned int length;
@@ -7281,7 +7341,8 @@ void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id)
 }
 
 
-// Test syncronisation ahead.
+
+// Test synchronisation ahead.
 int SyncAhead(buffer_struct_type *cb,int len)
 {
     unsigned char ch;

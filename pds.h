@@ -347,7 +347,7 @@ typedef struct pds_type_def
   FILE *ddsp_fd;               // DDS progress file descriptor
 } pds_type;
 
-//Argument structure type for threads.
+// Argument structure type for submitting arguments to threads when launching them.
 typedef struct arg_type_def 
 {
   void *arg1;
