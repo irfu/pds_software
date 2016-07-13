@@ -19,3 +19,7 @@
 
 # Calibration macro that runs for the first time 2016-04-21. 
 0x0512
+
+
+# Calibration-like macro. Should be excluded from deliveries, but not necessarily internally.
+0x0414

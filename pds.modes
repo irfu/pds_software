@@ -13,6 +13,7 @@
 #       as the last character to be used in sorting, i.e. not exactly numeric sorting order. Sorting is inconsistent.
 #
 0x0000:"Instrument not running any mode"
+
 0x0100:"Transmitting Probe 1 5 KHz"
 0x0101:"Transmitting Probe 2 5 KHz"
 0x0102:"Transmitting Probe 1 6.7 KHz"
@@ -21,6 +22,7 @@
 0x0105:"Internal Resistor Sweep calibration"
 0x0106:"Transmitting Probe 1"
 0x0107:"Transmitting Probe 2"
+
 0x0200:"Generic macro not for LDL"
 0x0201:"Density mode, 20 Bit ADCs truncated, downsampled to 0.83Hz"
 0x0202:"Density, normal mode alternating sweeps and time series, version 0."
@@ -30,6 +32,7 @@
 0x0205:"Density, Full 20 bit data time series"
 0x0206:"Generic macro for LDL"
 0x0207:"E-field mode, 16 Bit ADCs downsampled 4 times"
+
 0x0300:"EE Mode, 20 Bit ADCs FULL AQP E-Field"
 0x0301:"EN Mode, E-Field P1, Density Sweep P2"
 0x0302:"Density P1,E-field P2, Fix Dbias 10 V 8KHz  Filt. (Sensitive passive mode)"
@@ -38,6 +41,7 @@
 0x0305:"Alternating fine sweeps P1 & P2, Offset 7, Otherwise as Prom Macro 2"
 0x0306:"Alternating fine sweeps P1 & P2, Offset 9, Otherwise as Prom Macro 2"
 0x0307:"Alternating fine sweeps P1 & P2, Offset 11, Otherwise as Prom Macro 2"
+
 0x0400:"16 Bit ADCs P1 & P1 Down sampling 2 times"
 0x0401:"16 Bit ADCs P1 & P1 Down sampling 4 times"
 0x0402:"16 Bit ADCs P1 & P1 Down sampling 8 times"
@@ -45,8 +49,11 @@
 0x0404:"20 Bit ADCs P1 & P2 Down sampling 30 times"
 0x0405:"16 Bit ADCs Density Mode P1 & P2 long records 4096*2 samples for Interferometry"
 0x0406:"Empty"
+0x0416:"EN NM, float/-30V, cont trunc A20 down 128, sweeps P2, HF on P1 down 8"
 0x0407:"Empty"
+0x0417:"NE NM, -30V/float, cont trunc A20 down 128, sweeps P1, HF on P2 down 8"
 0x0410:"EN P1P2 Burst Mode, P1 float, Fix Bias P2 -30V, Cont. 20 bit no down, Sweeps P2 +-30V"
+
 0x0500:"Alternating Log Compressed sweeps P1 & P2,  Fix density bias on non sweeping probes"
 0x0501:"Alternating Log Compressed sweeps P1 & P2"
 0x0502:"Density Difference P1-P2"
@@ -57,21 +64,28 @@
 0x0512:"Open sweep calibration 8 kHz"
 0x0515:"Density P1 & P2 Normal Mode, Fix Bias 20V, Cont. 20 Bit down 128,Sweeps P1 & P2 -5V to 31V"
 0x0516:"Density P1P2 NM, Vb +30/-30V, Cont. 20 Bit trunc down 64, Sweeps P1 & P2 [-26,+31]V, short HF"
+0x0414:"Test: 0x516 with bootstrap relay flipped to off"
 0x0517:"Density P1P2 NM, Vb -30/-30V, Cont. 20 Bit trunc down 64, Sweeps P1 & P2 [-26,+31]V, short HF"
 0x0525:"Density P1P2 NM, Fix Bias +30/-17V, Cont. 20 Bit trunc down 128, Sweeps P1 & P2 [-17,+31]V"
 0x0506:"Density 20 bit down 128, 16 bit P1 & P2 and Sweep every 5th AQP"
 0x0507:"Empty"
+
 0x0600:"As MCID0x212 but with 20 V bias and 8KHz filters"
 0x0601:"Interferometry burst mode, then sweeps as MCID0x212"
+0x0610:"NN NM, fix bias +30/-30V, cont trunc A20 down 128, sweeps P1P2, HF on P1 down 8"
 0x0602:"Interferometry normal mode, then sweeps as MCID0x212"
 0x0603:"As MCID0x212 but with difference measurments"
+0x0613:"NN NM, fix bias +30/+30V, cont trunc A20 down 128, sweeps P1P2, HF on P1 down 8"
 0x0604:"Sweep P1 and P2, 16 bit interferometry at end, 20 bit cont. throughout, 20V fix bias version 0"
 0x0614:"Density P1 & P2 Burst Mode, Fix Bias -30V, Cont. 20 Bit full down 2, Sweeps P1 & P2 +-30V version 1"
+0x0615:"NE NM, +30V/float, cont trunc A20 down 128, sweeps P1, HF on P2 down 8"
+0x0616:"EN NM, float/+30V, cont trunc A20 down 128, sweeps P2, HF on P1 down 8"
 0x0617:"Density,Cont. 20 bit full, LDL BM, 16 bit and Sweep P1, Vb +30V"
 0x0624:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V version 2"
 0x0605:"Empty"
 0x0606:"Empty"
 0x0607:"Empty"
+
 0x0700:"E-Field,Cont. 20 Bit down 64, Every 96s 16 Bit diff"
 0x0701:"E-Field,Cont. 20 Bit down 64, Every 96s 16 Bit diff"
 0x0702:"E-Field,Cont. 20 Bit down 64, Every 96s 16 Bit diff"
@@ -80,6 +94,7 @@
 0x0705:"E-Field,Cont. 20 Bit down 64, Every 160s 16 bit diff"
 0x0706:"E-field,Cont. 20 Bit, Every AQP 16 Bit diff"
 0x0707:"NM cal A20/A16: NN, Vb 0/0 V, cont A20 down 64, A16 every 160s, no swp"
+
 0x0800:"EE Cont. 20 bit down 128, Every 160s 16 Bit P1 & P2"
 0x0801:"EE float Cont. 20 bit down 128, Every 160s 16 Bit P1 & P2"
 0x0802:"EE float Cont. 20 bit, Every AQP 16 bit P1 & P2"
@@ -93,7 +108,9 @@
 0x0816:"Density P1 NM, LDL, Vb +30V, Cont. 20 Bit trunc down 32, Sweeps +-30V, short HF"
 0x0817:"Density,Cont. 20 bit trun, LDL BM, 16 bit and Sweep P1, Vb +30V"
 0x0827:"Density,Cont. 20 bit trun, LDL BM, 16 bit and Sweep P1, Vb -30V"
+
 0x0900:"BM NN, Vb +30/-30V, lo/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
+0x0910:"NM EE with sweep P1, LF EE down 256 but last AQP down 8, HF EE down 8"
 0x0901:"BM NN, Vb +30/+30V, hi/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0902:"Empty"
 0x0903:"BM NN, Vb +30/+30V, lo/lo, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
@@ -104,6 +121,7 @@
 0x0912:"As MCID0X212, Density, normal mode alternating sweeps and time series."
 0x0914:"Density P1P2 Burst Mode, Fix Bias -30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V"
 0x0926:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V up-down"
+
 0x0A00:"Empty"
 0x0A01:"Empty"
 0x0A02:"Empty"
@@ -113,4 +131,5 @@
 0x0A05:"Empty"
 0x0A06:"Burst TM,Normal LDL or mixed LDL"
 0x0A07:"Empty"
+
 0xFFFF:"Instrument mode stopped"

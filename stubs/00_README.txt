@@ -34,6 +34,7 @@ MEDS can erroneously translate different commands to the same command in .mds fi
 "LAP_VBIAS1 ... = "0x007f"
 (and similar for probe 2) that should be removed UNLESS they represent genuine commands to set the bias to 0x007f TM units (approximately 0 Volt for voltage). It should be possible to distinguish a genuine setting of bias from a false one by looking at the exact command bytecode (.cmd file). If bit 1 (second-least significant bit, "worth 2") in the second byte is set, then no bias is set.
 It is uncertain if the same problem exists for "LAP_IBIAS1 ... = "0x007f" commands, but it seems likely that the same bit in the bytecode (.cmd file) works the same.
+False mds-file-bias bug might still be present in the newest version of MEDS.
 
 /Erik P G Johansson 2014-12-08, 2014-12-16, quoting Reine Gill.
 
