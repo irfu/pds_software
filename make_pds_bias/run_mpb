@@ -1,0 +1,95 @@
+#! /bin/bash
+
+# Produce pds.bias file that is used by the pds software. Calls mpb (compiled C code).
+# 
+# ARGUMENTS: <pds.bias file> <pds.bias exclude file> <pds.bias before removing excludes>
+#            <Root path for Rosetta command logs>
+#
+# Put ddsData path in argument too?
+
+pds_bias="$1"
+pds_bias_exclude="$2"
+pds_bias_unedited="$3"
+DDS_logs_path="$4"
+#DDS_logs_path=/data/ddsData/archivex/tlm/     # Example
+
+
+
+# Find command history files
+# list=`find /opt/ddsData/archivex/tlm/* -name rpc*_cmh_cmdpf.txt`
+list=`find "$DDS_logs_path"/* -name rpc*_cmh_cmdpf.txt`
+
+
+
+file1=`tempfile`
+file2=`tempfile`
+file3=`tempfile`
+file4=`tempfile`
+
+#go through them looking for bias settings and store temporarily
+for i in $list
+do
+    grep -A 4 ARPF390A $i >>$file1
+    grep -A 7 ARPS809A $i >>$file1
+    grep -A 7 ARPS804A $i >>$file1
+    #added new OBCPs  2014-05-12 FJ AIE 
+    grep -A 7 ARPS809C $i >>$file1
+    grep -A 7 ARPS809D $i >>$file1
+done
+
+
+
+echo "Calling mpb"
+mpb $file1 $file2
+
+
+
+sort $file2>$file4
+
+echo '#			        
+# Generated from command logs 	
+# with command: run_mpb filename 
+#			        
+# Note delimiter is a tab	
+#				
+#				
+# TIME|TAB|DENSITY P1P2|TAB|EFIELD P2P1|
+#' >$file3
+
+
+
+echo "Writing to \"$pds_bias\""
+cat $file3 $file4>$pds_bias
+rm $file1>/dev/null 2>&1
+rm $file2>/dev/null 2>&1
+rm $file3>/dev/null 2>&1
+rm $file4>/dev/null 2>&1
+
+
+
+cp "$pds_bias" "$pds_bias_unedited"   # Saving the intermediate result in a separate file.
+
+
+
+########## Remove selected bias settings
+echo "Removing bias commands specified in \"$pds_bias_exclude\"" 2>&1
+
+if [ -f "$pds_bias_exclude" ]; then
+	# Find all lines that are not in $pds_bias_exclude.
+	IFS=$'\n' read -d '' -r -a lines < "$pds_bias_exclude"
+
+	# Now just use index in the array lines to retrieve each line, e.g.
+	# printf "line 1: %s\n" "${lines[0]}"
+	
+	for (( i=0; i<${#lines[@]}; i++ ));
+	do
+		printf "line $i: %s\n" "${lines[$i]}"
+		echo "${lines[$i]:0:23}"
+		#echo 	$(sed '/"${lines[$i]"/d' $pds_bias)
+		grep -v "${lines[$i]:0:23}" "$pds_bias" > "$HOME/tempfile2"
+		mv "$HOME/tempfile2" "$pds_bias"
+	done
+else
+	echo "Can not find \"$pds_bias_exclude\"."
+fi
+

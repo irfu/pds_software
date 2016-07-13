@@ -1,0 +1,55 @@
+#! /bin/bash
+
+# Produce pds.bias file that is used by the pds software after that some commands have later been removed from it.
+# 
+# ARGUMENT: <file to create>
+
+
+# Find command history files
+# list=`find /opt/ddsData/archivex/tlm/* -name rpc*_cmh_cmdpf.txt`
+list=`find /data/ddsData/archivex/tlm/* -name rpc*_cmh_cmdpf.txt`
+
+
+file1=`tempfile`
+file2=`tempfile`
+file3=`tempfile`
+file4=`tempfile`
+
+#go through them looking for bias settings and store temporarily
+for i in $list
+do
+    grep -A 4 ARPF390A $i >>$file1
+    grep -A 7 ARPS809A $i >>$file1
+    grep -A 7 ARPS804A $i >>$file1
+    #added new OBCPs  2014-05-12 FJ AIE 
+    grep -A 7 ARPS809C $i >>$file1
+    grep -A 7 ARPS809D $i >>$file1
+done
+
+
+
+echo "Calling mpb"
+mpb $file1 $file2
+
+
+
+sort $file2>$file4
+
+echo '#			        
+# Generated from command logs 	
+# with command: run_mpb filename 
+#			        
+# Note delimiter is a tab	
+#				
+#				
+# TIME|TAB|DENSITY P1P2|TAB|EFIELD P2P1|
+#' >$file3
+
+
+
+echo "Writing to \"$1\""
+cat $file3 $file4>$1
+rm $file1>/dev/null 2>&1
+rm $file2>/dev/null 2>&1
+rm $file3>/dev/null 2>&1
+rm $file4>/dev/null 2>&1
