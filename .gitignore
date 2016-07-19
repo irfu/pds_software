@@ -3,5 +3,9 @@ bin/
 *~
 
 
+# Should maybe be not be ignored after the mission is over and the list is more stable. Or?
+pds.bias
+
+
 # Is re-generated when compiling.
 id.c

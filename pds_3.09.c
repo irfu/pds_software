@@ -152,7 +152,7 @@
 #include "cirb.h"         // Code for simple power of two circular buffers 
 #include "cirbdec.h"      // cirb declarations
 #include "nice.h"         // Sleep definitions etc
-#include <math.h>         //floor function
+#include <math.h>         // Floor function
 
 
 
@@ -1705,6 +1705,7 @@ void *DecodeScience(void *arg)
      * 
      * NOTE: The function uses MANY variables defined in the enclosing outer function
      * (DecodeScience) to avoid a very long and awkward argument list, but none of these are temporary variables.
+     * PROPOSAL: Re-write as true function with all input data as parameters.
      * 
      * dop : Defined in analogy with in "WritePTAB_File".
      */
@@ -2072,11 +2073,11 @@ void *DecodeScience(void *arg)
                                 break;
                                 
                             case D_SWEEP_P2_RAW_16BIT_BIP:
-                            case D_SWEEP_P2_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!! 
-                                curr.sensor++;              // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)    
+                            case D_SWEEP_P2_LC_16BIT_BIP:   // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!!
+                                curr.sensor++;              // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                             case D_SWEEP_P1_RAW_16BIT_BIP:
-                            case D_SWEEP_P1_LC_16BIT_BIP: // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!!
-                                curr.sensor++;              // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                            case D_SWEEP_P1_LC_16BIT_BIP:   // LOG COMPRESSION I HAVE TO DO SEPARATE PROCESSING FOR THIS!!!
+                                curr.sensor++;              // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                                 params=6;
                                 meas_seq++;                 // Increase number of measurement sequences
                                 CPrintf("    Found sweep science data, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
@@ -2084,20 +2085,15 @@ void *DecodeScience(void *arg)
                                 state=S07_GET_PARAMS;
                                 break;
 
-                            /* Case (macro variable) E_P1_D_P2_INTRL_20_BIT_RAW_BIP is defined in id.h.
-                             * 
-                             * The exact desired response/behaviour/code for this case is presently unknown.
-                             * The case should probably be inserted somewhere around here according to Anders Eriksson.
-                             * /Erik P G Johansson 2016-03-03
-                             */
                             case E_P1_D_P2_INTRL_20_BIT_RAW_BIP:
-                                
+                            case D_P1_E_P2_TRNC_20_BIT_RAW_BIP:
+                            case E_P1_D_P2_TRNC_20_BIT_RAW_BIP:
                             case D_P1P2INTRL_TRNC_20BIT_RAW_BIP:
                             case D_P1P2INTRL_20BIT_RAW_BIP:
                             case E_P1P2INTRL_TRNC_20BIT_RAW_BIP:
                             case E_P1P2INTRL_20BIT_RAW_BIP:
                                 // Effectively curr.sensor = 3 (SENS_P1P2)
-                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                curr.sensor++;   // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                                 // NOTE: No break!
                                 
                             case D_P2_TRNC_20_BIT_RAW_BIP:
@@ -2105,7 +2101,7 @@ void *DecodeScience(void *arg)
                             case D_P2_20_BIT_RAW_BIP:
                             case E_P2_20_BIT_RAW_BIP:    
                                 // Effectively curr.sensor = 2 (SENS_P2)
-                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                curr.sensor++;   // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                                 // NOTE: No break!
                                 
                             case D_P1_TRNC_20_BIT_RAW_BIP:
@@ -2113,10 +2109,10 @@ void *DecodeScience(void *arg)
                             case E_P1_TRNC_20_BIT_RAW_BIP:
                             case E_P1_20_BIT_RAW_BIP:
                                 // Effectively curr.sensor = 1 (SENS_P1)
-                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                curr.sensor++;   // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                                 
                                 params=2;
-                                meas_seq++; // Increase number of measurement sequences
+                                meas_seq++;   // Increase number of measurement sequences
                                 CPrintf("    Found science data, ID CODE: 0x%.2x Sequence %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
                                 param_type=ADC20_PARAMS;
                                 state=S07_GET_PARAMS;
@@ -2124,7 +2120,7 @@ void *DecodeScience(void *arg)
                                 
                             case D_DIFF_P1P2:
                             case E_DIFF_P1P2:
-                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                curr.sensor++;   // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                             case D_P2_RAW_16BIT:
                             case E_P2_16BIT_RAW:
                             case D_P2_RAW_16BIT_D2:
@@ -2135,7 +2131,7 @@ void *DecodeScience(void *arg)
                             case E_P2_RAW_16BIT_D8:
                             case D_P2_RAW_16BIT_D16:
                             case D_P2_RAW_16BIT_D8:
-                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
+                                curr.sensor++;   // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
                             case D_P1_RAW_16BIT:
                             case E_P1_16BIT_RAW:
                             case D_P1_RAW_16BIT_D4:
@@ -2146,14 +2142,14 @@ void *DecodeScience(void *arg)
                             case E_P1_RAW_16BIT_D4:
                             case E_P1_RAW_16BIT_D8:
                             case E_P1_RAW_16BIT_D16:
-                                curr.sensor++; // Increment current sensor. (Always initially set to 0=SENS_NONE before switch().)
-                                meas_seq++;    // Increase number of measurement sequences
+                                curr.sensor++;   // Increment current sensor. (Is always initially set to 0=SENS_NONE before switch().)
+                                meas_seq++;      // Increase number of measurement sequences
                                 CPrintf("    Found science data, no parameters, ID CODE: 0x%.2x Sequence: %d Sensor: %d \n",id_code,meas_seq,curr.sensor);
                                 state=S11_GET_LENGTH;
                                 break; 
                                 
                             default:
-                                CPrintf("    Found undefined, ID CODE:   0x%.2x\n",id_code);
+                                CPrintf("    Found undefined ID CODE:   0x%.2x\n",id_code);
                                 break;
                         }
                     }   // if(buff[0]==0xCC) // Found Sub Header
@@ -2162,7 +2158,7 @@ void *DecodeScience(void *arg)
                         in_sync=0; // Indicate out of sync.
                         state=S01_GET_MAINH; // No sub ID, End or out of sync
                     }
-                    break;
+                    break;   // switch-case
                     
                             //##############################################
                             // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
@@ -3171,7 +3167,7 @@ void *DecodeScience(void *arg)
                                                         // /Erik P G Johansson 2016-03-10
                                                         if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                         {
-                                                            CPrintf("    %d sequence starts %d aqps from start of sequence\n",meas_seq,aqps_seq);
+                                                            CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
                                                             curr.offset_time=aqps_seq*32.0;
                                                             curr.seq_time=rstime+curr.offset_time;      // Calculate time of current sequence
                                                             
@@ -6590,7 +6586,7 @@ int WritePTAB_File(
                     case D201:
                     case D202:
                         ocalf = 16.0;
-                        // Put together 8+8+4 bits to signed 20 bit number
+                        // Put together 8+8+4 bits to signed 20 bit number.
                         // EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA, MAKING THE LAST 4 BITS GARBAGE.
                         val=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&val); // Convert 20 bit signed to native signed

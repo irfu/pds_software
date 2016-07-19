@@ -13,6 +13,12 @@ pds_bias_unedited="$3"
 DDS_logs_path="$4"
 #DDS_logs_path=/data/ddsData/archivex/tlm/     # Example
 
+# DEBUG 
+#echo "pds_bias          = $pds_bias"
+#echo "pds_bias_exclude  = $pds_bias_exclude"
+#echo "pds_bias_unedited = $pds_bias_unedited"
+#echo "DDS_logs_path     = $DDS_logs_path"
+
 
 
 # Find command history files
