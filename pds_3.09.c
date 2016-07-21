@@ -91,6 +91,8 @@
  *       /Erik P G Johansson 2016-06-22
  *  * Modified the compressed output logs file name to contain the data set ID.
  *       /Erik P G Johansson 2016-06-22
+ *  * Bug fix: WriteUpdatedLabelFile now updates TARGET_NAME. Needed for updating DATASET.DAT.
+ *       /Erik P G Johansson 2016-07-21
  *
  *
  *
@@ -1428,14 +1430,13 @@ void *DecodeHK(void *arg)
     InitP(&hkl);                            // Initialize linked property/value list for PDS LAP HK
     ClearCommonPDS(&hkl);                   // Set the common PDS header keywords 
     SetupHK(&hkl);                          // Setup HK keywords
-    SetP(&hkl,"RECORD_BYTES",HK_LINE_SIZE_STR,1);       // Set number of bytes in a column of a record
-    SetP(&hkl,"DESCRIPTION","\"LAP HK Data, Each line is a separate HK packet sent every 32s\"",1);
-    SetP(&hkl,"MISSION_PHASE_NAME",mp.phase_name,1);    // Set mission phase name in HK parameters
-    SetP(&hkl,"TARGET_TYPE",mp.target_type,1);          // Set target type in  HK parameters 
-    SetP(&hkl,"TARGET_NAME",mp.target_name_did,1);      // Set target name in  HK parameters 
-    
-    SetP(&hkl,"DATA_SET_ID",mp.data_set_id,1);          // Set DATA SET ID in HK parameters
-    SetP(&hkl,"DATA_SET_NAME",mp.data_set_name,1);      // Set DATA SET NAME in HK parameters
+    SetP(&hkl,"RECORD_BYTES",       HK_LINE_SIZE_STR,1);        // Set number of bytes in a column of a record
+    SetP(&hkl,"DESCRIPTION",        "\"LAP HK Data, Each line is a separate HK packet sent every 32s\"",1);
+    SetP(&hkl,"MISSION_PHASE_NAME", mp.phase_name,1);           // Set mission phase name in HK parameters
+    SetP(&hkl,"TARGET_TYPE",        mp.target_type,1);          // Set target type in  HK parameters
+    SetP(&hkl,"TARGET_NAME",        mp.target_name_did,1);      // Set target name in  HK parameters
+    SetP(&hkl,"DATA_SET_ID",        mp.data_set_id,1);          // Set DATA SET ID in HK parameters
+    SetP(&hkl,"DATA_SET_NAME",      mp.data_set_name,1);        // Set DATA SET NAME in HK parameters
     
     if(calib) {// Set product type
         SetP(&hkl,"PRODUCT_TYPE","\"RDR\"",1);
@@ -5306,7 +5307,6 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, 
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
                 return -6;
             }
-            
             WriteUpdatedLabelFile(&mc_lbl, file_path, 1);   // NOTE: Write back label file with new info.
 
             //===============================================
@@ -5713,6 +5713,7 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
     SetP(lb_data, "PRODUCER_ID",        "EJ",                     1);  
     SetP(lb_data, "PRODUCER_FULL_NAME", "\"ERIK P G JOHANSSON\"", 1);
     SetP(lb_data, "MISSION_PHASE_NAME", mp.phase_name,            1);  
+    SetP(lb_data, "TARGET_NAME",        mp.target_name_did,       1);   // Needed for DATASET.CAT.
     if (update_PUBLICATION_DATE) {
         SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of data set
     }
@@ -6709,7 +6710,11 @@ int WritePTAB_File(
                 // EDIT FKJN 27/8 2014 ADC ZERO POINT OFFSET ERROR 
                 if(data_type==D16) {
                     if(val>=0) {
-                        val = val +2; // This value jumps when adc is set to 0, it would be nice to set it to 2.5 or something, but edited can't handle that.
+                        /* The ADC16s have a flaw around zero volt and therefore the output value has to be modified.
+                         * The value jumps when adc is set to 0. It would be nice to set it to 2.5 or something,
+                         * but edited can't handle that.
+                         */
+                        val = val + 2;
                     }
                 }
                 

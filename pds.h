@@ -56,7 +56,8 @@
 #define DENSITY 1
 #define E_FIELD 2
 
-// D16=ADC16, D20=ADC20
+// D16=ADC16 (NOT same as 16-bit data!)
+// D20=ADC20
 // D20x(T), x=probe
 // T = Truncated (i.e. 16 bit data from ADC20)
 #define D16     16
