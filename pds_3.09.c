@@ -93,6 +93,8 @@
  *       /Erik P G Johansson 2016-06-22
  *  * Bug fix: WriteUpdatedLabelFile now updates TARGET_NAME. Needed for updating DATASET.DAT.
  *       /Erik P G Johansson 2016-07-21
+ *  * Bug fix: Wrote illegal unquoted PDS keyword value containing dash/hyphen in, P1-P2_CURRENT/VOLTAGE.
+ *       /Erik P G Johansson 2016-07-22
  *
  *
  *
@@ -6944,11 +6946,12 @@ int WritePTAB_File(
 
 
 
-/* WRITE TO DATA LABEL FILE .LBL
+/*================================================================================================================================================
+ * WRITE TO DATA LABEL FILE .LBL
  * 
  * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is. See "WritePTAB_File" (assuming it has the same meaning).
  * NOTE: This function only has very little dependence on "dop". Compare "WritePTAB_File".
- */
+ ================================================================================================================================================*/
 int WritePLBL_File(
     char *path,
     char *fname,
@@ -6996,16 +6999,16 @@ int WritePLBL_File(
             case SENS_P1P2:
                 if(dop==0)
                 {
-                    // NOTE/BUG?: The tstr1 value does end up in PDS keyword/attributes and those must not contain
-                    // dash. This does however not happen in practice for diff=1.
-                    // The tstr1 value also ends up in unquoted PDS __values__ which might not permit dash for "symbolic" values.
-                    // Possibly the combinations are such that the value is only used legally for diff=1, dop=0, curr->sensor=SENS_P1P2 (?!!).
-                    // Source: "Object Description Language Specification and Usage", Version 3.8, Section 12 (Sections 12.4.2, 12.5, 12.5.4, 12.3.4?)
-                    // (Footnote: Rosetta officially uses PDS V3.6 but it is most likely identical to V3.8 here.)
-                    strcpy(tstr1,"P1-P2"); // Difference
+                    /*
+                     * BUG FIX: The tstr1 value end up in an unquoted PDS keyword/attribute value and those must not contain
+                     * dash. This however does/did not happen in practice for diff=1.
+                     * Source: "Planetary Data Systems Standards Reference", Version 3.6, p12-11, section 12.3.4+12.4.2.
+                     */
+                    //strcpy(tstr1, "P1-P2");   // Difference. Illegal dash?
+                    strcpy(tstr1, "P1_P2");   // Difference
                     diff=1;   // Must be 16 bit diff data.
                     // The LAP instrument permits using 20 bit data for P3 but that is for some reason not an interesting case
-                    // and Anders Eriksson states (2016-03-10) that that will never be used in practice.
+                    // and Anders Eriksson states (2016-03-10) that it will never be used in practice.
                 }
                 if(dop==1)
                     strcpy(tstr1,"P1");
