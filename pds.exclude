@@ -23,3 +23,7 @@
 
 # Calibration-like macro. Should be excluded from deliveries, but not necessarily internally.
 0x0414
+
+
+# Calibration macro
+0x0712
