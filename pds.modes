@@ -53,6 +53,9 @@
 0x0407:"Empty"
 0x0417:"NE NM, -30V/float, cont trunc A20 down 128, sweeps P1, HF on P2 down 8"
 0x0410:"EN P1P2 Burst Mode, P1 float, Fix Bias P2 -30V, Cont. 20 bit no down, Sweeps P2 +-30V"
+0x0411:"EN BM, float/-30V, cont full A20, /\ sweeps P2, HF on both down 8"
+0x0412:"EN BM, float/-30V, cont trunc A20, sweeps P2, HF on both down 8"
+0x0413:"EN BM, float/-30V, cont trunc A20, sweeps P2, HF on both down 8"
 0x0415:"NE NM, -30V/float, cont trunc A20 down 128, /\ sweeps P1, HF on P2 down 8"
 
 
