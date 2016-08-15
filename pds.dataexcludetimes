@@ -39,3 +39,7 @@
 1/0383789275.15680 1/0383789592.2573
 
 
+
+# Mistakenly runs macro 601 (BM) with NM telemetry instead of new macro 611 which was mistakenly written to the wrong place in LAP memory.
+# 2016-08-04T09:14:59.168 - 2016-08-04T09:15:05.797
+1/0428922811.15680 1/0428922817.56880
