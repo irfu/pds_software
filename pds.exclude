@@ -27,3 +27,8 @@
 
 # Calibration macro
 0x0712
+
+
+# Calibration macros run once
+0x0a01
+0x0a07
