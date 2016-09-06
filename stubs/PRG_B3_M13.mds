@@ -68,6 +68,8 @@
 10	LAP_SAMPLE_DURING_HOLD         = "ALLOW SAMPLING"
 14	LAP_SET_SUBHEADER              = "0x0032"
 16	LAP_TRANSFER_DATA_TO_OUT_FROM  = "TEMPORARY BUFFER"
+# Manually added after bug hunt (bad sweep biases, effectively LAP_P2_ADC16_DOWNSAMPLE=-1). /Erik P G Johansson 2016-09-06
+16	LAP_P2_ADC16_DOWNSAMPLE        = "0x0040"
 18	LAP_SET_SUBHEADER              = "0x000a"
 20	LAP_TRANSFER_DATA_TO_OUT_FROM  = "P2 BUFFER"
 23	LAP_HOLD_N_AQPS                = "0x0001"
