@@ -526,7 +526,7 @@ int DumpPrp(prp_type *p)
     int i;
     property_type *tmp;
     
-    pthread_mutex_lock(&protect_plnk);	
+    pthread_mutex_lock(&protect_plnk);
     
     if(p->properties!=NULL && p->head!=NULL)
     {
@@ -540,10 +540,12 @@ int DumpPrp(prp_type *p)
                     printf("= %s",tmp->value);
                 }
                 printf("\n");
+                //CPrintf("%s = %s\n", tmp->name, tmp->value);
             }
             tmp=tmp->next_p;
         }
         printf("No. properties: %d\n",p->no_prop);
+        //CPrintf("No. properties: %d\n",p->no_prop);
         pthread_mutex_unlock(&protect_plnk);
         return 0; // Ok
     }
@@ -708,6 +710,7 @@ int FindP(prp_type *p, property_type **prop, char *name, int occ, char check)
 
 //
 // Find name backwards (->prev_p direction) starting with *prop1.
+// "FindB" = "Find backwards"
 // 
 // *prop1 : Pointer to the property where the search begins. Must be in the linked property list.
 // *prop2 : Pointer to the property that was found (if any).

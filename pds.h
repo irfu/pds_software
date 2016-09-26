@@ -146,7 +146,7 @@
  *
  * /Erik P G Johansson 2015-06-11
 */
-#define CALIB_ADC_G1_TM_DELTA_P1     77.9601
+#define CALIB_ADC_G1_TM_DELTA_P1     77.9601    // "G1" = (Gain=1) = High gain
 #define CALIB_ADC_G1_TM_DELTA_P2     84.8991
 
 
@@ -279,7 +279,7 @@ typedef struct curr_type_def
   double       old_time;    // Used to test if we have extra bias settings
   unsigned int old_macro;   // Used to test if we have a new macro
   double       factor;      // Current conversion factor (Not physical current..but the factor currently used for time computations)
-  unsigned int afilter;     // Current analog filter (if data from both sensors(i.e. correlation) we assume the same filter on both)
+  unsigned int afilter;     // Current analog filter (if data from both sensors (i.e. correlation) we assume the same filter on both)
   int ibias1;               // Fix current bias p1
   int vbias1;               // Fix voltage bias p1
   int ibias2;               // Fix current bias p2
@@ -299,7 +299,7 @@ typedef struct pds_type_def
   int  SCResetCounter;         // Number of times the spacecraft clock has been reset
   char SCResetClock[20];       // Date and time of last spacecraft clock reset ex. 2003-01-01T00:00:00
   char templp[PATH_MAX];       // Path to PDS archive template
-  char macrop[PATH_MAX];       // Path to lap macro descriptions
+  char macrop[PATH_MAX];       // Path to LAP macro descriptions
   int  DPLNumber;              // DPL number
   float DataSetVersion;        // Data Set Version, first version is 1.0
   char LabelRevNote[PATH_MAX]; // Label revision note, unlimited length in PDS, but we limit it to same as PATH_MAX characters!
@@ -313,7 +313,7 @@ typedef struct pds_type_def
   char mcpath[PATH_MAX];       // Mission calendar path and file name
   char apathpds[PATH_MAX];     // Archive path PDS (Out data)
   char apathdds[PATH_MAX];     // Archive path DDS (In data)
-  char tpath[PATH_MAX];        // Path to time correlation packets
+  char tpath[PATH_MAX];        // Path to time correlation packets (TCORR)
   char lpath[PATH_MAX];        // Log path
   char dpathse[PATH_MAX];      // Data path PDS science edited
   char dpathsc[PATH_MAX];      // Data path PDS science calibrated

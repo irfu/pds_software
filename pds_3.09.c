@@ -93,7 +93,7 @@
  *       /Erik P G Johansson 2016-06-22
  *  * Bug fix: WriteUpdatedLabelFile now updates TARGET_NAME. Needed for updating DATASET.DAT.
  *       /Erik P G Johansson 2016-07-21
- *  * Bug fix: Wrote illegal unquoted PDS keyword value containing dash/hyphen in, P1-P2_CURRENT/VOLTAGE.
+ *  * Bug fix: Wrote illegal unquoted PDS keyword value containing dash/hyphen in P1-P2_CURRENT/VOLTAGE.
  *       /Erik P G Johansson 2016-07-22
  *
  *
@@ -102,12 +102,12 @@
  *        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
  *     NOTE: Changing this will/might cause backward-compatibility issues with lapdog and write_calib_meas.
  * "BUG": Code requires output directory path in pds.conf to end with slash.
- * "BUG": The code still does not update the LBL files in the DOCUMENT/ directory.
  * BUG: HK label files do not use "fingerprinting" for identifying macros (only DecodeScience does) and can therefor
  *      not recognize all macros.
  * BUG?: HK LBL files and INDEX.LBL have PRODUCT_ID without quotes. Uncertain if it is required but (1) the examples
  * in "Planetary Data System Standards Referense, Version 3.6" imply that one probably should, and (2) it is
  * inconsistent with the SCI LBL files and the CALIB/RPCLAP*.LBL files which do have quotes.
+ * "BUG": Does not update CATALOG/DATASET.CAT:TARGET_NAME.  /Erik P G Johansson 2016-07-26
  *
  *
  *
@@ -118,6 +118,10 @@
  * (Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to)
  * Code that uses this includes (incomplete list): function E2Epoch (used only once), WritePTAB_File, possibly the use of bias e.g. in LoadBias.
  * Empirically (playing with TimeOfDatePDS, pds' default compiler), time_t appears correspond to seconds after 1970-01-01 00:00.00.
+ *
+ * TODO: Shorten RPCLAP_CALIB_MEAS_EXCEPTIONS.* to RPCLAP_CALIB_MEAS_EXCEPT.* too keep filenames within 27+1+3.
+ *====================================================================================================================
+ * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
  *====================================================================================================================
  */
 
@@ -680,7 +684,6 @@ int main(int argc, char *argv[])
     }
 
 
-
     if(calib) {
         pds.DPLNumber=3;			// Calibrated data has DPL number 3
     } else {
@@ -689,12 +692,13 @@ int main(int argc, char *argv[])
     
     sec_epoch=E2Epoch(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
     
-    // Get mission phase data 
+    // Get mission phase data
     if(InitMissionPhaseStructFromMissionCalendar(&mp,&pds) < 0) {
         exit(1);
     }
-    
-    
+
+
+
     /*===================================================
      * Get options for altering mission phase parameters
      *================================================================================================
@@ -847,7 +851,7 @@ int main(int argc, char *argv[])
     
     Scet2Date_2((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
     YPrintf("Mission phase stop          : %s\n\n",tstr2);
-    printf("Mission phase stop          : %s\n\n",tstr2);
+    printf( "Mission phase stop          : %s\n\n",tstr2);
     SetP(&cat,"STOP_TIME",tstr2,1);                       // Set STOP_TIME
     
     SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
@@ -1115,7 +1119,8 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     // Values normally obtained from the mission calendar.
     // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
     // since deliveries may split up mission phases.
-    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      Mission phase name, e.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\"\n");
+    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      Mission phase name, e.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\".\n");
+    fprintf(stream, "                                            (The argument itself must contain no qutoes though.)\n");
     fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
     fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions.)\n");
     fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
@@ -1628,7 +1633,7 @@ void *DecodeScience(void *arg)
     unsigned int length=0;          // Length of science data,
     unsigned int hb=0;              // high
     unsigned int lb=0;              // and low byte.
-    unsigned int samples  = 0;      // Number of samples in science data (Not same as length!)
+    unsigned int samples = 0;       // Number of samples in science data (Not same as length!)
     int macro_descr_NOT_found=0;    // Indicates that we have NOT found a matching macro description for the macro ID. 0==Found, 1==Not found (!).
     
     unsigned int macro_id = 0;      // Macro ID tag.
@@ -1661,7 +1666,6 @@ void *DecodeScience(void *arg)
     char tstr1[256];                // Temporary string
     char tstr2[256];                // Temporary string
     char tstr3[256];                // Temporary string 
-    //char tstr4[256];                // Temporary string
     char tstr5[256];                // Temporary string 
     
     int i;                          // Temporary counters
@@ -1706,7 +1710,7 @@ void *DecodeScience(void *arg)
     /* Function to remove repetition and shorten the code that writes TABL/LFL file pairs.
      * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
      * 
-     * NOTE: The function uses MANY variables defined in the enclosing outer function
+     * IMPORTANT NOTE: The function uses MANY variables defined in the enclosing outer function
      * (DecodeScience) to avoid a very long and awkward argument list, but none of these are temporary variables.
      * PROPOSAL: Re-write as true function with all input data as parameters.
      * 
@@ -2403,6 +2407,7 @@ void *DecodeScience(void *arg)
                                             // Above: I don't treat the combination there only the lowest bits are used for the 20 bit ADC:s
                                             //        cause we never will use it..it's not scientific!
                                         }
+                                        //CPrintf("  sw_info.plateau_dur=%i\n", sw_info.plateau_dur);
                                         state=S11_GET_LENGTH; // Error unknown parameter type, continue to get length
                                         break;
                                         
@@ -2420,11 +2425,12 @@ void *DecodeScience(void *arg)
                                                     {
                                                         if(ComparePrp(property1,property2)) // Compare properties
                                                         {
-                                                            CPrintf("    Warning mismatch between parameters and macro description\n");
+                                                            CPrintf("    Warning: Mismatch between parameters and macro description\n");
                                                             CPrintf("    MACRO: %s=%s\n",property2->name,property2->value);
                                                             CPrintf("    PARAM: %s=%s\n",property1->name,property1->value);
                                                             // Remove warning keyword. Enough with warning in logs.
                                                             //InsertTopQ(&dict,"ROSETTA:LAP_SC_VS_MACRO_MISMATCH","WARNING");
+                                                            // NOTE: Seems that the "PARAM" value (from "dict") is used, not the macro value.
                                                             break; // Break out of loop
                                                         }
                                                         
@@ -2616,12 +2622,14 @@ void *DecodeScience(void *arg)
                                                 
                                                 dsa16_p1 = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
                                                 dsa16_p2 = -1;   // Indicate that "down sampl 16 bit sensor 2" value is not resolved
-                                                
+
+                                                // strstr : Return pointer to the first occurrence of a given string within another string.
                                                 if((tp=strstr(IDList[id_code],"16BIT_D"))!=NULL)
                                                 {
                                                     if(curr.sensor==SENS_P1) {
                                                         if(!sscanf(&tp[7],"%d",&dsa16_p1)) {
                                                             dsa16_p1=-1; // Error in conversion
+                                                            CPrintf("WARNING: Sets default value dsa16_p1=%i since can not parse substring tp=\"\%s\" of IDList[id_code]=\"%s\".\n", dsa16_p1, tp, IDList[id_code]);
                                                         }
                                                     }
                                                     
@@ -2629,10 +2637,14 @@ void *DecodeScience(void *arg)
                                                     {
                                                         if(!sscanf(&tp[7],"%d",&dsa16_p2)) {
                                                             dsa16_p2=-1; // Error in conversion
+                                                            CPrintf("WARNING: Sets default value dsa16_p2=%i since can not parse substring tp=\"\%s\" of IDList[id_code]=\"%s\".\n", dsa16_p2, tp, IDList[id_code]);
                                                         }
                                                     }
                                                 }
-                                                
+                                                //CPrintf("5 dsa16_p1=%i\n", dsa16_p1);
+                                                //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+                                                //CPrintf("  sw_info.plateau_dur=%i\n", sw_info.plateau_dur);
+
                                                 curr.bias_mode1=DENSITY;   // Assume density mode unless there is a reason not to.
                                                 curr.bias_mode2=DENSITY;
 
@@ -2757,16 +2769,23 @@ void *DecodeScience(void *arg)
                                                     //Find subheader for measurement sequence meas_seq
                                                     if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)   // Set property1. Read many times afterwards with FindB(..).
                                                     {
+                                                        //CPrintf("6 dsa16_p1=%i\n", dsa16_p1);
+                                                        //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
                                                         if (debug>0) {
                                                             printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);
                                                         }
-                                                        
+                                                        //CPrintf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);
+
+                                                        //CPrintf("4 dsa16_p1=%i\n", dsa16_p1);
+                                                        //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+                                                        //DumpPrp(&macros[mb][ma]);   // DEBUG
                                                         // Find downsampling value probe 1 in macro and if no ID value exists use macro desc. value
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",DNTCARE)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
                                                             if(dsa16_p1==-1 || macro_priority) { // Value not resolved from ID or macro has high priority use macro value instead
                                                                 dsa16_p1=val;
+                                                                //CPrintf("    Using .mds value: ROSETTA:LAP_P1_ADC16_DOWNSAMPLE=dsa16_p1=%i\n", dsa16_p1);
                                                             }
                                                             
                                                             if(dsa16_p1!=val) {
@@ -2774,13 +2793,14 @@ void *DecodeScience(void *arg)
                                                             }
                                                             //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p1);
                                                         }
-                                                        
+
                                                         // Find downsampling value probe 2 in macro and if no ID value exists use macro desc. value
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",DNTCARE)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
                                                             if(dsa16_p2==-1 || macro_priority)  { // Value not resolved from ID  or macro has high priority use macro value instead
                                                                 dsa16_p2=val;
+                                                                //CPrintf("    Using .mds value: ROSETTA:LAP_P2_ADC16_DOWNSAMPLE=dsa16_p2=%i\n", dsa16_p2);
                                                             }
                                                             
                                                             if(dsa16_p2!=val && !macro_priority)  { // Print mismatch warning. Only if macro desc. has low priority
@@ -2788,7 +2808,9 @@ void *DecodeScience(void *arg)
                                                             }
                                                             //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p2);
                                                         }
-                                                        
+                                                        //CPrintf("3 dsa16_p1=%i\n", dsa16_p1);
+                                                        //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+
                                                         // Test if digital filter was turned on for probe 1, if so add information to dictionary
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",DNTCARE)>0)
                                                         {
@@ -2823,7 +2845,7 @@ void *DecodeScience(void *arg)
                                                             }
                                                         }
                                                         curr.afilter=0; // Assume no analog filter
-                                                        
+
                                                         
                                                         
                                                         if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
@@ -3157,30 +3179,32 @@ void *DecodeScience(void *arg)
                                                                 tm_rate='Z';            // And (Z)ero if no telemetry rate
                                                         }
                                                         
-                                                        // NOTE: DECEIVING IF STATEMENT.
-                                                        // The "if" condition is an assignment and only returns false in case of error.
-                                                        // Therefore the if statement will basically always be executed.
-                                                        // NOTE: This is the only location where "aqps_seq" is assigned.
-                                                        // NOTE: This entire section could basically be moved to S15_WRITE_PDS_FILES, since it fits with creating files there.
-                                                        // However, this if statement is also contained within three other if statements:
-                                                        //    if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0) { ... }
-                                                        //    if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0) { ... }
-                                                        //    if(!macro_descr_NOT_found) { ... }
-                                                        // and one might not want to move the middle one to S15_WRITE_PDS_FILES(?).
-                                                        // /Erik P G Johansson 2016-03-10
+                                                        /**
+                                                         * NOTE: DECEIVING IF STATEMENT.
+                                                         * The "if" condition is an assignment and only returns false in case of error.
+                                                         * Therefore the if statement will basically always be executed.
+                                                         * NOTE: This is the only location where "aqps_seq" is assigned.
+                                                         * NOTE: This entire section could basically be moved to S15_WRITE_PDS_FILES, since it fits with creating files there.
+                                                         * However, this if statement is also contained within three other if statements:
+                                                         *    if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0) { ... }
+                                                         *    if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0) { ... }
+                                                         *    if(!macro_descr_NOT_found) { ... }
+                                                         * and one might not want to move the middle one to S15_WRITE_PDS_FILES(?).
+                                                         * /Erik P G Johansson 2016-03-10
+                                                         */
                                                         if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                         {
                                                             CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
                                                             curr.offset_time=aqps_seq*32.0;
                                                             curr.seq_time=rstime+curr.offset_time;      // Calculate time of current sequence
                                                             
-                                                            Raw2OBT_Str(curr.seq_time,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
+                                                            Raw2OBT_Str(curr.seq_time,  pds.SCResetCounter, tstr1); // Compile OBT string and add reset number of S/C clock.
                                                             
-                                                            SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr1,1);
+                                                            SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
-                                                            DecodeRawTime(curr.seq_time,tstr1,0);   // Decode raw time into PDS compliant UTC time
-                                                            CPrintf("    Current sequence start time is: %s\n",tstr1); 
-                                                            SetP(&comm,"START_TIME",tstr1,1);
+                                                            DecodeRawTime(curr.seq_time,  tstr1, 0);   // Decode raw time into PDS compliant UTC time
+                                                            CPrintf("    Current sequence start time is: %s\n", tstr1);
+                                                            SetP(&comm, "START_TIME", tstr1, 1);
                                                             
                                                             
                                                             // Create data path for current day
@@ -3219,6 +3243,7 @@ void *DecodeScience(void *arg)
                                                             // [19] : [E]-Field or [D]ensity
                                                             // [20] : [S]weep or [B]ias.
                                                             // [21] : P[1], P[2], P[3].
+                                                            // [22] : [4]/[8] kHz filter
                                                             // Note: [i] : i=byte index in string (i=0: first character)
                                                             // NOTE: Sets probe number and density/E field to "x" since these will be overwritten later (case S15_WRITE_PDS_FILES).
                                                             sprintf(tstr2, "RPCLAP%s%s%s_%sS_RxBx%1d%cS",
@@ -3296,11 +3321,11 @@ void *DecodeScience(void *arg)
                                                             
                                                             Raw2OBT_Str(curr.stop_time, pds.SCResetCounter, tstr5);   // Compile OBT string and add reset number of S/C clock.
                                                             
-                                                            SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",tstr5,1);
+                                                            SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",  tstr5, 1);
                                                             
                                                             DecodeRawTime(curr.stop_time, tstr5, 0);  // Decode raw time into PDS compliant UTC time.
-                                                            CPrintf("    Current sequence stop  time is: %s\n",tstr5);
-                                                            SetP(&comm,"STOP_TIME",tstr5,1);         // Update STOP_TIME in common PDS parameters.
+                                                            CPrintf("    Current sequence stop  time is: %s\n", tstr5);
+                                                            SetP(&comm, "STOP_TIME",  tstr5, 1);         // Update STOP_TIME in common PDS parameters.
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                     }   // if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)
                                                 }   // if(!macro_descr_NOT_found)
@@ -3379,12 +3404,17 @@ void *DecodeScience(void *arg)
                                                         InsertTopQV(&dict,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",dsa16_p2);
                                                     }
                                                 }
+                                                //CPrintf("0 dsa16_p1=%i\n", dsa16_p1);   // DEBUG
+                                                //CPrintf("  dsa16_p2=%i\n", dsa16_p2);   // DEBUG
+                                                //DumpPrp(&dict);   // DEBUG
                                                 state=S15_WRITE_PDS_FILES; // Change state
                                                 break;
 
                                                 case S15_WRITE_PDS_FILES:
                                                     DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
-                                                    
+                                                    //CPrintf("1 dsa16_p1=%i\n", dsa16_p1);
+                                                    //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+
                                                     //------------------------------------------------------------------------
                                                     // Erik P G Johansson 2015-03-25: Added functionality for excluding data.
                                                     // 
@@ -3465,8 +3495,18 @@ void *DecodeScience(void *arg)
                                                             } else {
                                                                 samp_plateau=sw_info.plateau_dur/dsa16_p2;   // Samples on one plateau
                                                             }
-                                                            
+
                                                             ini_samples=samples+1-(sw_info.steps+1)*samp_plateau;   // Initial samples before sweep starts
+                                                            if ((ini_samples<0) || (32<ini_samples)) {   // NOTE: Positive warning threshold is arbitrary.
+                                                                // Have seen many cases of suspicious values. Therefore extra error message.
+                                                                // Likely due to misconfigured .mds file(s).
+                                                                CPrintf("WARNING: Suspicious number of initial sweep samples, ini_samples=%i=0x%x\n", ini_samples, ini_samples);
+                                                                //CPrintf("         samples=%i; sw_info.steps=%i; samp_plateau=%i; sw_info.plateau_dur=%i\n", samples, sw_info.steps, samp_plateau, sw_info.plateau_dur);
+                                                                //CPrintf("         ROSETTA:LAP_P1_ADC16_DOWNSAMPLE=dsa16_p1=%i=0x%x\n", dsa16_p1, dsa16_p1);
+                                                                //CPrintf("         ROSETTA:LAP_P2_ADC16_DOWNSAMPLE=dsa16_p2=%i=0x%x\n", dsa16_p2, dsa16_p2);
+
+                                                            }
+
                                                         }
                                                         
                                                         //##########################################################################
@@ -3941,7 +3981,7 @@ int DPrintf(const char *fmt, ...)
     
     if((status=pthread_mutex_lock(&protect_log))==0)
     {
-        if(OpenLogFile(&pds.dlog_fd,PDS_LOG1,pds.ylog_fd)>=0) // Open log file if not already opened
+        if(OpenLogFile(&pds.dlog_fd,PDS_LOG1,pds.ylog_fd)>=0)   // Open log file if not already opened
         {
             if(pds.dlog_fd!=NULL)
             {
@@ -4241,7 +4281,7 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
 /**
  * Load second part of configuration file
  *
- * Sets among others: p->apathpds
+ * Sets among others: p->apathpds   // Archive path PDS (Out data)
  *
  * NOTE: The function name is deceiving. The function does more than just read configuration file.
  * NOTE: COPIES TEMPLATE DIRECTORY TO CREATE THE DATA SET DIRECTORY, and probably more.
@@ -5057,7 +5097,7 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
  * Load all macro descriptions (.mds files) into memory.
  *
  * NOTE: Iterates over all possible filenames (that fit the filename pattern) and tries to load each one of them.
- * NOTE: *.mds files: The left-most numbers appear to be ignored, but a tab is still required before the actual "variable assignment".
+ * NOTE: *.mds files: The left-most numbers appear to be ignored, but a TAB is still required before the actual "variable assignment".
  * NOTE: Adds prefix "ROSETTA:" to all keys (in property lists).
 */
 int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro descriptions
@@ -5109,7 +5149,7 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                             break;
                         }
                         
-                        Separate(line, l_tok, t_tok, '\t', 1);    // NOTE: Requires (exactly one) tab between first and second column.
+                        Separate(line, l_tok, t_tok, '\t', 1);    // NOTE: Requires (exactly one) TAB between first and second column.
                         Separate(t_tok, n_tok, v_tok, '=', 1);
                         //TrimWN(l_tok);   // Meaningless? l_tok is never used(?)
                         TrimWN(n_tok);
@@ -5518,10 +5558,11 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
     char abbrev[5];
     int stat;         // Just a status variable
     int dur;
-    
+
     if((fd=fopen(p->mcpath,"r"))==NULL) 
     {
-        CPrintf("    Couldn't open mission calendar file\n");
+        printf("ERROR: Could not open mission calendar file\n");
+        YPrintf("Could not open mission calendar file\n");
         return -1;
     }
     nline[255]='\0';
@@ -6186,7 +6227,7 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, m_type *m)
 
 /*===============================================================================================================================
  * Write TAB file, EDITED or CALIB.
- * Convert from TM units to physical units (i.e. calibrate) in CALIB.
+ * Convert from TM units to physical units (i.e. calibrate) for CALIB.
  *
  *  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
  *  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
@@ -6255,8 +6296,8 @@ int WritePTAB_File(
     int ti2=0;
 
     int macro_id; 
-    int current;                    // Current variable
-    int voltage;                    // Voltage variable
+    int current;                    // Current variable in TM
+    int voltage;                    // Voltage variable in TM
     
     int ibias;                      // Temporary current variable
     int vbias;                      // Temporary voltage variable
@@ -6273,7 +6314,7 @@ int WritePTAB_File(
     // FKJN: Offset for 20 bit data needs to be taken into account.
     // Equals 16 for "true 20-bit data" (_NON-TRUNCATED_ ADC20 data), otherwise 1.
     // Can be seen as a conversion factor between "16 bit TM units" and the current (16 or 20 bit) "TM units".  /Erik P G Johansson
-    double ocalf = 1.0;              
+    double ocalf = 1.0;             // ocalf = o(=?) calibration factor
     
     double ccurrent;                // Calibrated current
     double cvoltage;                // Calibrated voltage
@@ -8999,7 +9040,7 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
     double correlated;
     double tmp=0.0;
     
-    //CALIBRATE RAW
+    // CALIBRATE RAW
     
     // Default coefficients in case no time calibration data is found.
     gradient=1.0; 
@@ -9562,23 +9603,29 @@ void TraverseDDSArchive(pds_type *p)
     
     skip_len = strlen(p->apathdds); // Number of chars in DDS archive path
     
-    // Make it work with messy input DDS Archive 050113
+    // Make it work with messy input DDS Archive 050113.
     while(1)
     {
-        af=fts_open(path_arrays,FTS_LOGICAL,Compare); // Get file structure
+        af=fts_open(path_arrays,FTS_LOGICAL,Compare);   // Get handle with which one (using fts_read) can iterate over files in directory tree.
         if(af!=NULL)
         {
             do
             {
-                fe=fts_read(af); // Get next file
-                if(fe!=NULL)     // Exists ?
+                fe=fts_read(af);  // Get next file
+                if(fe!=NULL)      // Exists ?
                 {
-                    // Ignore directories not starting with 20
+                    // fe->fts_accpath;   /* "access path" */
+                    // Ignore directories not starting with "20".
                     if(fe->fts_accpath[skip_len]=='2' && fe->fts_accpath[skip_len+1]=='0')
                     {
                         len=strlen(fe->fts_name);
                         if(len==DDS_TM_FILE_LEN)
-                        {            
+                        {
+                            // NOTE: The DDS directory as it is organized at IRF-U also contains files with paths and names on the form
+                            //    .../ddsData/archive/2016/08/12/rpc160812Dds00_TLM_0000_00h00m19s_23h56m44s.tm,
+                            // and
+                            //    .../ddsData/archive/2016/08/12/sorted/rpc160812Sci00_00h00m07s_23h59m47s.tm
+                            // pds matches filenames and therefore only reads the latter. Location does not seem to matter (except for directory prefix "20").
                             if(!Match("rpc######Sci00_##h##m##s_##h##m##s.tm",fe->fts_name))  // Match filename to pattern, # is a digit 0 to 9
                             {
                                 if((p->ddsr_fd=fopen(fe->fts_accpath,"r"))==NULL) // Open matching file
@@ -9622,7 +9669,7 @@ void TraverseDDSArchive(pds_type *p)
                         }
                     }
                 }
-                // Here we can do a gracefull exit! if Ctrl-C is pressed
+                // Here we can do a graceful exit! if Ctrl-C is pressed
                 if(exit_gracefully)
                 {
                     fts_close(af);
@@ -9638,7 +9685,7 @@ void TraverseDDSArchive(pds_type *p)
         // Wait until circular TM data buffer has been processed
         nanosleep(&coma,NULL);
         
-        // Here we can do a gracefull exit!
+        // Here we can do a graceful exit!
         // Index is written in ExitPDS()
         ExitPDS(0);
     }
