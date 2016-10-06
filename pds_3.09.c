@@ -95,6 +95,9 @@
  *       /Erik P G Johansson 2016-07-21
  *  * Bug fix: Wrote illegal unquoted PDS keyword value containing dash/hyphen in P1-P2_CURRENT/VOLTAGE.
  *       /Erik P G Johansson 2016-07-22
+ *  * Bug fix: Shortened RPCLAP_CALIB_MEAS_EXCEPTIONS.* to RPCLAP_CALIB_MEAS_EXCEPT.* too keep filenames within 27+1+3
+ *       (PDS requirement).
+ *       /Erik P G Johansson 2016-10-06
  *
  *
  *
@@ -119,7 +122,6 @@
  * Code that uses this includes (incomplete list): function E2Epoch (used only once), WritePTAB_File, possibly the use of bias e.g. in LoadBias.
  * Empirically (playing with TimeOfDatePDS, pds' default compiler), time_t appears correspond to seconds after 1970-01-01 00:00.00.
  *
- * TODO: Shorten RPCLAP_CALIB_MEAS_EXCEPTIONS.* to RPCLAP_CALIB_MEAS_EXCEPT.* too keep filenames within 27+1+3.
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
  *====================================================================================================================
@@ -775,7 +777,7 @@ int main(int argc, char *argv[])
     // Choose file for offset calibration exceptions.
     // NOTE: pds.templp   is loaded in LoadConfig1.
     // NOTE: pds.apathpds is loaded in LoadConfig2,.
-    sprintf(pds.cpathoce, "%s/CALIB/%s", pds.apathpds, "RPCLAP_CALIB_MEAS_EXCEPTIONS.LBL");
+    sprintf(pds.cpathoce, "%s/CALIB/%s", pds.apathpds, "RPCLAP_CALIB_MEAS_EXCEPT.LBL");
 
 
 
@@ -6320,8 +6322,8 @@ int WritePTAB_File(
     double cvoltage;                // Calibrated voltage
     double vcalf;                   // vcalf=Voltage Calibration Factor. Basic conversion TM-to-physical units.
     double ccalf;                   // ccalf=Current Calibration Factor. Basic conversion TM-to-physical units.
-    
-    // Like vcalf, ccalf, but always a conversion factor derived from ADC16 since this value needed for the calibration of both ADC16 and ADC20 data(!).
+
+    // Like vcalf, ccalf, but always a conversion factor derived from ADC16 since this value is needed for the calibration of both ADC16 and ADC20 data(!).
     double vcalf_ADC16 = 0.0/0.0;
     double ccalf_ADC16 = 0.0/0.0;
     
@@ -6341,13 +6343,17 @@ int WritePTAB_File(
     // Calibration: Number of TM units to subtract from data after subtracting "macro 104 calibration offsets".
     // --------------------------------------------------------------------------------------------------------
     // Functionality added by Erik P G Johansson 2015-06-02.
-    // The actual purpose of this functionality is to remove constant offset from ADC20 data.
+    // Number of units removed from the output of the ADC20 (i.e. TM units before e.g. ADC20 truncation).
+    //
+    // The actual (present) purpose of this functionality is to remove constant offset from ADC20 data.
+    // NOTE: This subtraction is implemented in the code for all ADC20 cases and for non-sweep ADC16 cases.
+    // For ADC16 data the value is zero. The name calib_nonsweep_TM_delta is for historical reasons and should be changed.
     // NOTE: Applies to both voltage and current (TM) data, both E-field and density mode.
-    // NOTE: This subtraction is implemented in the code for all ADC20 cases, AND for non-sweep ADC16 cases
-    // since sometimes the same code applies to both ADC20 and ADC16 data. For ADC16 data the value is zero.
-    // Therefore, this variable can NOT YET be used to subtract values from all data if needed.
     // NOTE: calib_nonsweep_TM_delta does not take high-gain/low gain into consideration but can easily
-    // be made to do so in the future. Note that it may not be obvious how to determine high/low gain for P1-P2.
+    // be made to do so in the future. Note that it might not be obvious how to determine high/low gain for P1-P2.
+    //
+    // PROPOSAL: Implement for all ADC16 cases.
+    // PROPOSAL: Change name (calib_ADC_TM_out_offset), change sign (add to TM value instead of subtract), use for 8/4 kHz density offsets.
     double calib_nonsweep_TM_delta;
     
     int extra_bias_setting;
@@ -6399,6 +6405,7 @@ int WritePTAB_File(
                     //============
                     //  CASE: P1
                     //============
+                    // calib_nonsweep_TM_delta = -CALIB_ADC_G1_TM_DELTA_P1;   // Temporarily deactivated while awaiting testing.
                     if (is_high_gain_P1) {
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
                     } else {
@@ -6411,6 +6418,7 @@ int WritePTAB_File(
                     //============
                     //  CASE: P2
                     //============
+                    // calib_nonsweep_TM_delta = -CALIB_ADC_G1_TM_DELTA_P2;   // Temporarily deactivated while awaiting testing.
                     if (is_high_gain_P2) {
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
                     } else {
@@ -6423,6 +6431,8 @@ int WritePTAB_File(
                     //============
                     //  CASE: P3
                     //============
+                    // calib_nonsweep_TM_delta = -(CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2);   // Temporarily deactivated while awaiting testing.
+
                     // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
                     if (is_high_gain_P1) {
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
@@ -6754,20 +6764,20 @@ int WritePTAB_File(
                 if(data_type==D16) {
                     if(val>=0) {
                         /* The ADC16s have a flaw around zero volt and therefore the output value has to be modified.
-                         * The value jumps when adc is set to 0. It would be nice to set it to 2.5 or something,
-                         * but edited can't handle that.
+                         * The value jumps when the ADC16 is set to 0. It would be nice to set it to 2.5 or something,
+                         * but EDITED datasets can not handle that (must be integer values).
                          */
                         val = val + 2;
                     }
                 }
                 
-                //=====================================================================
+                //===========================================================================================================
                 // Set "current" and "voltage"
                 // ---------------------------
                 // NOTE: This is the only place where "current" and "voltage" are set.
                 // Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
                 // Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
-                //=====================================================================
+                //===========================================================================================================
                 if(bias_mode==DENSITY)
                 {
                     //====================
@@ -6835,22 +6845,25 @@ int WritePTAB_File(
                             // CASE: SWEEP (ADC16)
                             //=====================
                             // NOTE: No occurrence of SENS_P1P2.
+                            // QUESTION: Why use ocalf when sweeps are always ADC16 data (never truncated ADC20)?
                             if(strcmp(sw_info->resolution,"FINE")) // If it's NOT a fine sweep...
                             {
                                 // FKJN 2014-09-02
                                 // if 20bit data (non-truncated ADC20), ocalf = 16, otherwise 1.
                                 // ccurrent=ccalf*((double)(current-16*mc->CD[valid].C[voltage][1]));
                                 if(curr->sensor==SENS_P1)
-                                {                                    
-                                    ccurrent = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1])); // Offset and factor calibration
-                                    // Write time, current and calibrated voltage 
+                                {
+                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1])); // Offset and factor calibration
+                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
+                                    // Write time, current and calibrated voltage
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][1]); 
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
-                                    ccurrent = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2])); // Offset and factor calibration
-                                    // Write time, current and calibrated voltage 
+                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2])); // Offset and factor calibration
+                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
+                                    // Write time, current and calibrated voltage
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][2]); 
                                 }
                             }
@@ -6865,7 +6878,8 @@ int WritePTAB_File(
                                     // Edit FKJN 02/09 2014. Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
                                     // to a number from 0-255 if we want to use the same offset calibration file
                                     
-                                    ccurrent=ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][1])); 
+                                    ccurrent  = ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][1]));
+                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
                                     // Write time, current and calibrated voltage
                                     // EDIT 2014-08-06 FKJN
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][2]); 
@@ -6877,8 +6891,9 @@ int WritePTAB_File(
                                     // We should pherhaps have a calibration mode for fine sweeps in space
                                     // but it would be rather many 4096.
                                     
-                                    ccurrent=ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][2]));
-                                    // Write time, current and calibrated voltage 
+                                    ccurrent  = ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][2]));
+                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
+                                    // Write time, current and calibrated voltage
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][3]); 
                                 }
                             }
