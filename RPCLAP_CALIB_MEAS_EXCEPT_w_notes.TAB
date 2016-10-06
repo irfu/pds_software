@@ -1,5 +1,5 @@
-# Calibration selection list
-# --------------------------
+# Offset calibration exceptions list
+# ----------------------------------
 # Explicit time intervals for which pds will use specified TM and offset calibrations.
 # A default algorithm will be used for other time intervals.
 # 
