@@ -128,9 +128,12 @@
 0x0904:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V as 0x0624"
 0x0905:"Density P1P2 NM lo, Vb +30/-17V, Cont. 20 Bit trunc down 128, Sweeps P1 & P2 [-17,+31]V"
 0x0906:"Normal TM,Normal LDL or mixed LDL"
+0x0916:"Density P1P2 Normal Mode, Fix Bias +30/+30V, Cont. truncated, Sweeps /\ P1 & P2 +-30V, experimental sweeps"
 0x0907:"Empty"
+0x0917:"Density P1P2 Normal Mode, Fix Bias -30/-30V, Cont. truncated, Sweeps /\ P1 & P2 +-30V, experimental sweeps"
 0x0912:"As MCID0X212, Density, normal mode alternating sweeps and time series."
-0x0914:"Density P1P2 Burst Mode, Fix Bias -30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V"
+0x0922:"Density P1P2 Burst Mode, Fix Bias -30/-30V, Cont. truncated, Sweeps /\ P1 & P2 +-30V, experimental sweeps"
+0x0914:"Density P1P2 Normal Mode, Fix Bias -30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V"
 0x0926:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V up-down"
 
 0x0A00:"Empty"
