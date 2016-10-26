@@ -98,6 +98,8 @@
  *  * Bug fix: Shortened RPCLAP_CALIB_MEAS_EXCEPTIONS.* to RPCLAP_CALIB_MEAS_EXCEPT.* too keep filenames within 27+1+3
  *       (PDS requirement).
  *       /Erik P G Johansson 2016-10-06
+ *  * Bug fix: HK label column "TMP12" BYTES=4 --> BYTES=5.
+ *       /Erik P G Johansson 2016-10-25
  *
  *
  *
@@ -111,10 +113,33 @@
  * in "Planetary Data System Standards Referense, Version 3.6" imply that one probably should, and (2) it is
  * inconsistent with the SCI LBL files and the CALIB/RPCLAP*.LBL files which do have quotes.
  * "BUG": Does not update CATALOG/DATASET.CAT:TARGET_NAME.  /Erik P G Johansson 2016-07-26
+ * BUG?: Probably does not handle leap seconds correctly all the time. Has found a ~one second error at leap second in
+ *    DATA/EDITED/2015/JUL/D01/RPCLAP150701_001_H.LBL : START_TIME-SPACECRAFT_CLOCK_START_COUNT.
+ *    /Erik P G Johansson, 2016-10-17
+ * BUG: Rare instances of bad INSTRUMENT_MODE_ID values.
+ *      RO-C-RPCLAP-2-ESC3-MTP020-V1.0/DATA/EDITED/2015/SEP/D03/RPCLAP150903_01A_H.LBL
+ *          INSTRUMENT_MODE_ID = MCID0Xe2fc
+ *          INSTRUMENT_MODE_DESC = "Open Sweep Test Calibration"   // Corresponds to macro 104.
+ *          NOTE: grep INSTRUMENT_MODE_ID *_01*_H.LBL  ==> Overlaps with 104 data.
+ *      RO-C-RPCLAP-2-ESC3-MTP020-V1.0/DATA/EDITED/2015/SEP/D21/RPCLAP150921_001_H.LBL
+ *          INSTRUMENT_MODE_ID = MCID0Xe2fc
+ *          INSTRUMENT_MODE_DESC = "Density P1P2 Burst Mode, Fix Bias -30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V"
+ *              // Corresponds to macro 914 (before correcting BM/NM typo in pds.modes).
+ *          NOTE: grep INSTRUMENT_MODE_ID D21/RPCLAP*_00*_H.LBL  ==> 914 data afterwards
+ *          NOTE: First HK after several days without data.
+ *      RO-C-RPCLAP-2-ESC3-MTP021-V1.0/DATA/EDITED/2015/OCT/D17/RPCLAP151017_03X_H.LBL
+ *          INSTRUMENT_MODE_ID = MCID0Xe2fc
+ *          INSTRUMENT_MODE_DESC = "EE float Cont. 20 bit, Every AQP 16 bit P1 & P2"   // Fits macro 802
+ *          NOTE: grep INSTRUMENT_MODE RPCLAP151017_0[34]*_H.LBL ==> Just when switching macro 802-->914
+ *      NOTE: Odd INSTRUMENT_MODE_ID value
+ *      NOTE: Same INSTRUMENT_MODE_ID, different but _valid_ INSTRUMENT_MODE_DESC.
+ *      NOTE: 0xe2fc = 58108
+ *      NOTE: Both files HK.
+ *      NOTE: Code (for HK) which translates macro ID to INSTRUMENT_MODE_ID and INSTRUMENT_MODE_DESC is close to each other, DecodeHK,
  *
  *
  *
- * NOTE: Indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
+ * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
  *       This is due to dysfunctional automatic indentation in the Kate editor.
  * NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
  * NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
@@ -124,6 +149,10 @@
  *
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
+ * PROPOSAL: Add optional parameter for output directory.
+ *    PRO: Useful for automatizing the production of delivery datasets. The calling code does not need to know the output directory (hardcoded; read pds.conf).
+ * PROPOSAL: Flag for outputting data set in arbitrary directory.
+ *    PRO: Useful for automatizing generation for delivery. (Data sets need further automatic processsing after generation.)
  *====================================================================================================================
  */
 
@@ -7699,7 +7728,7 @@ int SetupHK(prp_type *p)
         Append(p,"NAME","TMP12");
         Append(p,"DATA_TYPE","ASCII_INTEGER");
         Append(p,"START_BYTE","199");
-        Append(p,"BYTES","4");
+        Append(p,"BYTES","5");
         Append(p,"DESCRIPTION","\"UNCALIBRATED TEMP, VALID IF TEMP IS ENABLED AND E-FIELD MODE\"");
         Append(p,"END_OBJECT","COLUMN");
         Append(p,"OBJECT","COLUMN");
