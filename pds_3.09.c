@@ -100,6 +100,9 @@
  *       /Erik P G Johansson 2016-10-06
  *  * Bug fix: HK label column "TMP12" BYTES=4 --> BYTES=5.
  *       /Erik P G Johansson 2016-10-25
+ *  * Bug fix: Observed illegally changing P2_CURRENT TAB column widths. All EDITED current+voltage column widths (incl. for
+ *    P3) changed from 6 to 7 bytes to accomodate for full range of ADC20 values.
+ *       /Erik P G Johansson 2016-11-23
  *
  *
  *
@@ -661,7 +664,7 @@ int main(int argc, char *argv[])
         
         if(volume_id_nbr==0 || volume_id_nbr>9999)
         {
-            fprintf(stderr,"check -vid volume_id_nbr input\n");
+            fprintf(stderr,"Can not interpret -vid <volume_id_nbr> argument.\n");
             exit(1);
         }
     }
@@ -682,7 +685,7 @@ int main(int argc, char *argv[])
         
         if(pds.DataSetVersion<=0.0 || pds.DataSetVersion>9.9)
         {
-            fprintf(stderr,"check -dsv data_set_version input\n");
+            fprintf(stderr,"Can not interpret -dsv <data_set_version> argument.\n");
             exit(1);
         }
     }
@@ -7003,13 +7006,17 @@ int WritePTAB_File(
                     {                  
                         // For difference data P1-P2 we need to add two bias vectors. They can be different!
                         if(bias_mode==DENSITY) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,current,vbias1,vbias2); // Add two voltage bias vectors
+                            //fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,current,vbias1,vbias2); // Add two voltage bias vectors
+                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",tstr3,td2,current,vbias1,vbias2); // Add two voltage bias vectors
                         } else {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,ibias1,ibias2,voltage); // Add two current bias vectors
+                            //fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d,%6d\r\n",tstr3,td2,ibias1,ibias2,voltage); // Add two current bias vectors
+                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",tstr3,td2,ibias1,ibias2,voltage); // Add two current bias vectors
                         }
                     }
                     else {
-                        fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d\r\n",tstr3,td2,current,voltage); // Write time, current and voltage 
+                        //fprintf(pds.stable_fd,"%s,%016.6f,%6d,%6d\r\n",tstr3,td2,current,voltage); // Write time, current and voltage
+                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",tstr3,td2,current,voltage); // Write time, current and voltage
+                        // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
                     }
                 }   // if(calib) ... else ...
             }   // for(k=0,i=0,j=0;i<samples;i++)    // Iterate over all samples
@@ -7086,10 +7093,9 @@ int WritePLBL_File(
                 {
                     /*
                      * BUG FIX: The tstr1 value end up in an unquoted PDS keyword/attribute value and those must not contain
-                     * dash. This however does/did not happen in practice for diff=1.
+                     * dash.
                      * Source: "Planetary Data Systems Standards Reference", Version 3.6, p12-11, section 12.3.4+12.4.2.
                      */
-                    //strcpy(tstr1, "P1-P2");   // Difference. Illegal dash?
                     strcpy(tstr1, "P1_P2");   // Difference
                     diff=1;   // Must be 16 bit diff data.
                     // The LAP instrument permits using 20 bit data for P3 but that is for some reason not an interesting case
@@ -7101,24 +7107,45 @@ int WritePLBL_File(
                     strcpy(tstr1,"P2");
                 break;
         }
-        
-        row_bytes=59;
-        
+
+
+        //====================================
+        // Derive the row width (incl. CR+LF)
+        //====================================
+        // Sum up row bytes going from left to right, more or less.
+        //
+        // Example row, EDITED, P1/P2 (not P3):
+        // 2016-05-05T04:37:52.610109,421043787.239258,    507,      8<CR><LF>
+        //               26          1       16       1  7    1   7    1   1   = 59+2 = 61 bytes/row
+        //row_bytes=59;
+        row_bytes = 26+1+16 +2;   // = 45 = 59-14; UTC string + comma + decimalized spacecraft clock + CR+LF.
         if(calib) // If we do calibration
         {
-            row_bytes+=16; // Calibrated data has wider columns.
-            
+            //##################
+            // CASE: CALIBRATED
+            //##################
+            //row_bytes+=16; // Calibrated data has wider columns.
+            row_bytes += 2*(1+14); // += 30; Add TWO columns: CALIBRATED current + voltage.
+
             if(diff) // Any 16 bit difference data ?
             {
-                row_bytes+=15; // Extra calibrated bias column current or voltage
+                //row_bytes+=15; // Extra calibrated bias column current or voltage
+                row_bytes += 1+14;   // Add ONE extra column: CALIBRATED current OR voltage.
                 columns++;     // One extra column
             }
         }
         else
         {
+            //##############
+            // CASE: EDITED
+            //##############
+
+            row_bytes += 2*(1+7);   // += 16; Add TWO columns: EDITED current + voltage.
+
             if(diff)
             {
-                row_bytes+=7; // Extra bias column current or voltage
+                //row_bytes+=7; // Extra bias column current or voltage
+                row_bytes += 1+7;   // Add ONE extra column: EDITED current OR voltage.
                 columns++;    // One extra column
             }
         }
@@ -7168,7 +7195,7 @@ int WritePLBL_File(
                 strcpy(tstr2,IDList[id_code]);      // Get ID code name as description
                 TrimWN(tstr2);                      // Remove trailing whitespace
                 fprintf(pds.slabel_fd,"DESCRIPTION        = \"%s\"\r\n",tstr2); // Add it
-                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
+                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN, first one
                 fprintf(pds.slabel_fd,"NAME        = UTC_TIME\r\n");
                 fprintf(pds.slabel_fd,"DATA_TYPE   = TIME\r\n");
                 fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte); 
@@ -7176,7 +7203,7 @@ int WritePLBL_File(
                 fprintf(pds.slabel_fd,"DESCRIPTION = \"UTC TIME\"\r\n");
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                 
-                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
+                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
                 fprintf(pds.slabel_fd,"NAME        = OBT_TIME\r\n");
                 fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                 fprintf(pds.slabel_fd,"BYTES       = 16\r\n"); start_byte+=(16+1);
@@ -7186,17 +7213,25 @@ int WritePLBL_File(
                 fprintf(pds.slabel_fd,"DESCRIPTION = \"SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)\"\r\n");
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                 
-                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
+                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
 
-                //===============================================
-                // CREATE 1 OR 2 CURRENT COLUMNS (2 ONLY FOR P3)
-                //===============================================
+                //============================================================
+                // Create 1 or 2 CURRENT columns (2 columns iff. P3, E field)
+                //============================================================
                 if(calib)
                 {
-                    // We have difference data P1-P2
-                    if(diff && bias_mode==E_FIELD) // We need an extra current bias column
+                    //#############
+                    // CASE: CALIB
+                    //#############
+
+                    if(diff && bias_mode==E_FIELD)
                     {
-                        fprintf(pds.slabel_fd,"NAME        = P1_CURRENT\r\n");  
+                        //#####################################
+                        // CASE: We have difference data P1-P2
+                        //#####################################
+
+                        // We need an extra current bias column.
+                        fprintf(pds.slabel_fd,"NAME        = P1_CURRENT\r\n");
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_REAL\r\n");
                         fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                         fprintf(pds.slabel_fd,"BYTES       = 14\r\n");start_byte+=(14+1);
@@ -7205,8 +7240,8 @@ int WritePLBL_File(
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CALIBRATED CURRENT BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
-                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
-                        fprintf(pds.slabel_fd,"NAME        = P2_CURRENT\r\n");  
+                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
+                        fprintf(pds.slabel_fd,"NAME        = P2_CURRENT\r\n");
                     }
                     else
                         fprintf(pds.slabel_fd,"NAME        = %s_CURRENT\r\n",tstr1);  
@@ -7225,16 +7260,21 @@ int WritePLBL_File(
                 }
                 else
                 {
+                    //##############
+                    // CASE: EDITED
+                    //##############
+
                     if(diff && bias_mode==E_FIELD) // We need an extra current bias column
                     {
                         fprintf(pds.slabel_fd,"NAME        = P1_CURRENT\r\n");  
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                         fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
-                        fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                        //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                        fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CURRENT BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
-                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");		  
+                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
                         fprintf(pds.slabel_fd,"NAME        = P2_CURRENT\r\n");  
                     }
                     else
@@ -7242,8 +7282,9 @@ int WritePLBL_File(
                     
                     fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                     fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
-                    fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
-                    
+                    //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                    fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
+
                     if(bias_mode==E_FIELD)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CURRENT BIAS\"\r\n");
                     else
@@ -7251,16 +7292,26 @@ int WritePLBL_File(
                 }
                 
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
-                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");
+                fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
                 
-                //===============================================
-                // CREATE 1 OR 2 VOLTAGE COLUMNS (2 ONLY FOR P3)
-                //===============================================
+
+
+                //=================================================================
+                // Create 1 or 2 VOLTAGE columns (2 columns iff. P3, density mode)
+                //=================================================================
                 if(calib)
                 {
-                    // We have difference data P1-P2
-                    if(diff && bias_mode==DENSITY) // We need an extra voltage bias column
+                    //#############
+                    // CASE: CALIB
+                    //#############
+
+                    if(diff && bias_mode==DENSITY)
                     {
+                        //#####################################
+                        // CASE: We have difference data P1-P2
+                        //#####################################
+
+                        // We need an extra voltage bias column.
                         fprintf(pds.slabel_fd,"NAME        = P1_VOLTAGE\r\n");
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_REAL\r\n");
                         fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
@@ -7270,7 +7321,7 @@ int WritePLBL_File(
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CALIBRATED VOLTAGE BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
-                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");		  
+                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
                         fprintf(pds.slabel_fd,"NAME        = P2_VOLTAGE\r\n"); 
                     }
                     else
@@ -7290,17 +7341,25 @@ int WritePLBL_File(
                 }
                 else
                 {
-                    // We have difference data P1-P2
-                    if(diff && bias_mode==DENSITY) // We need an extra voltage bias column
+                    //##############
+                    // CASE: EDITED
+                    //##############
+                    if(diff && bias_mode==DENSITY)
                     {
+                        //#####################################
+                        // CASE: We have difference data P1-P2
+                        //#####################################
+
+                        // We need an extra voltage bias column
                         fprintf(pds.slabel_fd,"NAME        = P1_VOLTAGE\r\n");
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                         fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
-                        fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                        //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                        fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"VOLTAGE BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
-                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");		  
+                        fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
                         fprintf(pds.slabel_fd,"NAME        = P2_VOLTAGE\r\n"); 
                     }
                     else
@@ -7308,7 +7367,8 @@ int WritePLBL_File(
                     
                     fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                     fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
-                    fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                    //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
+                    fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
                     
                     if(bias_mode==DENSITY)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"VOLTAGE BIAS\"\r\n");
