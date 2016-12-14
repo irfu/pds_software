@@ -95,8 +95,8 @@
  *       /Erik P G Johansson 2016-07-21
  *  * Bug fix: Wrote illegal unquoted PDS keyword value containing dash/hyphen in P1-P2_CURRENT/VOLTAGE.
  *       /Erik P G Johansson 2016-07-22
- *  * Bug fix: Shortened RPCLAP_CALIB_MEAS_EXCEPTIONS.* to RPCLAP_CALIB_MEAS_EXCEPT.* too keep filenames within 27+1+3
- *       (PDS requirement).
+ *  * Bug fix: Shortened RPCLAP_CALIB_MEAS_EXCEPTIONS.* to RPCLAP_CALIB_MEAS_EXCEPT.* too keep lengths of filenames
+ *       within 27+1+3 (PDS requirement).
  *       /Erik P G Johansson 2016-10-06
  *  * Bug fix: HK label column "TMP12" BYTES=4 --> BYTES=5.
  *       /Erik P G Johansson 2016-10-25
@@ -424,7 +424,7 @@ int debug=0;               // Turn on/off debugging
 
 int macro_priority=0;      // Priority of macros (Trust more or less than info in data). 0=Trust data, 1=Trust macro info
 
-int calib=0;               // Indicate if we are doing a calibrated (1) or edited (0) archive.
+int calib=0;               // Indicate if we are creating a calibrated (1) or edited (0) archive.
 
 extern char IDList[][33];  // ID array, string with short name of ID code. Defined in "id.c".
 
@@ -3930,13 +3930,13 @@ void ExitPDS(int status)
             }
             pclose(pipe_fp); // Close pipeline
             
-            //======================================================
-            // Start to compress log files.
-            //
+            //==============================================================================================
+            // Start to compress log files
+            // ---------------------------
             // NOTE: External shell commands cd, tar and gzip must exist!
-            // NOTE: Using data set ID in compressed logs file name makes the application a little bit more
+            // NOTE: Using DATA_SET_ID in compressed logs file name makes the application a little bit more
             // fragile in case of error, since mp.data_set_id must have been successfully initialized.
-            //======================================================
+            //==============================================================================================
             printf("Compressing log files, please wait\n");
             GetUTime(tstr3);                                                    // Get local UTC time.
             ReplCh(tstr3,':','#');                                              // Replace : in time string with #, since 
@@ -5274,7 +5274,10 @@ void RunShellCommand(char *command_str)
  * calibrations to use for specific time intervals when the default algorithm does not apply.
  * Returns data in data structure "m".
  *
- * MC = Measurement/measured calibration(?)
+ * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills
+ *       the data structure used by that algorithm.
+ * NOTE: The function rewrites the offset calibration LBL files (CALIB_MEAS, CALIB_MEAS_EXCEPT) with some updated
+ *       information. This should ideally maybe be done elsewhere.
  *
  * NOTE: The function rewrites the offset calibration LBL files with some updated information.
  * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills the data structure used by that algorithm.
@@ -5291,7 +5294,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, 
     prp_type mc_lbl;            // Linked property/value list for measured data offset and conversion to volts/ampere.
     property_type *property;
 
-    char file_path[PATH_MAX];
+    char file_path[PATH_MAX];           // Temporary variable for a file path.
     char *filename_pattern;
     struct dirent **dir_entry_list;     // (Pointer to array of pointers.)
     struct dirent *dentry;              // Directory entry
@@ -5435,12 +5438,12 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, 
 
 
 
-    //====================================================
+    //===============================================================
     // Read offset calibration exceptions list - LBL file
     //
     // (1) Write back file with updated keywords (DATA_SET_ID etc.).
     // (2) Extract name of TAB file.
-    //====================================================
+    //===============================================================
     char tstr[256+PATH_MAX];
     InitP(&mc_lbl);
     if (ReadLabelFile(&mc_lbl, pathoce)<0)                // Read offset calibration exceptions LBL file
@@ -6204,7 +6207,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
  * ASSUMES: Assumes that the function can still call the log function YPrintf.
  * (This important information for when to call this function during the shutdown process.)
  *
- * NOTE: This should DELETE ALL offset calibration files for EDITED, but it still leaves the other calibration files.
+ * NOTE: This should DELETE ALL offset calibration files for EDITED, but still leave the other calibration files.
  *
  * cpath : Path to calibration directory
  * m : Data structure used for determining files to delete. The criterion is m->calib_info[i].calibration_file_used==false.
@@ -6347,7 +6350,7 @@ int WritePTAB_File(
     
     // FKJN: Offset for 20 bit data needs to be taken into account.
     // Equals 16 for "true 20-bit data" (_NON-TRUNCATED_ ADC20 data), otherwise 1.
-    // Can be seen as a conversion factor between "16 bit TM units" and the current (16 or 20 bit) "TM units".  /Erik P G Johansson
+    // Can be seen as a conversion factor from "16 bit TM units" to the current (16 or 20 bit) "TM units".  /Erik P G Johansson
     double ocalf = 1.0;             // ocalf = o(=?) calibration factor
     
     double ccurrent;                // Calibrated current
@@ -6372,20 +6375,22 @@ int WritePTAB_File(
     D20_MA_on = 0;
     
     
-    // Calibration: Number of TM units to subtract from data after subtracting "macro 104 calibration offsets".
-    // --------------------------------------------------------------------------------------------------------
-    // Functionality added by Erik P G Johansson 2015-06-02.
-    // Number of units removed from the output of the ADC20 (i.e. TM units before e.g. ADC20 truncation).
-    //
-    // The actual (present) purpose of this functionality is to remove constant offset from ADC20 data.
-    // NOTE: This subtraction is implemented in the code for all ADC20 cases and for non-sweep ADC16 cases.
-    // For ADC16 data the value is zero. The name calib_nonsweep_TM_delta is for historical reasons and should be changed.
-    // NOTE: Applies to both voltage and current (TM) data, both E-field and density mode.
-    // NOTE: calib_nonsweep_TM_delta does not take high-gain/low gain into consideration but can easily
-    // be made to do so in the future. Note that it might not be obvious how to determine high/low gain for P1-P2.
-    //
-    // PROPOSAL: Implement for all ADC16 cases.
-    // PROPOSAL: Change name (calib_ADC_TM_out_offset), change sign (add to TM value instead of subtract), use for 8/4 kHz density offsets.
+    /*=================================================================================================================
+     * Calibration: Number of TM units to subtract from data after subtracting "macro 104 calibration offsets".
+     * --------------------------------------------------------------------------------------------------------
+     * Functionality added by Erik P G Johansson 2015-06-02.
+     * Number of units removed from the output of the ADC20 (i.e. TM units before e.g. ADC20 truncation).
+     *
+     * The actual (present) purpose of this functionality is to remove constant offset from ADC20 data.
+     * NOTE: This subtraction is implemented in the code for all ADC20 cases and for non-sweep ADC16 cases.
+     * For ADC16 data the value is zero. The name calib_nonsweep_TM_delta is for historical reasons and should be changed.
+     * NOTE: Applies to both voltage and current (TM) data, both E-field and density mode.
+     * NOTE: calib_nonsweep_TM_delta does not take high-gain/low gain into consideration but can easily
+     * be made to do so in the future. Note that it might not be obvious how to determine high/low gain for P1-P2.
+     *
+     * PROPOSAL: Implement for all ADC16 cases.
+     * PROPOSAL: Change name (calib_ADC_TM_out_offset), change sign (add to TM value instead of subtract), use for 8/4 kHz density offsets.
+    =================================================================================================================*/
     double calib_nonsweep_TM_delta;
     
     int extra_bias_setting;
@@ -6540,6 +6545,7 @@ int WritePTAB_File(
             //====================
             // CASE: E-FIELD MODE
             //====================
+
             if(data_type==D16) {
                 //=================
                 //   CASE: ADC16

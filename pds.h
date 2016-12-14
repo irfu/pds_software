@@ -122,7 +122,7 @@
 
 
 
-/**
+/**========================================================================================================================
  * Constants used for calibration of ADC20 data ("relative" to ADC16).
  * --------------------------------------------------------------------
  * To be multiplied with
@@ -142,30 +142,32 @@
  *
  * NOTE: DELTA values (as defined here) are to be multipled with the ADC16 conversion factors (LAP_CURRENT_CAL_16B_G1), not ADC20 factors.
  *
- * NOTE: DELTA values refer to ADC20 data after truncation. ==> Must be multiplied by 16 for non-truncated ADC20 data(?)
+ * NOTE: DELTA values refer to ADC20 data AFTER truncation. ==> Must be multiplied by 16 for non-truncated ADC20 data(?)
  *
  * PROPOSAL: Rename to be more similar to CALIB_ADC16_DENSITY_8_VS_4_kHz_FILTER_OFFSET_TM_P1 etc.. ~"ADC20_MINUS_ADC16".
  * PROPOSAL: Change "TM" --> ??
  *    PRO: "TM" is a slightly deceiving reference. Really refers to the output of the ADC20 which can be truncated, but compared to ADC16.
  *
  * /Erik P G Johansson 2015-06-11, 2016-09-27
- */
+ ========================================================================================================================*/
 #define CALIB_ADC_G1_TM_DELTA_P1     77.9601    // "G1" = (Gain=1) = High gain. TM = TM units.
 #define CALIB_ADC_G1_TM_DELTA_P2     84.8991
 
 
 
-/**
+/**========================================================================================================================
  * Constants for calibration of 8 kHz ADC16 data (density+E field?) relative to 4 kHz
  * ----------------------------------------------------------------------------------
  * See Chapter 4.4, "LAP Offset Determination and Calibration", v2015-09-01, Anders Eriksson.
  * This may have to be changed to time-varying values some day.
  * The values should be added to all 8 kHz ADC16 data.
+ * NOTE: The sign is not clearly expressed in the report. The report refers to sweep offsets b_pq (not signals) to use for
+ * 4 kHz and 8 kHz data and which are _subtracted_ from signal, i.e. their difference have the opposite sign.
  *
  * AE mail 2016-09-27: EFIELD_P1 - EFIELD_P2 = DENSITY_P1 - DENSITY_P2 = 25.35-1.4 = 23.95.
- */
-//#define CALIB_ADC16_TM_DENSITY_8_MINUS_4_kHz_FILTER_OFFSET_P1 =  -1.4     // TM = TM units.
-//#define CALIB_ADC16_TM_DENSITY_8_MINUS_4_kHz_FILTER_OFFSET_P2 = -25.35
+ ========================================================================================================================*/
+//#define CALIB_ADC16_TM_DENSITY_8_MINUS_4_kHz_FILTER_OFFSET_P1 =   1.4     // TM = TM units.
+//#define CALIB_ADC16_TM_DENSITY_8_MINUS_4_kHz_FILTER_OFFSET_P2 =  25.35
 //#define CALIB_ADC16_TM_EFIELD_8_MINUS_4_kHz_FILTER_OFFSET_P1 = unknown
 //#define CALIB_ADC16_TM_EFIELD_8_MINUS_4_kHz_FILTER_OFFSET_P2 = unknown
 
