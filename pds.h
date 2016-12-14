@@ -348,7 +348,8 @@ typedef struct pds_type_def
   char cpathdfp2[PATH_MAX];    // Path to density frequency response probe 2
   char cpathefp1[PATH_MAX];    // Path to e-field frequency response probe 1
   char cpathefp2[PATH_MAX];    // Path to e-field frequency response probe 2
-  char cpathoce[PATH_MAX];     // Path to offset calibration exceptions (OCE) data (LBL file)
+  char cpathocel[PATH_MAX];    // Path to offset calibration exceptions (OCE) data (LBL file)
+  char cpathocet[PATH_MAX];    // Path to offset calibration exceptions (OCE) data (TAB file)
   char spaths[PATH_MAX];       // Data subdirectory path for PDS science
   char dpathh[PATH_MAX];       // Data path PDS HK
   char spathh[PATH_MAX];       // Data subdirectory path for PDS HK

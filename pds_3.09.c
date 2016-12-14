@@ -103,6 +103,9 @@
  *  * Bug fix: Observed illegally changing P2_CURRENT TAB column widths. All EDITED current+voltage column widths (incl. for
  *    P3) changed from 6 to 7 bytes to accomodate for full range of ADC20 values.
  *       /Erik P G Johansson 2016-11-23
+ *  * ~Bug fix: Removes CALIB_MEAS_EXCEPT files (LBL+TAB) for EDITED datasets. Simultaneously changed to prescribing TAB filename
+ *       instead of reading it from the LBL file (since one now needs the TAB path twice in the code, rather than once).
+ *       /Erik P G Johansson 2016-12-14
  *
  *
  *
@@ -246,7 +249,7 @@ int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depa
 int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData);
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
-int  LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, m_type *m);             // Get measured data calibration files
+int  LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m);             // Get measured data calibration files
 void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries);
 int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp, pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
 
@@ -268,7 +271,7 @@ int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);                   
 //----------------------------------------------------------------------------------------------------------------------------------
 char GetBiasMode(curr_type *curr, int dop);
 int  SelectCalibrationData(time_t, char*, m_type*);
-int  RemoveUnusedOffsetCalibrationFiles(char*, m_type*);
+int  RemoveUnusedOffsetCalibrationFiles(char*, char *pathocel, char *pathocet, m_type*);
 
 // Write data to data product table file.
 int WritePTAB_File(
@@ -486,7 +489,8 @@ pds_type pds =
     "",         // Path to density frequency response probe 2
     "",         // Path to e-field frequency response probe 1
     "",         // Path to e-field frequency response probe 2
-    "",         // Offset calibration exceptions data
+    "",         // Offset calibration exceptions data (LBL)
+    "",         // Offset calibration exceptions data (TAB)
     "",         // Data subdirectory path for PDS science
     "",         // Data path PDS HK
     "",         // Data subdirectory path for PDS HK
@@ -809,7 +813,8 @@ int main(int argc, char *argv[])
     // Choose file for offset calibration exceptions.
     // NOTE: pds.templp   is loaded in LoadConfig1.
     // NOTE: pds.apathpds is loaded in LoadConfig2,.
-    sprintf(pds.cpathoce, "%s/CALIB/%s", pds.apathpds, "RPCLAP_CALIB_MEAS_EXCEPT.LBL");
+    sprintf(pds.cpathocel, "%s/CALIB/%s", pds.apathpds, "RPCLAP_CALIB_MEAS_EXCEPT.LBL");
+    sprintf(pds.cpathocet, "%s/CALIB/%s", pds.apathpds, "RPCLAP_CALIB_MEAS_EXCEPT.TAB");
 
 
 
@@ -978,7 +983,7 @@ int main(int argc, char *argv[])
         ExitPDS(1);
     }
 
-    status = LoadOffsetCalibrationsTMConversion(pds.cpathd, pds.cpathm, pds.cpathoce, &m_conv);        // Get measurement calibration files
+    status = LoadOffsetCalibrationsTMConversion(pds.cpathd, pds.cpathm, pds.cpathocel, pds.cpathocet, &m_conv);        // Get measurement calibration files
     if(status<0)
     {
         YPrintf("Can not load offset calibration TM conversion files or the offset calibration exceptions files. Function error code %i. Exiting.\n", status);
@@ -3794,7 +3799,7 @@ void ExitPDS(int status)
     }
 
 
-    int func_status = RemoveUnusedOffsetCalibrationFiles(pds.cpathd, &m_conv);
+    int func_status = RemoveUnusedOffsetCalibrationFiles(pds.cpathd, pds.cpathocel, pds.cpathocet, &m_conv);
     if (func_status < 0) {
         YPrintf("Error when removing unused calibration files. Function error code %i\n", func_status);
     }
@@ -5279,15 +5284,16 @@ void RunShellCommand(char *command_str)
  * NOTE: The function rewrites the offset calibration LBL files (CALIB_MEAS, CALIB_MEAS_EXCEPT) with some updated
  *       information. This should ideally maybe be done elsewhere.
  *
- * NOTE: The function rewrites the offset calibration LBL files with some updated information.
- * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills the data structure used by that algorithm.
+ * rpath    : Path to directory where the CALIB_MEAS files are (LBL+TAB).
+ * fpath    : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS.LBL filenames must
+ *            match the pattern. The rest of the string/path is unused(!).
+ * pathocel : Path to offset calibration exceptions (OCE) LBL file.
+ * pathocet : Path to offset calibration exceptions (OCE) TAB file.
+ * m        : Structure in which the calibration data is stored.
  *
- * rpath   : Path to directory where the CALIB_MEAS files are (LBL+TAB).
- * fpath   : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS.LBL filenames must match the pattern. The rest of the string/path is unused(!).
- * pathoce : Path to offset calibration exceptions (OCE) LBL file.
- * m       : Structure in which the calibration data is stored.
+ * Variable naming convention: MC = Measurement/measured calibration(?)
  */
-int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, m_type *m)
+int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m)
 {
     // FKJN 2014-09-04
     // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
@@ -5446,18 +5452,18 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, 
     //===============================================================
     char tstr[256+PATH_MAX];
     InitP(&mc_lbl);
-    if (ReadLabelFile(&mc_lbl, pathoce)<0)                // Read offset calibration exceptions LBL file
+    if (ReadLabelFile(&mc_lbl, pathocel)<0)                // Read offset calibration exceptions LBL file
     {
         FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
-        YPrintf("Can not open offset calibration exceptions label file \"%s\".\n", pathoce);
+        YPrintf("Can not open offset calibration exceptions label file \"%s\".\n", pathocel);
         return -15;
     }
-    WriteUpdatedLabelFile(&mc_lbl, pathoce, 1);            // Write back label file with new info
-    FindP(&mc_lbl, &property, "^TABLE", 1, DNTCARE);       // Get TAB file name (not path).
-    sscanf(property->value, "\"%[^\"]\"", tstr);
+    WriteUpdatedLabelFile(&mc_lbl, pathocel, 1);           // Write back label file with new info
+    //FindP(&mc_lbl, &property, "^TABLE", 1, DNTCARE);       // Get TAB file name (not path).
+    //sscanf(property->value, "\"%[^\"]\"", tstr);           // Copy value and remove quotes.
 
     // NOTE: dirname() (1) can apparently modify its argument, and (2) returns a pointer to something that should NOT later be freed (some internal variable?).
-    sprintf(file_path, "%s/%s", dirname(pathoce), tstr);    // Construct full path, using the same parent directory as for the LBL file.
+    //sprintf(file_path, "%s/%s", dirname(pathocel), tstr);    // Construct full path, using the same parent directory as for the LBL file.
     FreePrp(&mc_lbl);
 
 
@@ -5466,14 +5472,14 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathoce, 
     // Read offset calibration exceptions list - TAB file
     //====================================================
     FILE *fd;
-    if((fd=fopen(file_path, "r"))==NULL) {
-        sprintf(tstr, "Can not open offset calibration exceptions table file \"%s\"\n", file_path);
+    if((fd=fopen(pathocet, "r"))==NULL) {
+        sprintf(tstr, "Can not open offset calibration exceptions table file \"%s\"\n", pathocet);
         YPrintf(tstr);
         perror(tstr);
         return -10;
     }
 
-    YPrintf("Reading offset calibration exceptions table file: %s\n", file_path);
+    YPrintf("Reading offset calibration exceptions table file: %s\n", pathocet);
     char line[1024];   // Line buffer
     while (fgets(line, 1024, fd) != NULL)
     {
@@ -6212,7 +6218,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
  * cpath : Path to calibration directory
  * m : Data structure used for determining files to delete. The criterion is m->calib_info[i].calibration_file_used==false.
  */
-int RemoveUnusedOffsetCalibrationFiles(char *cpathd, m_type *m)
+int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *pathocet, m_type *m)
 {
     int exit_code = 0;
     int i;
@@ -6254,6 +6260,17 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, m_type *m)
             }
 
             FreePrp(&lbl_info); // Free linked property/value list
+        }
+
+    }
+
+    if (!calib) {
+        // NOTE: Prints entire paths.
+        YPrintf("Deleting unused OCE calibration files: %s, %s\n", pathocel, pathocet);
+        if ((remove(pathocel)!=0) || (remove(pathocet)!=0)) {
+            YPrintf("Error when deleting file\n");
+            exit_code = -2;
+            // NOTE: Does not return from function yet.
         }
     }
 
