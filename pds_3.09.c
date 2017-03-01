@@ -7,12 +7,15 @@
  *
  * VERSION: 3.09
  *
- * AUTHOR: Reine Gill
+ * AUTHOR: Original author is Reine Gill; many modifications by Erik P G Johansson
  * Lines 4603-4604 modified from 2.98 by aie@irfu.se,
  * Lines 6661 & 6806-6815 edited by fj@irfu.se
  * DATE: 140710
  * ...
+ *
+ *
  * CHANGES FROM VERSION 3.07 TO 3.08
+ * =================================
  *  * Fixed bug that assigns command-line argument specified configuration file paths to the wrong string variables.
  *       /Erik P G Johansson 2015-02-xx
  *  * Changed the name of three PDS keywords to being probe-specific (in addition to four previously renamed PDS keywords).
@@ -33,7 +36,9 @@
  *  * Fixed bug that made INDEX.LBL not adjust to the DATA_SET_ID column changing width.
  *       /Erik P G Johansson 2015-05-12
  *
+ *
  * CHANGES FROM VERSION 3.08 TO 3.09
+ * =================================
  *  * Fixed bug that made ADC20 always choose high-gain.
  *       /Erik P G Johansson 2015-06-03
  *  * Added code for calibrating ADC20 data relative to ADC16
@@ -106,6 +111,9 @@
  *  * ~Bug fix: Removes CALIB_MEAS_EXCEPT files (LBL+TAB) for EDITED datasets. Simultaneously changed to prescribing TAB filename
  *       instead of reading it from the LBL file (since one now needs the TAB path twice in the code, rather than once).
  *       /Erik P G Johansson 2016-12-14
+ * * Bug fix: ADC16-to-ADC20 offset calibration bug. E-field at times when there were both P1 and P2 data (which was not P3 data) used
+ *      the wrong offset (the P3 offset) which was far too small.
+ *      /Erik P G Johansson 2017-03-01
  *
  *
  *
@@ -6288,14 +6296,20 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
  *
  * We use the mode information from command logs here since it also contain off information.
  *
- * NOTE: Conversion from TM units to physical units plus calibration is made here.
+ * NOTE: Conversion from TM units to physical units plus calibration is done here.
  *
  * Uncertain what "dop" means, and compared to curr->sensor. Compare "dop" in WritePLBL_File.
  *    NOTE: Check how dop is set in calls to WritePTAB_File and WritePLBL_File. It is always a literal.
  *    NOTE: Check how dop is used in WritePLBL_File (very little).
  *    NOTE: "dop" seems different from curr_type_def#sensor. sensor==0 has different meaning at the very least.
- *    GUESS: curr-->sensor refers to the probe(s) for which there is data.
- *    GUESS: The combination of curr.sensor and "dop" determines which probe is being written to disk.
+ *    NOTE: In this function, whenever dop is used together with something else in a (boolean) condition (many of those),
+ *          it is one of these three conditions:
+ *      (1)  (curr->sensor==SENS_P1P2 && dop==0)
+ *      (2)  (curr->sensor==SENS_P1 || dop==1)
+ *      (3)  (curr->sensor==SENS_P2 || dop==2)
+ *
+ *    Erik P G Johansson's GUESS: curr-->sensor refers to the probe(s) for which there is data.
+ *    Erik P G Johansson's GUESS: The combination of curr.sensor and "dop" determines which probe is being written to disk.
  *       curr.sensor=SENS_P1
  *          dop=0, 1 : P1
  *       curr.sensor=SENS_P2
@@ -6304,7 +6318,7 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
  *          dop=0 : P3
  *          dop=1 : P1
  *          dop=2 : P2
- *       <=> (This is equivalent with...)
+ *       <=> (This is equivalent to...)
  *       dop=0
  *          curr.sensor=SENS_P1   : P1 
  *          curr.sensor=SENS_P2   : P2
@@ -6363,11 +6377,11 @@ int WritePTAB_File(
     
     char bias_mode = GetBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
     
-    //  double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
+    // double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
     
     // FKJN: Offset for 20 bit data needs to be taken into account.
     // Equals 16 for "true 20-bit data" (_NON-TRUNCATED_ ADC20 data), otherwise 1.
-    // Can be seen as a conversion factor from "16 bit TM units" to the current (16 or 20 bit) "TM units".  /Erik P G Johansson
+    // Can be seen as a conversion factor from "16-bit TM units" to the current ADC20 TM units (truncated or non-truncated).
     double ocalf = 1.0;             // ocalf = o(=?) calibration factor
     
     double ccurrent;                // Calibrated current
@@ -6375,7 +6389,8 @@ int WritePTAB_File(
     double vcalf;                   // vcalf=Voltage Calibration Factor. Basic conversion TM-to-physical units.
     double ccalf;                   // ccalf=Current Calibration Factor. Basic conversion TM-to-physical units.
 
-    // Like vcalf, ccalf, but always a conversion factor derived from ADC16 since this value is needed for the calibration of both ADC16 and ADC20 data(!).
+    // Like vcalf, ccalf, but always a conversion factor derived from ADC16 since this value is needed for the calibration
+    // of both ADC16 and ADC20 data(!).
     double vcalf_ADC16 = 0.0/0.0;
     double ccalf_ADC16 = 0.0/0.0;
     
@@ -6384,11 +6399,11 @@ int WritePTAB_File(
     time_t old_time;
     time_t stime;                   // Time of current data
     
-    double utime;                  // Current time in UTC for test of extra bias settings.
-    int valid=0;                   // Valid index into structure with calibration data.
+    double utime;                   // Current time in UTC for test of extra bias settings.
+    int valid=0;                    // Valid index into structure with calibration data.
     
-    property_type *property1; 	// declare temporary property1
-    int D20_MA_on;		//D20 Moving average bug boolean
+    property_type *property1;       // declare temporary property1
+    int D20_MA_on;                  //D20 Moving average bug boolean
     D20_MA_on = 0;
     
     
@@ -6406,7 +6421,8 @@ int WritePTAB_File(
      * be made to do so in the future. Note that it might not be obvious how to determine high/low gain for P1-P2.
      *
      * PROPOSAL: Implement for all ADC16 cases.
-     * PROPOSAL: Change name (calib_ADC_TM_out_offset), change sign (add to TM value instead of subtract), use for 8/4 kHz density offsets.
+     * PROPOSAL: Change name (calib_ADC_TM_out_offset), change sign (value to be added to TM value instead of subtract),
+     * use for 8/4 kHz density offsets.
     =================================================================================================================*/
     double calib_nonsweep_TM_delta;
     
@@ -6432,8 +6448,8 @@ int WritePTAB_File(
             //CPrintf("        mc->calib_info[valid].calibration_file_used = %i\n", mc->calib_info[valid].calibration_file_used);
         }
 
-        
-        
+
+
         //######################################################################################
         //######################################################################################
         // Find the correct calibration factors depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20
@@ -6576,18 +6592,20 @@ int WritePTAB_File(
                 //   CASE: ADC20
                 //=================
                 vcalf       = mc->CF[valid].v_cal_20b;
-                vcalf_ADC16 = mc->CF[valid].v_cal_16b / 16;   // Should always be ADC16 value.
+                vcalf_ADC16 = mc->CF[valid].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16). Should always be derived from ADC16 factor.
                 if (data_type==D20T || data_type==D201T || data_type==D202T) {
                     vcalf       *= 16;   // Increase cal factor by 16 for truncated ADC20 data.
                     vcalf_ADC16 *= 16;
                 }
                 
-                if      (curr->sensor==SENS_P1P2 || dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }    // Should be "&&" in condition?!
+                //if      (curr->sensor==SENS_P1P2 || dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }    // Should be "&&" in condition?!
+                if      (curr->sensor==SENS_P1P2 && dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }    // Bugfix 2017-03-01 Erik P G Johansson.
                 else if (curr->sensor==SENS_P1   || dop==1) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1;                            }
                 else if (curr->sensor==SENS_P2   || dop==2) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P2;                            }
             }
         }
     }   //  if(calib) ...
+
     
 
     
@@ -7002,9 +7020,10 @@ int WritePTAB_File(
                         
                         // NOTE: calib_nonsweep_TM_delta == 0 for ADC16 data.
                         //cvoltage = vcalf * ((double)voltage - calib_nonsweep_TM_delta);   // Voltage offset and factor calibration
+
                         cvoltage  = vcalf * ((double) voltage);
-                        cvoltage -= vcalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
-                        
+                        cvoltage -= vcalf_ADC16 * ocalf * calib_nonsweep_TM_delta;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
+
                         
                         if(curr->sensor==SENS_P1P2 && dop==0) {
                             // Write time, calibrated currents (two) and voltage (one).

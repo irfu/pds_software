@@ -56,7 +56,7 @@
 #define DENSITY 1
 #define E_FIELD 2
 
-// Prefix "D16" = ADC16 (NOT same as 16-bit data!)
+// Prefix "D16" = ADC16 (NOT the same as 16-bit data!)
 // Prefix "D20" = ADC20
 // D20x(T), x=probe
 // T = Truncated (i.e. 16 bit data from ADC20)
@@ -126,8 +126,8 @@
  * Constants used for calibration of ADC20 data ("relative" to ADC16).
  * --------------------------------------------------------------------
  * To be multiplied with
- *    ROSETTA:LAP_VOLTAGE_CAL_16B, or
- *    ROSETTA:LAP_CURRENT_CAL_16B_G1 or
+ *    ROSETTA:LAP_VOLTAGE_CAL_16B,       or
+ *    ROSETTA:LAP_CURRENT_CAL_16B_G1,    or
  *    ROSETTA:LAP_CURRENT_CAL_16B_G0_05,
  * depending on mode and high/low-gain to
  * produce "Delta", the constant difference between ADC20 and ADC16 for the same physical signal.
