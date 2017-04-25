@@ -81,7 +81,7 @@
 0x0610:"NN NM, fix bias +30/-30V, cont trunc A20 down 128, sweeps P1P2, HF on P1 down 8"
 0x0602:"Interferometry normal mode, then sweeps as MCID0x212"
 0x0612:"NN NM, fix bias -30/-30V, cont trunc A20 down 128, sweeps P1P2, HF on P2 down 8"
-0x0603:"As MCID0x212 but with difference measurments"
+0x0603:"As MCID0x212 but with difference measurements"
 0x0613:"NN NM, fix bias +30/+30V, cont trunc A20 down 128, sweeps P1P2, HF on P1 down 8"
 0x0604:"Sweep P1 and P2, 16 bit interferometry at end, 20 bit cont. throughout, 20V fix bias version 0"
 0x0614:"Density P1 & P2 Burst Mode, Fix Bias -30V, Cont. 20 Bit full down 2, Sweeps P1 & P2 +-30V version 1"
