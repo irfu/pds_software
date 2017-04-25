@@ -123,53 +123,54 @@
 
 
 /**========================================================================================================================
- * Constants used for calibration of ADC20 data ("relative" to ADC16).
- * --------------------------------------------------------------------
- * To be multiplied with
- *    ROSETTA:LAP_VOLTAGE_CAL_16B,       or
- *    ROSETTA:LAP_CURRENT_CAL_16B_G1,    or
- *    ROSETTA:LAP_CURRENT_CAL_16B_G0_05,
- * depending on mode and high/low-gain to
- * produce "Delta", the constant difference between ADC20 and ADC16 for the same physical signal.
- * Values have been derived through a one-time calibration using LAP data from 2015-05-28.
+ * Offset between the INTERNAL analog signals that go into ADC20 and ADC16
+ * -----------------------------------------------------------------------
+ * Values which should be SUBTRACTED from all ADC20 data.
+ * 
+ * Values are expressed in ADC16 TM units (NOT ADC20) and should thus be multiplied with appropriate ADC16
+ * conversion factor (never ADC20 factor) depending on density/E-field and high/low-gain:
+ * 
+ * NOTE: Since these offsets refer to a systematic difference between two internal analogue signals, they correspond
+ * neither to offsets between analogue input signals, nor between output signals.
+ * 
+ * NOTE: Values have been derived from a one-time in-flight calibration on 2015-05-28.
  * See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
  * Values have been taken from Table 4.
  *
  * NOTE: Current (2015-06-04) calibration values were obtained using HIGH-GAIN ("G1") so values are strictly speaking
- *       ONLY VALID FOR HIGH-GAIN data.
- *       Lacking low-gain values, the high-gain values might or might not be used also for low-gain data in the actual
- *       implementation that uses these values. See the actual use of these constants in pds_x.xx.c:WritePTABFile.
+ * ONLY VALID FOR HIGH-GAIN data. Lacking low-gain values, the high-gain values might or might not be used also for
+ * low-gain data in the actual implementation that uses these values. See the actual use of these constants in
+ * pds_x.xx.c:WritePTABFile.
  *
- * NOTE: DELTA values (as defined here) are to be multipled with the ADC16 conversion factors (LAP_CURRENT_CAL_16B_G1), not ADC20 factors.
- *
- * NOTE: DELTA values refer to ADC20 data AFTER truncation. ==> Must be multiplied by 16 for non-truncated ADC20 data(?)
- *
- * PROPOSAL: Rename to be more similar to CALIB_ADC16_DENSITY_8_VS_4_kHz_FILTER_OFFSET_TM_P1 etc.. ~"ADC20_MINUS_ADC16".
- * PROPOSAL: Change "TM" --> ??
- *    PRO: "TM" is a slightly deceiving reference. Really refers to the output of the ADC20 which can be truncated, but compared to ADC16.
- *
- * /Erik P G Johansson 2015-06-11, 2016-09-27
+ * NOTE: Values do not take the moving-average bug into account. /2017-04-25
+ * 
+ * /Erik P G Johansson 2015-06-11, 2016-09-27, 2017-04-24
  ========================================================================================================================*/
-#define CALIB_ADC_G1_TM_DELTA_P1     77.9601    // "G1" = (Gain=1) = High gain. TM = TM units.
-#define CALIB_ADC_G1_TM_DELTA_P2     84.8991
+#define CALIB_ADC20_P1_OFFSET_ADC16TM     77.9601
+#define CALIB_ADC20_P2_OFFSET_ADC16TM     84.8991
 
 
 
 /**========================================================================================================================
- * Constants for calibration of 8 kHz ADC16 data (density+E field?) relative to 4 kHz
- * ----------------------------------------------------------------------------------
+ * Offsets between 8 kHz and 4 kHz data (i.e. only ADC16 data, density+E field)
+ * ----------------------------------------------------------------------------
  * See Chapter 4.4, "LAP Offset Determination and Calibration", v2015-09-01, Anders Eriksson.
  * This may have to be changed to time-varying values some day.
- * The values should be added to all 8 kHz ADC16 data.
+ * 
+ * The values should be SUBTRACTED from all 8 kHz ADC16 data.
+ * Values are expressed in ADC16 TM units and should thus be multiplied with appropriate ADC16
+ * conversion factor depending on density/E-field and high/low-gain:
+ * 
  * NOTE: The sign is not clearly expressed in the report. The report refers to sweep offsets b_pq (not signals) to use for
  * 4 kHz and 8 kHz data and which are _subtracted_ from signal, i.e. their difference have the opposite sign.
  *
+ * NOTE: Since these offsets refer to a systematic difference between two internal analogue signals, they correspond
+ * neither to offsets between analogue input signals, nor between output signals.
+ * 
  * AE mail 2016-09-27: EFIELD_P1 - EFIELD_P2 = DENSITY_P1 - DENSITY_P2 = 25.35-1.4 = 23.95.
  ========================================================================================================================*/
-//#define CALIB_ADC16_TM_DENSITY_8_MINUS_4_kHz_FILTER_OFFSET_P1 =   1.4     // TM = TM units.
-//#define CALIB_ADC16_TM_DENSITY_8_MINUS_4_kHz_FILTER_OFFSET_P2 =  25.35
-//#define CALIB_ADC16_TM_EFIELD_8_MINUS_4_kHz_FILTER_OFFSET_P1 = unknown
-//#define CALIB_ADC16_TM_EFIELD_8_MINUS_4_kHz_FILTER_OFFSET_P2 = unknown
+//#define CALIB_8KHZ_P1_OFFSET_ADC16TM =  -1.4
+//#define CALIB_8KHZ_P2_OFFSET_ADC16TM = -25.35
 
 
 

@@ -6380,8 +6380,10 @@ int WritePTAB_File(
     // double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
     
     // FKJN: Offset for 20 bit data needs to be taken into account.
-    // Equals 16 for "true 20-bit data" (_NON-TRUNCATED_ ADC20 data), otherwise 1.
-    // Can be seen as a conversion factor from "16-bit TM units" to the current ADC20 TM units (truncated or non-truncated).
+    // =16 : "True 20-bit data" (_NON-TRUNCATED_ ADC20 data)
+    // = 1 : Otherwise, i.e. Truncated ADC20 data and ADC16 data.
+    // Can be interpreted as a conversion factor for values expressed in "16-bit TM units"
+    // to values expressed in the current ADC20 TM units (truncated or non-truncated).
     double ocalf = 1.0;             // ocalf = o(=?) calibration factor
     
     double ccurrent;                // Calibrated current
@@ -6408,23 +6410,18 @@ int WritePTAB_File(
     
     
     /*=================================================================================================================
-     * Calibration: Number of TM units to subtract from data after subtracting "macro 104 calibration offsets".
+     * Calibration: ADC20 offset to remove
      * --------------------------------------------------------------------------------------------------------
      * Functionality added by Erik P G Johansson 2015-06-02.
-     * Number of units removed from the output of the ADC20 (i.e. TM units before e.g. ADC20 truncation).
      *
      * The actual (present) purpose of this functionality is to remove constant offset from ADC20 data.
-     * NOTE: This subtraction is implemented in the code for all ADC20 cases and for non-sweep ADC16 cases.
-     * For ADC16 data the value is zero. The name calib_nonsweep_TM_delta is for historical reasons and should be changed.
-     * NOTE: Applies to both voltage and current (TM) data, both E-field and density mode.
-     * NOTE: calib_nonsweep_TM_delta does not take high-gain/low gain into consideration but can easily
-     * be made to do so in the future. Note that it might not be obvious how to determine high/low gain for P1-P2.
+     * NOTE: This subtraction is implemented in the code for all ADC20 cases and for non-sweep ADC16 cases
+     * (due to how the code handles different cases). Therefore, the value must be zero for ADC16 data.
+     * NOTE: Applies to both measured voltage and current (TM) data, i.e. both E-field and density mode.
      *
-     * PROPOSAL: Implement for all ADC16 cases.
-     * PROPOSAL: Change name (calib_ADC_TM_out_offset), change sign (value to be added to TM value instead of subtract),
-     * use for 8/4 kHz density offsets.
+     * PROPOSAL: Implement for all cases and use as a general offset (value to be subtracted) from every value. Use for 8 kHz density offsets AND ADC20 offsets.
     =================================================================================================================*/
-    double calib_nonsweep_TM_delta;
+    double calib_ADC20_offset_ADC16TM;
     
     int extra_bias_setting;
     
@@ -6455,9 +6452,9 @@ int WritePTAB_File(
         // Find the correct calibration factors depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20
         //######################################################################################
         //######################################################################################
-        calib_nonsweep_TM_delta = 0.0;   // Valid value until set to be non-zero for some cases.
-        const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);  // BUGFIX: Now always reads 8 instead of 6 characters. /Erik P G Johansson 2015-06-03.
-        const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);  // BUGFIX: Now always reads 8 instead of 6 characters. /Erik P G Johansson 2015-06-03.
+        calib_ADC20_offset_ADC16TM = 0.0;   // Valid value until set to be non-zero for some cases.
+        const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);
+        const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
         if(bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
             //====================
@@ -6475,7 +6472,6 @@ int WritePTAB_File(
                     //============
                     //  CASE: P1
                     //============
-                    // calib_nonsweep_TM_delta = -CALIB_ADC_G1_TM_DELTA_P1;   // Temporarily deactivated while awaiting testing.
                     if (is_high_gain_P1) {
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
                     } else {
@@ -6488,7 +6484,6 @@ int WritePTAB_File(
                     //============
                     //  CASE: P2
                     //============
-                    // calib_nonsweep_TM_delta = -CALIB_ADC_G1_TM_DELTA_P2;   // Temporarily deactivated while awaiting testing.
                     if (is_high_gain_P2) {
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
                     } else {
@@ -6501,8 +6496,6 @@ int WritePTAB_File(
                     //============
                     //  CASE: P3
                     //============
-                    // calib_nonsweep_TM_delta = -(CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2);   // Temporarily deactivated while awaiting testing.
-
                     // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
                     if (is_high_gain_P1) {
                         ccalf=mc->CF[valid].c_cal_16b_hg1;
@@ -6527,9 +6520,7 @@ int WritePTAB_File(
                     //============
                     //  CASE: P1
                     //============
-                    // Seĺect ADC20 calibration "delta" constant. This should ideally depend on high/low gain
-                    // but we use the high-gain value for now. /Erik P G Johansson 2015-06-03.
-                    calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1;
+                    calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM;
                     if (is_high_gain_P1) {
                         //printf("GAIN 1 20 Bit P1\n");
                         ccalf       = mc->CF[valid].c_cal_20b_hg1;
@@ -6551,9 +6542,7 @@ int WritePTAB_File(
                     //============
                     //  CASE: P2
                     //============
-                    // Seĺect ADC20 calibration "delta" constant. This should ideally depend on high/low gain but
-                    // we use the high-gain value for now. /Erik P G Johansson 2015-06-03.
-                    calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P2;
+                    calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM;
                     if (is_high_gain_P2) {
                         //printf("GAIN 1 20 Bit P2\n");
                         ccalf       = mc->CF[valid].c_cal_20b_hg1;
@@ -6598,10 +6587,9 @@ int WritePTAB_File(
                     vcalf_ADC16 *= 16;
                 }
                 
-                //if      (curr->sensor==SENS_P1P2 || dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }    // Should be "&&" in condition?!
-                if      (curr->sensor==SENS_P1P2 && dop==0) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1 - CALIB_ADC_G1_TM_DELTA_P2; }    // Bugfix 2017-03-01 Erik P G Johansson.
-                else if (curr->sensor==SENS_P1   || dop==1) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P1;                            }
-                else if (curr->sensor==SENS_P2   || dop==2) { calib_nonsweep_TM_delta = CALIB_ADC_G1_TM_DELTA_P2;                            }
+                if      (curr->sensor==SENS_P1P2 && dop==0) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM - CALIB_ADC20_P2_OFFSET_ADC16TM; }    // Bugfix 2017-03-01 Erik P G Johansson:  || --> &&
+                else if (curr->sensor==SENS_P1   || dop==1) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM;                            }
+                else if (curr->sensor==SENS_P2   || dop==2) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM;                            }
             }
         }
     }   //  if(calib) ...
@@ -6919,15 +6907,17 @@ int WritePTAB_File(
                             //=====================
                             // NOTE: No occurrence of SENS_P1P2.
                             // QUESTION: Why use ocalf when sweeps are always ADC16 data (never truncated ADC20)?
-                            if(strcmp(sw_info->resolution,"FINE")) // If it's NOT a fine sweep...
+                            if(strcmp(sw_info->resolution,"FINE")) 
                             {
+                                //=========================
+                                // CASE: NOT(!) FINE SWEEP
+                                //=========================
                                 // FKJN 2014-09-02
                                 // if 20bit data (non-truncated ADC20), ocalf = 16, otherwise 1.
                                 // ccurrent=ccalf*((double)(current-16*mc->CD[valid].C[voltage][1]));
                                 if(curr->sensor==SENS_P1)
                                 {
                                     ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1])); // Offset and factor calibration
-                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
                                     // Write time, current and calibrated voltage
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][1]); 
                                 }
@@ -6935,13 +6925,15 @@ int WritePTAB_File(
                                 if(curr->sensor==SENS_P2)
                                 {
                                     ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2])); // Offset and factor calibration
-                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
                                     // Write time, current and calibrated voltage
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][2]); 
                                 }
                             }
-                            else   // Fine sweep
+                            else
                             {
+                                //==================
+                                // CASE: FINE SWEEP
+                                //==================
                                 if(curr->sensor==SENS_P1)
                                 {
                                     // Offset and factor calibration, voltage is not entirely correct here!!
@@ -6951,8 +6943,7 @@ int WritePTAB_File(
                                     // Edit FKJN 02/09 2014. Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
                                     // to a number from 0-255 if we want to use the same offset calibration file
                                     
-                                    ccurrent  = ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][1]));
-                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
+                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1]));
                                     // Write time, current and calibrated voltage
                                     // EDIT 2014-08-06 FKJN
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][2]); 
@@ -6964,8 +6955,7 @@ int WritePTAB_File(
                                     // We should pherhaps have a calibration mode for fine sweeps in space
                                     // but it would be rather many 4096.
                                     
-                                    ccurrent  = ccalf*((double)(current - ocalf*mc->CD[valid].C[voltage][2]));
-                                    //ccurrent -= ccalf * ocalf * calib_nonsweep_TM_delta;   // To add soon for ADC16 calibration.
+                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2]));
                                     // Write time, current and calibrated voltage
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][3]); 
                                 }
@@ -6976,41 +6966,42 @@ int WritePTAB_File(
                             //===============================
                             // CASE: NOT SWEEP (ADC16/ADC20)
                             //===============================
-                            
+                            // NOTE: calib_ADC20_offset_ADC16TM == 0 for ADC16 data.
+
                             if(curr->sensor==SENS_P1P2 && dop==0)
                             {
-                                //ccurrent = ccalf*((double)(current - ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2] - calib_nonsweep_TM_delta))); // Offset and factor calibration
                                 ccurrent  = ccalf * ((double) current);
                                 ccurrent -= ccalf_ADC16 * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
-                                ccurrent -= ccalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
-                                
+                                ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20..
+
                                 // Write time, current (one difference) and calibrated voltages (two)
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1],v_conv.C[vbias2][2]); 
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1],v_conv.C[vbias2][2]);
                             }
-                            
+
                             if(curr->sensor==SENS_P1 || dop==1)
                             {
-                                //ccurrent = ccalf * ((double)(current - ocalf*(mc->CD[valid].C[vbias1][1] - calib_nonsweep_TM_delta))); // Offset and factor calibration                          
                                 ccurrent  = ccalf * ((double) current);
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias1][1];
-                                ccurrent -= ccalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
-                                
+                                ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20..
+
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1]);
                             }
-                            
+
                             if(curr->sensor==SENS_P2 || dop==2)
                             {
-                                //ccurrent = ccalf * ((double)(current - ocalf*(mc->CD[valid].C[vbias2][2] - calib_nonsweep_TM_delta))); // Offset and factor calibration                          
                                 ccurrent  = ccalf * ((double) current);
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias2][2];
-                                ccurrent -= ccalf_ADC16 * ocalf * calib_nonsweep_TM_delta;
-                                
+                                ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20..
+
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias2][2]);
                             }
                         }   // if(param_type==SWEEP_PARAMS) ... else ...
-                        
+
                     }   // if(bias_mode==DENSITY)
                     else // Assume bias mode is E_FIELD no other possible
                     {
@@ -7018,11 +7009,10 @@ int WritePTAB_File(
                         // CASE: E-FIELD MODE
                         //====================
                         
-                        // NOTE: calib_nonsweep_TM_delta == 0 for ADC16 data.
-                        //cvoltage = vcalf * ((double)voltage - calib_nonsweep_TM_delta);   // Voltage offset and factor calibration
+                        // NOTE: calib_ADC20_offset_ADC16TM == 0 for ADC16 data.
 
                         cvoltage  = vcalf * ((double) voltage);
-                        cvoltage -= vcalf_ADC16 * ocalf * calib_nonsweep_TM_delta;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
+                        cvoltage -= vcalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
 
                         
                         if(curr->sensor==SENS_P1P2 && dop==0) {
