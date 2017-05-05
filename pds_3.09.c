@@ -283,7 +283,8 @@ int  RemoveUnusedOffsetCalibrationFiles(char*, char *pathocel, char *pathocet, m
 
 // Write data to data product table file.
 int WritePTAB_File(
-    unsigned char *buff, char *fname, int data_type, int samples, int id_code, int length, sweep_type *sw_info, curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
+    unsigned char *buff, char *fname, int data_type, int samples, int id_code, int length, sweep_type *sw_info, adc20_type *a20_info,
+    curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
     m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int ini_samples, int samp_plateau);
 
 // Write to data product label file .lbl
@@ -1796,7 +1797,7 @@ void *DecodeScience(void *arg)
         if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, dop, ini_samples,param_type)>=0)
         {
             WritePTAB_File(
-                buff, tab_fname, data_type, samples, id_code, length, &sw_info, &curr, param_type, dsa16_p1, dsa16_p2, dop,
+                buff, tab_fname, data_type, samples, id_code, length, &sw_info, &a20_info ,&curr, param_type, dsa16_p1, dsa16_p2, dop,
                 &m_conv, bias, nbias, mode, nmode, ini_samples, samp_plateau);
             
             strncpy(tstr10,lbl_fname,29);
@@ -6336,6 +6337,7 @@ int WritePTAB_File(
     int id_code,
     int length,
     sweep_type *sw_info,
+    adc20_type *a20_info,
     curr_type *curr,
     int param_type,
     int dsa16_p1,
@@ -6419,8 +6421,27 @@ int WritePTAB_File(
      * PROPOSAL: Implement for all cases and use as a general offset (value to be subtracted) from every value. Use for 8 kHz density offsets AND ADC20 offsets.
     =================================================================================================================*/
     double calib_ADC20_offset_ADC16TM;
+
+    /*======================================================================================================
+     * There is a bug in the flight software implementation of moving average for ADC20 data.
+     * 
+     * Actual implementation in flight software (with bug):
+     *      Moving average = (SUMMA x_i) / (N+1)
+     * Intended implementation in flight software:
+     *      Moving average = (SUMMA x_i) / N
+     * 
+     * N = ROSETTA:LAP_P1P2_ADC20_MA_LENGTH
+     * NOTE: N = 1 is equivalent to moving average disabled. ==> No bug.
+     * 
+     * All ADC20 data should be multiplied by this variable before adding/subtracting any offsets.
+     * This corrects for the difference (factor) between intended and actual flight software
+     * implementation. The variable should have value one when moving average is disabled.
+     *======================================================================================================*/
+    double ADC20_moving_average_bug_TM_factor;
     
     int extra_bias_setting;
+    
+    
     
     vcalf = 1.0; // Assume 1 to begin with
     ccalf = 1.0; // Assume 1 to begin with
@@ -6428,7 +6449,25 @@ int WritePTAB_File(
     DecodeRawTime(curr->seq_time, UTC_str, 0); // First convert spacecraft time to UTC to get time calibration right
     
     TimeOfDatePDS(UTC_str, &stime);            // Convert back to seconds
-    
+
+    /*======================================================================================================
+     * Determine
+     * (1) whether ADC20 moving average is enabled, and
+     * (2) the ADC20 flight software moving average bug compensation factor.
+     * 
+     * Not certain how the moving average length is set for non-ADC20 data. Therefore require both 
+     * (1) ADC20 data, AND (2) moving average length > 1, before concluding that moving average is enabled.
+     ======================================================================================================*/
+    if ((param_type==ADC20_PARAMS) && (a20_info->moving_average_length != 1)) {
+        D20_MA_on = TRUE;
+        ADC20_moving_average_bug_TM_factor = (a20_info->moving_average_length + 1.0) / a20_info->moving_average_length;   // NOTE: Force floating-point division.
+    } else {
+        D20_MA_on = FALSE;
+        ADC20_moving_average_bug_TM_factor = 1.0;
+    }
+
+
+
     if(calib)
     {
         //=============
@@ -6441,17 +6480,18 @@ int WritePTAB_File(
             CPrintf("    Calibration file %i: %s\n", valid, mc->calib_info[valid].LBL_filename);
             //CPrintf("        mc->calib_info[valid].calibration_file_used = %i\n", mc->calib_info[valid].calibration_file_used);
         }
+        
+       
 
-
-
-        //######################################################################################
-        //######################################################################################
-        // Find the correct calibration factors depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20
-        //######################################################################################
-        //######################################################################################
+        //################################################################################################
+        //################################################################################################
+        // Find the correct calibration factors & offsets depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20
+        //################################################################################################
+        //################################################################################################
         calib_ADC20_offset_ADC16TM = 0.0;   // Valid value until set to be non-zero for some cases.
         const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);
         const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
+        
         if(bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
             //====================
@@ -6662,11 +6702,14 @@ int WritePTAB_File(
             old_time=0;
             
             
-            // check if moving average is one. if so, and 
-            FindP(&dict,&property1,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH",1,DNTCARE); // Do we have ADC20 data that is downsampled? output e.g. 0x0040
-            if(property1!=NULL) {
-                D20_MA_on = atoi(strndup(property1->value+2,4))>0;
-            }
+            
+            // OLD IMPLEMENTATION:
+            // Check if moving average is on (ROSETTA:LAP_P1P2_ADC20_MA_LENGTH greater than one).
+            //FindP(&dict,&property1,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH",1,DNTCARE); // Do we have ADC20 data that is downsampled? output e.g. 0x0040
+            //if(property1!=NULL) {
+            //    D20_MA_on = atoi(strndup(property1->value+2,4))>0;   // BUG: Memory leak. String returned by strndup is not deallocated.
+            //}
+            
             
             
             //=================================================================
@@ -6970,7 +7013,7 @@ int WritePTAB_File(
                             
                             if(curr->sensor==SENS_P1P2 && dop==0)
                             {
-                                ccurrent  = ccalf * ((double) current);
+                                ccurrent  = ccalf * ((double) current) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16 * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
 
@@ -6980,7 +7023,7 @@ int WritePTAB_File(
 
                             if(curr->sensor==SENS_P1 || dop==1)
                             {
-                                ccurrent  = ccalf * ((double) current);
+                                ccurrent  = ccalf * ((double) current) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias1][1];
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
 
@@ -6990,7 +7033,7 @@ int WritePTAB_File(
 
                             if(curr->sensor==SENS_P2 || dop==2)
                             {
-                                ccurrent  = ccalf * ((double) current);
+                                ccurrent  = ccalf * ((double) current) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias2][2];
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
 
@@ -7008,7 +7051,7 @@ int WritePTAB_File(
                         
                         // NOTE: calib_ADC20_offset_ADC16TM == 0 for ADC16 data.
 
-                        cvoltage  = vcalf * ((double) voltage);
+                        cvoltage  = vcalf * ((double) voltage) * ADC20_moving_average_bug_TM_factor;
                         cvoltage -= vcalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
 
                         
