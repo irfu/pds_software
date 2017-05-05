@@ -2451,8 +2451,8 @@ void *DecodeScience(void *arg)
                                             
                                             if((a20_info.adc20_control & 0x3)==0x02) { curr.sensor=SENS_P1; }// Modify current sensor from both P1 and P2 to P1 only
                                             if((a20_info.adc20_control & 0x3)==0x01) { curr.sensor=SENS_P2; }// Modify current sensor from both P1 and P2 to P2 only
-                                            // Above: I don't treat the combination there only the lowest bits are used for the 20 bit ADC:s
-                                            //        cause we never will use it..it's not scientific!
+                                            // Above: I don't treat the combination where only the lowest bits are used for the 20 bit ADC:s
+                                            //        because we will never use it. It's not scientific!
                                         }
                                         //CPrintf("  sw_info.plateau_dur=%i\n", sw_info.plateau_dur);
                                         state=S11_GET_LENGTH; // Error unknown parameter type, continue to get length
@@ -6396,8 +6396,6 @@ int WritePTAB_File(
     double vcalf_ADC16 = 0.0/0.0;
     double ccalf_ADC16 = 0.0/0.0;
     
-    
-    
     time_t old_time;
     time_t stime;                   // Time of current data
     
@@ -6405,9 +6403,8 @@ int WritePTAB_File(
     int valid=0;                    // Valid index into structure with calibration data.
     
     property_type *property1;       // declare temporary property1
-    int D20_MA_on;                  //D20 Moving average bug boolean
-    D20_MA_on = 0;
     
+    int D20_MA_on;                  // D20 Moving average bug boolean
     
     /*=================================================================================================================
      * Calibration: ADC20 offset to remove
@@ -6425,8 +6422,8 @@ int WritePTAB_File(
     
     int extra_bias_setting;
     
-    vcalf=1.0; // Assume 1 to begin with
-    ccalf=1.0; // Assume 1 to begin with
+    vcalf = 1.0; // Assume 1 to begin with
+    ccalf = 1.0; // Assume 1 to begin with
     
     DecodeRawTime(curr->seq_time, UTC_str, 0); // First convert spacecraft time to UTC to get time calibration right
     
@@ -6531,7 +6528,7 @@ int WritePTAB_File(
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
                     } 
                     
-                    if(data_type==D20T || data_type==D201T) { // If using ADC20 data that is truncated by 4 bits, increase (ADC20-)calibration factor by 16.
+                    if(data_type==D20T || data_type==D201T) { // If using ADC20 data that is truncated by 4 bits, compensate calibration factors for this.
                         ccalf       *= 16;
                         ccalf_ADC16 *= 16;
                     }
@@ -6553,7 +6550,7 @@ int WritePTAB_File(
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
                     }
                     
-                    if(data_type==D20T || data_type==D202T) { // If using ADC20 data that is truncated by 4 bits, increase (ADC20-)calibration factor by 16.
+                    if(data_type==D20T || data_type==D202T) { // If using ADC20 data that is truncated by 4 bits, compensate calibration factors for this.
                         ccalf       *= 16;
                         ccalf_ADC16 *= 16;
                     }
@@ -6572,7 +6569,7 @@ int WritePTAB_File(
                 //=================
                 //   CASE: ADC16
                 //=================
-                vcalf=mc->CF[valid].v_cal_16b;
+                vcalf       = mc->CF[valid].v_cal_16b;
                 vcalf_ADC16 = vcalf;
             }
             else
@@ -6617,8 +6614,9 @@ int WritePTAB_File(
     }
     else
     {
-        if(id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) // Log compression used
+        if (id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) { // Log compression used
             LogDeComp(buff,length,ilogtab); // Decompress log data in buff result returned in buff
+        }
             
             
             if(param_type==SWEEP_PARAMS)
@@ -6636,21 +6634,21 @@ int WritePTAB_File(
             //============
             if(curr->sensor==SENS_P1 || dop==1)
             {
-                vbias=curr->vbias1;
-                vbias1=curr->vbias1;
-                ibias=curr->ibias1;
-                ibias1=curr->ibias1;
+                vbias  = curr->vbias1;
+                vbias1 = curr->vbias1;
+                ibias  = curr->ibias1;
+                ibias1 = curr->ibias1;
             }
             
             if(curr->sensor==SENS_P2 || dop==2)
             {
-                vbias=curr->vbias2;
-                vbias2=curr->vbias2;
-                ibias=curr->ibias2;
-                ibias2=curr->ibias2;
+                vbias  = curr->vbias2;
+                vbias2 = curr->vbias2;
+                ibias  = curr->ibias2;
+                ibias2 = curr->ibias2;
             }
             
-            // BUGFIX: if statement needed to interpret data for P3 (E field), macro 700, for 2006-12-19.
+            // BUGFIX: "if" statement needed to interpret data for P3 (E field), macro 700, for 2006-12-19.
             // /Erik P G Johansson 2016-03-09
             if(curr->sensor==SENS_P1P2 && dop==0)
             {
@@ -6732,7 +6730,7 @@ int WritePTAB_File(
                 td1 = i*curr->factor;   // Calculate current time relative to first time (first data point).
                 
                 td2 = curr->seq_time + td1;   // Calculate current time.
-                DecodeRawTime(td2,tstr3,1); // Decode raw time to UTC
+                DecodeRawTime(td2,tstr3,1);   // Decode raw time to UTC.
                 
                 if(nbias>0 && bias!=NULL)
                 {
@@ -6740,15 +6738,15 @@ int WritePTAB_File(
                     utime=(unsigned int)stime+td1; // Current time in raw utc format
                     
                     extra_bias_setting=0;
-                    for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--) // Go through all extra bias settings
+                    for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings.
                     {
-                        if(bias[l][0]<=utime && bias[l][0]>old_time) // Find any bias setting before current time
+                        if(bias[l][0]<=utime && bias[l][0]>old_time)   // Find any bias setting before current time.
                         {
                             extra_bias_setting=1;
                             for(m=0;m<nmode;m++)
                             {
                                 old_time=utime;
-                                if(mode[m][0]>bias[l][0] && mode[m][0]<=utime) // Check a mode change happened after a extra bias setting
+                                if(mode[m][0]>bias[l][0] && mode[m][0]<=utime)   // Check a mode change happened after a extra bias setting.
                                 {
                                     extra_bias_setting=0;
                                     break;
@@ -6789,10 +6787,10 @@ int WritePTAB_File(
                     
                     if(extra_bias_setting)
                     {
-                        vbias1 = ((bias[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1
-                        vbias2 =  (bias[l][1] & 0xff);        // Override macro present voltage bias p2
-                        ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
-                        ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2 
+                        vbias1 = ((bias[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1.
+                        vbias2 =  (bias[l][1] & 0xff);        // Override macro present voltage bias p2.
+                        ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
+                        ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2.
                         /*** The above lines were corrected by aie@irfu.se 120822 as the current bias is permuted 
                          * in the bias command. Original code:
                          * curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
@@ -6819,9 +6817,9 @@ int WritePTAB_File(
                         
                         extra_bias_setting=0;
                     }
-                }
+                }   // if(nbias>0 && bias!=NULL)
                 
-                // EDIT FKJN 27/8 2014 ADC ZERO POINT OFFSET ERROR 
+                // EDIT FKJN 2014-08-27 ADC ZERO POINT OFFSET ERROR 
                 if(data_type==D16) {
                     if(val>=0) {
                         /* The ADC16s have a flaw around zero volt and therefore the output value has to be modified.
@@ -6844,15 +6842,15 @@ int WritePTAB_File(
                     //====================
                     // CASE: DENSITY MODE
                     //====================
-                    current=val; // Set sampled current value in TM units
+                    current = val; // Set sampled current value in TM units
                     if(param_type==SWEEP_PARAMS) // Do we have a sweep?
                     {
                         if(i<ini_samples) { // Sweep started ?
-                            voltage=vbias; // Set initial voltage bias before sweep starts. Not defined for P3.
+                            voltage = vbias; // Set initial voltage bias before sweep starts. Not defined for P3.
                         }
                         else
                         { 
-                            voltage=ti2; // Set value used before changing the bias, prevents start bias value to be modified before used.
+                            voltage = ti2; // Set value used before changing the bias, prevents start bias value to be modified before used.
                             k++;
                             if(!(k%samp_plateau)) {   // Every new step set a new bias voltage
                                 ti2+=curr_step;     // Change bias
@@ -6867,7 +6865,7 @@ int WritePTAB_File(
                     }
                     else
                     {
-                        voltage=vbias; // Set FIX Density bias in TM unit. Not defined for P3.
+                        voltage = vbias; // Set FIX Density bias in TM unit. Not defined for P3.
                     }
                 }
                 else
@@ -6875,8 +6873,8 @@ int WritePTAB_File(
                     //====================
                     // CASE: E-FIELD MODE
                     //====================
-                    current=ibias; // Set FIX Current bias in TM units. Not defined for P3.
-                    voltage=val;   // Set sampled voltage value in TM units
+                    current = ibias;   // Set FIX Current bias in TM units. Not defined for P3.
+                    voltage = val;     // Set sampled voltage value in TM units.
                 }
                 
                 pthread_testcancel();
@@ -6907,7 +6905,7 @@ int WritePTAB_File(
                             //=====================
                             // NOTE: No occurrence of SENS_P1P2.
                             // QUESTION: Why use ocalf when sweeps are always ADC16 data (never truncated ADC20)?
-                            if(strcmp(sw_info->resolution,"FINE")) 
+                            if(strcmp(sw_info->resolution,"FINE"))
                             {
                                 //=========================
                                 // CASE: NOT(!) FINE SWEEP
@@ -6967,13 +6965,14 @@ int WritePTAB_File(
                             // CASE: NOT SWEEP (ADC16/ADC20)
                             //===============================
                             // NOTE: calib_ADC20_offset_ADC16TM == 0 for ADC16 data.
+                            // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20.
 
+                            
                             if(curr->sensor==SENS_P1P2 && dop==0)
                             {
                                 ccurrent  = ccalf * ((double) current);
                                 ccurrent -= ccalf_ADC16 * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
-                                // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20..
 
                                 // Write time, current (one difference) and calibrated voltages (two)
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1],v_conv.C[vbias2][2]);
@@ -6984,7 +6983,6 @@ int WritePTAB_File(
                                 ccurrent  = ccalf * ((double) current);
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias1][1];
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
-                                // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20..
 
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1]);
@@ -6995,7 +6993,6 @@ int WritePTAB_File(
                                 ccurrent  = ccalf * ((double) current);
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias2][2];
                                 ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
-                                // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20..
 
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias2][2]);
@@ -8419,7 +8416,7 @@ int GetAlphaNum(char *n,char *path,char *pattern)
     // ==> Results do (presumably) not need to be deallocated.
     dentry=readdir(de);  // Get first entry
     
-    // Do a linear search through all filenames..
+    // Do a linear search through all filenames.
     // To find the last one with highest alphanumeric value
     
     while(dentry!=NULL && pattern!=NULL) 
