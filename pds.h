@@ -146,8 +146,8 @@
  * 
  * /Erik P G Johansson 2015-06-11, 2016-09-27, 2017-04-24
  ========================================================================================================================*/
-#define CALIB_ADC20_P1_OFFSET_ADC16TM     77.9601
-#define CALIB_ADC20_P2_OFFSET_ADC16TM     84.8991
+#define CALIB_ADC20_P1_OFFSET_ADC16TM   77.9601
+#define CALIB_ADC20_P2_OFFSET_ADC16TM   84.8991
 
 
 
@@ -165,12 +165,12 @@
  * 4 kHz and 8 kHz data and which are _subtracted_ from signal, i.e. their difference have the opposite sign.
  *
  * NOTE: Since these offsets refer to a systematic difference between two internal analogue signals, they correspond
- * neither to offsets between analogue input signals, nor between output signals.
+ * neither to fixed offsets between physical input signals, nor between TM output signals.
  * 
  * AE mail 2016-09-27: EFIELD_P1 - EFIELD_P2 = DENSITY_P1 - DENSITY_P2 = 25.35-1.4 = 23.95.
  ========================================================================================================================*/
-//#define CALIB_8KHZ_P1_OFFSET_ADC16TM =  -1.4
-//#define CALIB_8KHZ_P2_OFFSET_ADC16TM = -25.35
+#define CALIB_8KHZ_P1_OFFSET_ADC16TM    -1.4
+#define CALIB_8KHZ_P2_OFFSET_ADC16TM   -25.35
 
 
 
@@ -294,7 +294,7 @@ typedef struct adc20_type_def
 // Current settings for various parameters
 typedef struct curr_type_def
 {
-  unsigned int sensor;      // LAP sensor currently in use
+  unsigned int sensor;      // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
   unsigned int transmitter; // LAP currently transmitting sensor
   double       seq_time;    // Current time of a mesurment sequence in a macro cycle
   double       stop_time;   // Current stop time of a mesurment sequence in a macro cycle

@@ -3023,8 +3023,7 @@ void *DecodeScience(void *arg)
                                                             // Find LAP_FEEDBACK_P1
                                                             if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_FEEDBACK_P1",DNTCARE)>0) {
                                                                 InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
-                                                            }
-                                                            
+                                                            }                                                            
                                                         }   // if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2)
 
                                                         
@@ -6408,20 +6407,6 @@ int WritePTAB_File(
     
     int D20_MA_on;                  // D20 Moving average bug boolean
     
-    /*=================================================================================================================
-     * Calibration: ADC20 offset to remove
-     * --------------------------------------------------------------------------------------------------------
-     * Functionality added by Erik P G Johansson 2015-06-02.
-     *
-     * The actual (present) purpose of this functionality is to remove constant offset from ADC20 data.
-     * NOTE: This subtraction is implemented in the code for all ADC20 cases and for non-sweep ADC16 cases
-     * (due to how the code handles different cases). Therefore, the value must be zero for ADC16 data.
-     * NOTE: Applies to both measured voltage and current (TM) data, i.e. both E-field and density mode.
-     *
-     * PROPOSAL: Implement for all cases and use as a general offset (value to be subtracted) from every value. Use for 8 kHz density offsets AND ADC20 offsets.
-    =================================================================================================================*/
-    double calib_ADC20_offset_ADC16TM;
-
     /*======================================================================================================
      * There is a bug in the flight software implementation of moving average for ADC20 data.
      * 
@@ -6436,12 +6421,17 @@ int WritePTAB_File(
      * All ADC20 data should be multiplied by this variable before adding/subtracting any offsets.
      * This corrects for the difference (factor) between intended and actual flight software
      * implementation. The variable should have value one when moving average is disabled.
-     *======================================================================================================*/
-    double ADC20_moving_average_bug_TM_factor;
-    
+     *  See its assignment.
+     ======================================================================================================*/
+    double ADC20_moving_average_bug_TM_factor = 0.0/0.0;
+
+    /*==================================================================================================================
+     * Offset that is to be subtracted from every measured value (density and E-field, ADC16 and ADC20, 4 kHz and 8 kHz).
+     * Used for calibration purposes. See its assignment. Expressed in ADC16 TM units.
+     ==================================================================================================================*/
+    double calib_offset_ADC16TM = 0.0/0.0;
+
     int extra_bias_setting;
-    
-    
     
     vcalf = 1.0; // Assume 1 to begin with
     ccalf = 1.0; // Assume 1 to begin with
@@ -6465,7 +6455,17 @@ int WritePTAB_File(
         D20_MA_on = FALSE;
         ADC20_moving_average_bug_TM_factor = 1.0;
     }
-
+    
+    
+    
+    /* Declare constants which replace the conditions in many "if" statements. This clarifies the code.
+     * NOTE: For unknown reasons, the expressions represented by the constants here are not used for sweeps,
+     * Possibly because "param_type==SWEEP_PARAMS" implies that P3 is not used and therefore "dop" does not need to be read.
+     */
+    const int writing_P1_data = (curr->sensor==SENS_P1 || dop==1);
+    const int writing_P2_data = (curr->sensor==SENS_P2 || dop==2);
+    const int writing_P3_data = (curr->sensor==SENS_P1P2 && dop==0);
+    
 
 
     if(calib)
@@ -6478,19 +6478,49 @@ int WritePTAB_File(
         valid = SelectCalibrationData(stime, UTC_str, mc);
         if (debug >= 1) {
             CPrintf("    Calibration file %i: %s\n", valid, mc->calib_info[valid].LBL_filename);
-            //CPrintf("        mc->calib_info[valid].calibration_file_used = %i\n", mc->calib_info[valid].calibration_file_used);
         }
         
        
 
-        //################################################################################################
-        //################################################################################################
-        // Find the correct calibration factors & offsets depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20
-        //################################################################################################
-        //################################################################################################
-        calib_ADC20_offset_ADC16TM = 0.0;   // Valid value until set to be non-zero for some cases.
+        //################################################################################################################
+        //################################################################################################################
+        // Find the correct calibration factors & offsets depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20, 4/8 kHz FILTER
+        //################################################################################################################
+        //################################################################################################################
+        
         const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);
         const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
+        const int uses_8kHz_filter = (curr->afilter == 8);
+        
+        {
+            /*=====================================================
+            * Offset to remove from all ADC16 8 kHz-filtered data.
+            =====================================================*/
+            double calib_ADC16_8kHz_offset_ADC16TM = 0.0/0.0;   // Temporary variable.
+            if ((data_type==D16) && uses_8kHz_filter) {
+                if      (writing_P1_data) { calib_ADC16_8kHz_offset_ADC16TM = CALIB_8KHZ_P1_OFFSET_ADC16TM; }
+                else if (writing_P2_data) { calib_ADC16_8kHz_offset_ADC16TM = CALIB_8KHZ_P2_OFFSET_ADC16TM; }
+                else if (writing_P3_data) { calib_ADC16_8kHz_offset_ADC16TM = CALIB_8KHZ_P1_OFFSET_ADC16TM - CALIB_8KHZ_P2_OFFSET_ADC16TM; }
+            } else {
+                calib_ADC16_8kHz_offset_ADC16TM = 0.0;
+            }
+            
+            /*==============================================================================================
+            * Offset to remove from all ADC20 data. /Functionality added by Erik P G Johansson 2015-06-02.
+            ==============================================================================================*/
+            double calib_ADC20_offset_ADC16TM = 0.0/0.0;   // Temporary variable.
+            if (data_type!=D16) {
+                if      (writing_P1_data) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM; }
+                else if (writing_P2_data) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM; }
+                else if (writing_P3_data) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM - CALIB_ADC20_P2_OFFSET_ADC16TM; }
+            } else {
+                calib_ADC20_offset_ADC16TM = 0.0;
+            }
+            
+            calib_offset_ADC16TM = calib_ADC16_8kHz_offset_ADC16TM + calib_ADC20_offset_ADC16TM;
+        }
+        
+            
         
         if(bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
@@ -6504,41 +6534,32 @@ int WritePTAB_File(
                 //=================
                 
                 // NOTE: We have the same calibration factor for both P1 and P2 for now!
-                if(curr->sensor==SENS_P1 || dop==1)
+                if(writing_P1_data)
                 {
                     //============
                     //  CASE: P1
                     //============
-                    if (is_high_gain_P1) {
-                        ccalf=mc->CF[valid].c_cal_16b_hg1;
-                    } else {
-                        ccalf=mc->CF[valid].c_cal_16b_lg;
-                    }
+                    if (is_high_gain_P1) {   ccalf=mc->CF[valid].c_cal_16b_hg1;   }
+                    else                 {   ccalf=mc->CF[valid].c_cal_16b_lg;    }
                 }
                 
-                if(curr->sensor==SENS_P2 || dop==2)
+                if(writing_P2_data)
                 {
                     //============
                     //  CASE: P2
                     //============
-                    if (is_high_gain_P2) {
-                        ccalf=mc->CF[valid].c_cal_16b_hg1;
-                    } else {
-                        ccalf=mc->CF[valid].c_cal_16b_lg;
-                    }
+                    if (is_high_gain_P2) {   ccalf=mc->CF[valid].c_cal_16b_hg1;   }
+                    else                 {   ccalf=mc->CF[valid].c_cal_16b_lg;    }
                 }
                 
-                if(curr->sensor==SENS_P1P2 && dop==0)
+                if(writing_P3_data)
                 {
                     //============
                     //  CASE: P3
                     //============
                     // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
-                    if (is_high_gain_P1) {
-                        ccalf=mc->CF[valid].c_cal_16b_hg1;
-                    } else {
-                        ccalf=mc->CF[valid].c_cal_16b_lg;
-                    }
+                    if (is_high_gain_P1) {   ccalf=mc->CF[valid].c_cal_16b_hg1;   }
+                    else                 {   ccalf=mc->CF[valid].c_cal_16b_lg;    }
                 }
                 
                 ccalf_ADC16 = ccalf;
@@ -6552,12 +6573,12 @@ int WritePTAB_File(
                 // NOTE: No initialization for the combination ADC20+Density mode+(P1-P2) (SENS_P1P2)
                 // since this case is not physically interesting (although possible to use).
                 
-                if(curr->sensor==SENS_P1 || dop==1)
+                if(writing_P1_data)
                 {
                     //============
                     //  CASE: P1
                     //============
-                    calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM;
+                    //calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM;
                     if (is_high_gain_P1) {
                         //printf("GAIN 1 20 Bit P1\n");
                         ccalf       = mc->CF[valid].c_cal_20b_hg1;
@@ -6574,12 +6595,12 @@ int WritePTAB_File(
                     }
                 }
                 
-                if(curr->sensor==SENS_P2 || dop==2)
+                if(writing_P2_data)
                 {
                     //============
                     //  CASE: P2
                     //============
-                    calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM;
+                    //calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM;
                     if (is_high_gain_P2) {
                         //printf("GAIN 1 20 Bit P2\n");
                         ccalf       = mc->CF[valid].c_cal_20b_hg1;
@@ -6619,14 +6640,14 @@ int WritePTAB_File(
                 //=================
                 vcalf       = mc->CF[valid].v_cal_20b;
                 vcalf_ADC16 = mc->CF[valid].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16). Should always be derived from ADC16 factor.
-                if (data_type==D20T || data_type==D201T || data_type==D202T) {
+                if (data_type==D20T || data_type==D201T || data_type==D202T) {   // If using ADC20 truncated data, compensate calibration factors for this. NOTE: Odd condition with "||"?
                     vcalf       *= 16;   // Increase cal factor by 16 for truncated ADC20 data.
                     vcalf_ADC16 *= 16;
                 }
                 
-                if      (curr->sensor==SENS_P1P2 && dop==0) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM - CALIB_ADC20_P2_OFFSET_ADC16TM; }    // Bugfix 2017-03-01 Erik P G Johansson:  || --> &&
-                else if (curr->sensor==SENS_P1   || dop==1) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM;                            }
-                else if (curr->sensor==SENS_P2   || dop==2) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM;                            }
+                //if      (writing_P3_data) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM - CALIB_ADC20_P2_OFFSET_ADC16TM; }    // Bugfix 2017-03-01 Erik P G Johansson:  "||" --> "&&"
+                //else if (writing_P1_data) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P1_OFFSET_ADC16TM;                                 }
+                //else if (writing_P2_data) { calib_ADC20_offset_ADC16TM = CALIB_ADC20_P2_OFFSET_ADC16TM;                                 }
             }
         }
     }   //  if(calib) ...
@@ -6672,7 +6693,7 @@ int WritePTAB_File(
             //============
             // Set biases
             //============
-            if(curr->sensor==SENS_P1 || dop==1)
+            if(writing_P1_data)
             {
                 vbias  = curr->vbias1;
                 vbias1 = curr->vbias1;
@@ -6680,7 +6701,7 @@ int WritePTAB_File(
                 ibias1 = curr->ibias1;
             }
             
-            if(curr->sensor==SENS_P2 || dop==2)
+            if(writing_P2_data)
             {
                 vbias  = curr->vbias2;
                 vbias2 = curr->vbias2;
@@ -6690,7 +6711,7 @@ int WritePTAB_File(
             
             // BUGFIX: "if" statement needed to interpret data for P3 (E field), macro 700, for 2006-12-19.
             // /Erik P G Johansson 2016-03-09
-            if(curr->sensor==SENS_P1P2 && dop==0)
+            if(writing_P3_data)
             {
                 // P3=P1-P2 difference
                 ibias1 = curr->ibias1;
@@ -6845,14 +6866,14 @@ int WritePTAB_File(
                         CPrintf("      E_Field P1: 0x%02x P2: 0x%02x\n",ibias1,ibias2);
                         
                         // Override biases
-                        if(curr->sensor==SENS_P1 || dop==1)
+                        if(writing_P1_data)
                         {
                             vbias=vbias1;
                             ibias=ibias1;
                         }
                         
                         // Override biases
-                        if(curr->sensor==SENS_P2 || dop==2)
+                        if(writing_P2_data)
                         {
                             vbias=vbias2;
                             ibias=ibias2;
@@ -6958,16 +6979,16 @@ int WritePTAB_File(
                                 // ccurrent=ccalf*((double)(current-16*mc->CD[valid].C[voltage][1]));
                                 if(curr->sensor==SENS_P1)
                                 {
-                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1])); // Offset and factor calibration
-                                    // Write time, current and calibrated voltage
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][1]); 
+                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1]));                   // Offset and factor calibration
+                                    ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][1]);   // Write time, current and calibrated voltage
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
-                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2])); // Offset and factor calibration
-                                    // Write time, current and calibrated voltage
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][2]); 
+                                    ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2]));                   // Offset and factor calibration
+                                    ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[voltage][2]);   // Write time, current and calibrated voltage
                                 }
                             }
                             else
@@ -6985,7 +7006,8 @@ int WritePTAB_File(
                                     // to a number from 0-255 if we want to use the same offset calibration file
                                     
                                     ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][1]));
-                                    // Write time, current and calibrated voltage
+                                    ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
+                                    
                                     // EDIT 2014-08-06 FKJN
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][2]); 
                                 }
@@ -6997,8 +7019,8 @@ int WritePTAB_File(
                                     // but it would be rather many 4096.
                                     
                                     ccurrent  = ccalf * ((double)(current - ocalf * mc->CD[valid].C[voltage][2]));
-                                    // Write time, current and calibrated voltage
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][3]); 
+                                    ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,f_conv.C[(sw_info->p1_fine_offs*256+voltage)][3]);   // Write time, current and calibrated voltage
                                 }
                             }
                         }   // if(param_type==SWEEP_PARAMS)
@@ -7007,36 +7029,38 @@ int WritePTAB_File(
                             //===============================
                             // CASE: NOT SWEEP (ADC16/ADC20)
                             //===============================
-                            // NOTE: calib_ADC20_offset_ADC16TM == 0 for ADC16 data.
                             // NOTE: "ccalf_ADC16 * ocalf" should be a constant wrt. truncated/non-truncated ADC20.
 
                             
-                            if(curr->sensor==SENS_P1P2 && dop==0)
+                            if(writing_P3_data)
                             {
                                 ccurrent  = ccalf * ((double) current) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16 * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
-                                ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                //ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
 
                                 // Write time, current (one difference) and calibrated voltages (two)
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1],v_conv.C[vbias2][2]);
                             }
 
-                            if(curr->sensor==SENS_P1 || dop==1)
+                            if(writing_P1_data)
                             {
                                 ccurrent  = ccalf * ((double) current) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias1][1];
-                                ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                //ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
 
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias1][1]);
                             }
 
-                            if(curr->sensor==SENS_P2 || dop==2)
+                            if(writing_P2_data)
                             {
                                 ccurrent  = ccalf * ((double) current) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16 * ocalf * mc->CD[valid].C[vbias2][2];
-                                ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
-
+                                //ccurrent -= ccalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;
+                                ccurrent -= ccalf_ADC16 * ocalf * calib_offset_ADC16TM;
+                                
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,ccurrent,v_conv.C[vbias2][2]);
                             }
@@ -7048,23 +7072,22 @@ int WritePTAB_File(
                         //====================
                         // CASE: E-FIELD MODE
                         //====================
-                        
-                        // NOTE: calib_ADC20_offset_ADC16TM == 0 for ADC16 data.
 
                         cvoltage  = vcalf * ((double) voltage) * ADC20_moving_average_bug_TM_factor;
-                        cvoltage -= vcalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
+                        //cvoltage -= vcalf_ADC16 * ocalf * calib_ADC20_offset_ADC16TM;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
+                        cvoltage -= vcalf_ADC16 * ocalf * calib_offset_ADC16TM;    // NOTE: vcalf_ADC16 * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
 
                         
-                        if(curr->sensor==SENS_P1P2 && dop==0) {
+                        if(writing_P3_data) {
                             // Write time, calibrated currents (two) and voltage (one).
                             fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],i_conv.C[ibias2][2],cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                         }
                         
-                        if(curr->sensor==SENS_P1 || dop==1) {
+                        if(writing_P1_data) {
                             fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias1][1],cvoltage); // Write time, calibrated current and voltage
                         }
                         
-                        if(curr->sensor==SENS_P2 || dop==2) {
+                        if(writing_P2_data) {
                             fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,i_conv.C[ibias2][2],cvoltage); // Write time, calibrated current and voltage
                         }
                     }   // if(bias_mode==DENSITY) ... else ...
@@ -7074,7 +7097,7 @@ int WritePTAB_File(
                     //###################
                     // CASE: EDITED data
                     //###################
-                    if(curr->sensor==SENS_P1P2 && dop==0)
+                    if(writing_P3_data)
                     {                  
                         // For difference data P1-P2 we need to add two bias vectors. They can be different!
                         if(bias_mode==DENSITY) {
