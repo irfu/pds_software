@@ -6416,13 +6416,15 @@ int WritePTAB_File(
     
     property_type *property1;       // declare temporary property1
     
-    int D20_MA_on;                  // D20 Moving average bug boolean
+    int ADC20_moving_average_enabled;                  // ADC20 Moving average bug boolean
     
     /*======================================================================================================
      * There is a bug in the flight software implementation of moving average for ADC20 data.
      * 
-     * Actual implementation in flight software (with bug):
-     *      Moving average = (SUMMA x_i) / (N+1)
+     * The actual implementation in flight software (with bug), inferred from data (not source code),
+     * and as it is believed as of 2017-05-30:
+     *      Moving average = (x_? + SUMMA x_i) / N
+     *      x_? = Unknown sample
      * Intended implementation in flight software:
      *      Moving average = (SUMMA x_i) / N
      * 
@@ -6431,8 +6433,8 @@ int WritePTAB_File(
      * 
      * All ADC20 data should be multiplied by this variable before adding/subtracting any offsets.
      * This corrects for the difference (factor) between intended and actual flight software
-     * implementation. The variable should have value one when moving average is disabled.
-     * See its assignment.
+     * implementation. The variable should have value equal to one when moving average is disabled.
+     * See the variable's assignment.
      ======================================================================================================*/
     double ADC20_moving_average_bug_TM_factor = 0.0/0.0;
 
@@ -6447,6 +6449,8 @@ int WritePTAB_File(
 
     int extra_bias_setting;
     
+    
+    
     vcalf = 1.0; // Assume 1 to begin with
     ccalf = 1.0; // Assume 1 to begin with
     
@@ -6454,20 +6458,23 @@ int WritePTAB_File(
     
     TimeOfDatePDS(UTC_str, &stime);            // Convert back to seconds
 
-    /*=========================================================================================================
+    /*===================================================================================================================
      * Determine
      * (1) whether ADC20 moving average is enabled, and
      * (2) the ADC20 flight software moving average bug compensation factor.
      * 
      * Not certain how the moving average length is set for non-ADC20 data. Therefore require both 
      * (1) ADC20 data, AND (2) moving average length > 1, before concluding that moving average is enabled.
-     * This makes the value always valid (can be used when moving average can not be applied, i.e. ADC16 data).
-     =========================================================================================================*/
+     * This makes the value always valid (i.e. can be used when moving average can not be applied, i.e. for ADC16 data).
+     * 
+     * NOTE: This should not be confused with another flight software bug that randomizes the last four bits in
+     * non-truncated ADC20 data when the moving average is used.
+     ===================================================================================================================*/
     if ((param_type==ADC20_PARAMS) && (a20_info->moving_average_length != 1)) {
-        D20_MA_on = TRUE;
-        ADC20_moving_average_bug_TM_factor = (a20_info->moving_average_length + 1.0) / a20_info->moving_average_length;   // NOTE: Force floating-point division.
+        ADC20_moving_average_enabled = TRUE;
+        ADC20_moving_average_bug_TM_factor = (a20_info->moving_average_length) / (a20_info->moving_average_length + 1.0);   // NOTE: Force floating-point division.
     } else {
-        D20_MA_on = FALSE;
+        ADC20_moving_average_enabled = FALSE;
         ADC20_moving_average_bug_TM_factor = 1.0;
     }
     
@@ -6749,7 +6756,7 @@ int WritePTAB_File(
             // Check if moving average is on (ROSETTA:LAP_P1P2_ADC20_MA_LENGTH greater than one).
             //FindP(&dict,&property1,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH",1,DNTCARE); // Do we have ADC20 data that is downsampled? output e.g. 0x0040
             //if(property1!=NULL) {
-            //    D20_MA_on = atoi(strndup(property1->value+2,4))>0;   // BUG: Memory leak. String returned by strndup is not deallocated.
+            //    ADC20_moving_average_enabled = atoi(strndup(property1->value+2,4))>0;   // BUG: Memory leak. String returned by strndup is not deallocated.
             //}
             
             
@@ -6773,8 +6780,8 @@ int WritePTAB_File(
                         // MAKING THE LAST 4 BITS GARBAGE. ==> Set those bits to zero.
                         meas_value_EU=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&meas_value_EU); // Convert 20 bit signed to native signed
-                        if(D20_MA_on) {
-                            meas_value_EU = meas_value_EU & 0xFFFF0;  // Clear the last 4 bits since a moving-average bug in the flight software renders them useless.
+                        if(ADC20_moving_average_enabled) {
+                            meas_value_EU = meas_value_EU & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
                         }
                         j+=2;
                         if(dop==1) { // Doing probe 1, skip probe 2
@@ -6790,8 +6797,8 @@ int WritePTAB_File(
                         // MAKING THE LAST 4 BITS GARBAGE. ==> Set those bits to zero.
                         meas_value_EU=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&meas_value_EU); // Convert 20 bit signed to native signed
-                        if(D20_MA_on) {
-                            meas_value_EU = meas_value_EU & 0xFFFF0;  // Clear the last 4 bits since a moving-average bug in the flight software renders them useless.
+                        if(ADC20_moving_average_enabled) {
+                            meas_value_EU = meas_value_EU & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
                         }
                         j+=2;
                         break;
