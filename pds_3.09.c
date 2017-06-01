@@ -114,6 +114,10 @@
  * * Bug fix: ADC16-to-ADC20 offset calibration bug. E-field at times when there were both P1 and P2 data (which was not P3 data) used
  *      the wrong offset (the P3 offset) which was far too small.
  *      /Erik P G Johansson 2017-03-01
+ * * Added offsets for 8 kHz filter (ADC16), compensation for moving average factor bug (in flight s/w).
+ *      /Erik P G Johansson 2017-05-16/30.
+ * * Functionality for arbitrary ADC16 jump magnitude for EDITED (integer) and CALIB (decimal number) separately.
+ *      /Erik P G Johansson 2017-06-01.
  *
  *
  *
@@ -6128,7 +6132,7 @@ char GetBiasMode(curr_type *curr, int dop) {
 
 
 /*
- * Function to select which offset calibration data to used for a given point in time.
+ * Function to select which bias voltage current offset calibration data to used for a given point in time.
  *
  * NOTE: The function will set the flag mc->calibration_used.
  *
@@ -6362,18 +6366,18 @@ int WritePTAB_File(
 
     char UTC_str[256];
 
-    int curr_step=3;                // Current sweep step, default value just there to get rid of compilation warning
+    int curr_step=3;                // Current sweep step, default value just there to get rid of compilation warning.
     
     double td1;                     // Temporary double
     double td2;                     // Temporary double
     
     int i,j,k,l,m;
-    int meas_value_EU;               // Measured value (i.e. not bias value) in TM units.
+    int meas_value_TM;               // Measured value (i.e. not bias value) in TM units. NOTE: Integer.
     int ti2=0;
 
     int macro_id; 
-    int current_EU;                  // Current variable in engineering units (EU), e.g. TM when measured.
-    int voltage_EU;                  // Voltage variable in TM
+    int current_TM;                  // Current variable in TM units (TC or TM).
+    int voltage_TM;                  // Voltage variable in TM units (TC or TM).
     
     int ibias;                       // Temporary current variable
     int vbias;                       // Temporary voltage variable
@@ -6416,17 +6420,17 @@ int WritePTAB_File(
     
     property_type *property1;       // declare temporary property1
     
-    int ADC20_moving_average_enabled;                  // ADC20 Moving average bug boolean
+    int ADC20_moving_average_enabled;                  // ADC20 Moving average boolean. Used for correcting for flight s/w bug.
     
     /*======================================================================================================
      * There is a bug in the flight software implementation of moving average for ADC20 data.
      * 
-     * The actual implementation in flight software (with bug), inferred from data (not source code),
+     * Intended implementation in flight software:
+     *      Moving average = (SUMMA x_i) / N
+     * The actual implementation in flight s/w (with bug), inferred from data (not flight s/w source code),
      * and as it is believed as of 2017-05-30:
      *      Moving average = (x_? + SUMMA x_i) / N
      *      x_? = Unknown sample
-     * Intended implementation in flight software:
-     *      Moving average = (SUMMA x_i) / N
      * 
      * N = ROSETTA:LAP_P1P2_ADC20_MA_LENGTH
      * NOTE: N = 1 is equivalent to moving average disabled. ==> No bug.
@@ -6439,16 +6443,20 @@ int WritePTAB_File(
     double ADC20_moving_average_bug_TM_factor = 0.0/0.0;
 
     /*==================================================================================================================
-     * Offset that is to be subtracted from every measured value (density and E-field, ADC16 and ADC20, 4 kHz and 8 kHz).
+     * Offset that is to be SUBTRACTED from every measured CALIB value (density and E-field, ADC16 and ADC20, 4 kHz and 8 kHz).
      * Used for calibration purposes. See its assignment. Expressed in ADC16 TM units.
+     * NOTE: Same value is used for all samples in the TAB file, i.e. it can not be used for ADC16 nonnegative offset
+     * which depends on the sample value. Hence the prefix "global_".
      * 
      * PROPOSAL: Include voltage bias measured current offset.
-     *  CON: vbias not set at the time the variable is assigned.
+     *      CON: vbias not set at the time the variable is assigned.
      ==================================================================================================================*/
-    double calib_offset_ADC16TM = 0.0/0.0;
+    double global_calib_offset_ADC16TM = 0.0/0.0;
+
+
 
     int extra_bias_setting;
-    
+
     
     
     vcalf = 1.0; // Assume 1 to begin with
@@ -6539,7 +6547,7 @@ int WritePTAB_File(
                 calib_ADC20_offset_ADC16TM = 0.0;
             }
             
-            calib_offset_ADC16TM = calib_ADC16_8kHz_offset_ADC16TM + calib_ADC20_offset_ADC16TM;
+            global_calib_offset_ADC16TM = calib_ADC16_8kHz_offset_ADC16TM + calib_ADC20_offset_ADC16TM;
         }
         
             
@@ -6693,6 +6701,8 @@ int WritePTAB_File(
     // 1234567890123456789012345<26><27>  POSITIONS                  
     // SSSS,ffffff, 32767,-32768<CR><LF>  EXAMPLE ROW
     
+    
+    CPrintf("    Writing PDS Data table file: %s\n",fname);
     if((pds.stable_fd=fopen(tstr2,"w"))==NULL)                       // Open table file
     {
         CPrintf("    Couldn't open PDS TAB data file: %s!!\n",tstr2);
@@ -6764,7 +6774,7 @@ int WritePTAB_File(
             //=================================================================
             // Iterate over all samples (i.e. over every row in the TAB file).
             //=================================================================
-            for(k=0,i=0,j=0;i<samples;i++) 
+            for(k=0,i=0,j=0;i<samples;i++)
             {
                 // Convert data from signed 16 bit and signed 20 bit to native signed integer
                 // In case of alternating 20 bit P1 and P2, this will be split into two label
@@ -6778,10 +6788,10 @@ int WritePTAB_File(
                             j+=2;
                         // EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA,
                         // MAKING THE LAST 4 BITS GARBAGE. ==> Set those bits to zero.
-                        meas_value_EU=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
-                        SignExt20(&meas_value_EU); // Convert 20 bit signed to native signed
+                        meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
+                        SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                         if(ADC20_moving_average_enabled) {
-                            meas_value_EU = meas_value_EU & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
+                            meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
                         }
                         j+=2;
                         if(dop==1) { // Doing probe 1, skip probe 2
@@ -6795,10 +6805,10 @@ int WritePTAB_File(
                         // Put together 8+8+4 bits to signed 20 bit number.
                         // EDIT FKJN 12/2 2015. ERROR IN LAP MOVING AVERAGE FLIGHT SOFTWARE FOR 20 BIT DATA,
                         // MAKING THE LAST 4 BITS GARBAGE. ==> Set those bits to zero.
-                        meas_value_EU=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
-                        SignExt20(&meas_value_EU); // Convert 20 bit signed to native signed
+                        meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
+                        SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                         if(ADC20_moving_average_enabled) {
-                            meas_value_EU = meas_value_EU & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
+                            meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
                         }
                         j+=2;
                         break;
@@ -6808,7 +6818,7 @@ int WritePTAB_File(
                         if(dop==2) {// Doing probe 2, skip probe 1
                             j+=2;
                         }
-                        meas_value_EU=((short int)(buff[j]<<8 | buff[j+1]));
+                        meas_value_TM=((short int)(buff[j]<<8 | buff[j+1]));
                         j+=2;
                         if(dop==1) {// Doing probe 1, skip probe 2
                             j+=2;
@@ -6817,7 +6827,7 @@ int WritePTAB_File(
                         
                     case D16:
                     default:
-                        meas_value_EU=((short int)(buff[j]<<8 | buff[j+1])); // Convert 16 bit into native
+                        meas_value_TM=((short int)(buff[j]<<8 | buff[j+1])); // Convert 16 bit into native
                         j+=2;
                 }
                 
@@ -6913,38 +6923,50 @@ int WritePTAB_File(
                     }
                 }   // if(nbias>0 && bias!=NULL)
                 
-                // EDIT FKJN 2014-08-27 ADC ZERO POINT OFFSET ERROR 
+                /**=======================================================================================================
+                 * Offset to be subtracted from every CALIB sample (not EDITED). Analogous to global_calib_offset_ADC16TM
+                 * except that it (potentially) varies for every sample, hence the prefix "local_".
+                 * Should contain the offsets in global_calib_offset_ADC16TM.
+                 =======================================================================================================*/
+                double local_calib_offset_ADC16TM = global_calib_offset_ADC16TM;
+                
+                // FIRST EDIT FKJN 2014-08-27 ADC ZERO POINT OFFSET ERROR 
+                /** Subtract offset for ADC16 non-negative values.
+                 *  See comments on ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM / ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM. */
                 if(data_type==D16) {
-                    if(meas_value_EU>=0) {
-                        /* The ADC16s have a flaw around zero volt and therefore the output value has to be modified.
-                         * The value jumps when the ADC16 is set to 0. It would be nice to set it to 2.5 or something,
-                         * but EDITED datasets can not handle that (must be integer values).
-                         */
-                        meas_value_EU = meas_value_EU + 2;
+                    if(meas_value_TM>=0) {
+//                         meas_value_TM = meas_value_TM + 2;
+                        if (!calib) {
+                            meas_value_TM = meas_value_TM - ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM;    // NOTE: Subtraction from actual measured value.
+                        } else {
+                            // Subtract ADC16 nonnegative values offset using local_calib_offset_ADC16TM instead of meas_value_TM,
+                            // since the latter is an integer variable that can not handle decimal values.
+                            local_calib_offset_ADC16TM = local_calib_offset_ADC16TM + ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM;    // NOTE: Addition to offset which will later be subtracted from actual measured value.
+                        }
                     }
                 }
                 
-                //===========================================================================================================
-                // Set variables "current_EU" and "voltage_EU" to bias and measured values
-                // -----------------------------------------------------------------
-                // NOTE: This is the only place where "current_EU" and "voltage_EU" are set.
-                // Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
-                // Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
-                //===========================================================================================================
+                /**===========================================================================================================
+                 * Set variables "current_TM" and "voltage_TM" to bias and measured values
+                 * -----------------------------------------------------------------
+                 * NOTE: This is the only place where "current_TM" and "voltage_TM" are set.
+                 * Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
+                 * Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
+                 ===========================================================================================================*/
                 if(bias_mode==DENSITY)
                 {
                     //====================
                     // CASE: DENSITY MODE
                     //====================
-                    current_EU = meas_value_EU; // Set sampled current value in TM units
+                    current_TM = meas_value_TM; // Set sampled current value in TM units
                     if(param_type==SWEEP_PARAMS) // Do we have a sweep?
                     {
                         if(i<ini_samples) { // Sweep started ?
-                            voltage_EU = vbias;   // Set initial voltage bias before sweep starts. Not defined for P3.
+                            voltage_TM = vbias;   // Set initial voltage bias before sweep starts. Not defined for P3.
                         }
                         else
                         { 
-                            voltage_EU = ti2;   // Set value used before changing the bias, prevents start bias value to be modified before used.
+                            voltage_TM = ti2;   // Set value used before changing the bias, prevents start bias value to be modified before used.
                             k++;
                             if(!(k%samp_plateau)) {   // Every new step set a new bias voltage
                                 ti2+=curr_step;     // Change bias
@@ -6959,7 +6981,7 @@ int WritePTAB_File(
                     }
                     else
                     {
-                        voltage_EU = vbias; // Set FIX Density bias in TM unit. Not defined for P3.
+                        voltage_TM = vbias; // Set FIX Density bias in TM unit. Not defined for P3.
                     }
                 }
                 else
@@ -6967,8 +6989,8 @@ int WritePTAB_File(
                     //====================
                     // CASE: E-FIELD MODE
                     //====================
-                    current_EU = ibias;           // Set FIX Current bias in TM units. Not defined for P3.
-                    voltage_EU = meas_value_EU;   // Set sampled voltage value in TM units.
+                    current_TM = ibias;           // Set FIX Current bias in TM units. Not defined for P3.
+                    voltage_TM = meas_value_TM;   // Set sampled voltage value in TM units.
                 }
 
                 pthread_testcancel();
@@ -6991,14 +7013,17 @@ int WritePTAB_File(
                         // CASE: DENSITY MODE
                         //====================
                         
+                        ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
+                        ccurrent -= ccalf_ADC16 * local_calib_offset_ADC16TM;
+                            
                         if(param_type==SWEEP_PARAMS)
                         {
                             //=====================
                             // CASE: SWEEP (ADC16)
                             //=====================
                             
-                            ccurrent  = ccalf * ((double)(current_EU));    // Factor calibration
-                            ccurrent -= ccalf_ADC16 * calib_offset_ADC16TM;
+                            //ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
+                            //ccurrent -= ccalf_ADC16 * local_calib_offset_ADC16TM;
                             
                             // NOTE: No occurrence of SENS_P1P2 in the probe data conditions (unknown why).
                             // QUESTION: Why use ocalf when sweeps are always ADC16 data (i.e. never truncated ADC20)?
@@ -7009,24 +7034,24 @@ int WritePTAB_File(
                                 //=========================
                                 // FKJN 2014-09-02
                                 // if 20bit data (non-truncated ADC20), ocalf = 16, otherwise 1.
-                                // ccurrent=ccalf*((double)(current_EU-16*mc->CD[valid].C[voltage_EU][1]));
+                                // ccurrent=ccalf*((double)(current_TM-16*mc->CD[valid].C[voltage_TM][1]));
                                 
                                 if(curr->sensor==SENS_P1)
                                 {
-                                  //ccurrent  = ccalf * ((double)(current_EU));    // Factor calibration
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_EU][1];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_EU][1];
-                                  //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[voltage_EU][1]);   // Write time, current and calibrated voltage
+                                  //ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
+                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][1];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][1];
+                                  //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[voltage_TM][1]);   // Write time, current and calibrated voltage
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
-                                  //ccurrent  = ccalf * ((double)(current_EU));
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_EU][2];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_EU][2];
-                                  //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[voltage_EU][2]);   // Write time, current and calibrated voltage
+                                  //ccurrent  = ccalf * ((double)(current_TM));
+                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][2];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][2];
+                                  //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[voltage_TM][2]);   // Write time, current and calibrated voltage
                                 }
                             }
                             else
@@ -7044,23 +7069,23 @@ int WritePTAB_File(
                                     // Edit FKJN 02/09 2014. Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
                                     // to a number from 0-255 if we want to use the same offset calibration file
                                     
-                                  //ccurrent  = ccalf * ((double)(current_EU));
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_EU][1];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_EU][1];
-                                  //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
+                                  //ccurrent  = ccalf * ((double)(current_TM));
+                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][1];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][1];
+                                  //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
-                                            ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_EU) ][2]);   // Write time, current and calibrated voltage
+                                            ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2]);   // Write time, current and calibrated voltage
                                     // NOTE: f_conv.C[ ... ][2] : [2] refers to column 3 in file which is correct (i.e. not P2).
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
-                                  //ccurrent  = ccalf * ((double)(current_EU));
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_EU][2];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_EU][2];
-                                  //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
+                                  //ccurrent  = ccalf * ((double)(current_TM));
+                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][2];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][2];
+                                  //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
-                                            ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_EU) ][3]);   // Write time, current and calibrated voltage
+                                            ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][3]);   // Write time, current and calibrated voltage
                                     // NOTE: f_conv.C[ ... ][3] : [3] refers to column 4 in file which is correct (i.e. not "P3").
                                     // BUG? p1_fine_offs --> p2_fine_offs ?? See comments at beginning of file.
                                 }
@@ -7073,29 +7098,29 @@ int WritePTAB_File(
                             //===============================
                             // NOTE: "ccalf_ADC16_old * ocalf" should be a constant wrt. truncated/non-truncated ADC20.
 
-                            ccurrent  = ccalf * ((double) current_EU);
-                            ccurrent -= ccalf_ADC16 * calib_offset_ADC16TM;
+                            //ccurrent  = ccalf * ((double) current_TM);
+                            //ccurrent -= ccalf_ADC16 * local_calib_offset_ADC16TM;
                                 
                             if(writing_P1_data)
                             {
                                 
-                              //ccurrent  = ccalf * ((double) current_EU) * ADC20_moving_average_bug_TM_factor;
+                              //ccurrent  = ccalf * ((double) current_TM) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16             * mc->CD[valid].C[vbias1][1];
                               //ccurrent -= ccalf_ADC16_old * ocalf * mc->CD[valid].C[vbias1][1];
-                              //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
+                              //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
 
-                                //fprintf(pds.stable_fd, "current_EU=%i;   calf=%14.7e;   ADC20_moving_average_bug_TM_factor=%14.7e;   ccalf_ADC16=%14.7e\r\n", current_EU, ccalf, ADC20_moving_average_bug_TM_factor, ccalf_ADC16);    // DEBUG
-                                //fprintf(pds.stable_fd, "mc->CD[valid].C[vbias1][1]=%14.7e;   calib_offset_ADC16TM=%14.7e\r\n",   mc->CD[valid].C[vbias1][1],   ADC20_moving_average_bug_TM_factor);    // DEBUG                                
+                                //fprintf(pds.stable_fd, "current_TM=%i;   calf=%14.7e;   ADC20_moving_average_bug_TM_factor=%14.7e;   ccalf_ADC16=%14.7e\r\n", current_TM, ccalf, ADC20_moving_average_bug_TM_factor, ccalf_ADC16);    // DEBUG
+                                //fprintf(pds.stable_fd, "mc->CD[valid].C[vbias1][1]=%14.7e;   local_calib_offset_ADC16TM=%14.7e\r\n",   mc->CD[valid].C[vbias1][1],   ADC20_moving_average_bug_TM_factor);    // DEBUG                                
                                 // Write time, current and calibrated voltage
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[vbias1][1]);
                             }
 
                             if(writing_P2_data)
                             {
-                              //ccurrent  = ccalf * ((double) current_EU) * ADC20_moving_average_bug_TM_factor;
+                              //ccurrent  = ccalf * ((double) current_TM) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16             * mc->CD[valid].C[vbias2][2];
                               //ccurrent -= ccalf_ADC16_old * ocalf * mc->CD[valid].C[vbias2][2];
-                              //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
+                              //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                 
                                 // Write time, current and calibrated voltage 
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[vbias2][2]);
@@ -7103,10 +7128,10 @@ int WritePTAB_File(
                             
                             if(writing_P3_data)
                             {
-                              //ccurrent  = ccalf * ((double) current_EU) * ADC20_moving_average_bug_TM_factor;
+                              //ccurrent  = ccalf * ((double) current_TM) * ADC20_moving_average_bug_TM_factor;
                                 ccurrent -= ccalf_ADC16             * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
                               //ccurrent -= ccalf_ADC16_old * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
-                              //ccurrent -= ccalf_ADC16_old * ocalf * calib_offset_ADC16TM;
+                              //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
 
                                 // Write time, current (one difference) and calibrated voltages (one per probe, i.e. two)
                                 fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
@@ -7121,12 +7146,11 @@ int WritePTAB_File(
                         // CASE: E-FIELD MODE
                         //====================
 
-                        cvoltage  = vcalf * ((double) voltage_EU);
-                        cvoltage -= vcalf_ADC16             * calib_offset_ADC16TM;
-                      //cvoltage -= vcalf_ADC16_old * ocalf * calib_offset_ADC16TM;    // NOTE: vcalf_ADC16_old * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
+                        cvoltage  = vcalf * ((double) voltage_TM);
+                        cvoltage -= vcalf_ADC16             * local_calib_offset_ADC16TM;
+                      //cvoltage -= vcalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;    // NOTE: vcalf_ADC16_old * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
 
                         if(writing_P3_data) {
-                            // Write time, calibrated currents (two values) and voltage (one value).
                             fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,
                                     i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                         }
@@ -7152,14 +7176,14 @@ int WritePTAB_File(
                         // For difference data P1-P2 we need to add two bias vectors. They can be different!
                         if(bias_mode==DENSITY) {
                             fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",tstr3,td2,
-                                    current_EU,   vbias1,   vbias2); // Add two voltage bias vectors
+                                    current_TM,   vbias1,   vbias2); // Add two voltage bias vectors
                         } else {
                             fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",tstr3,td2,
-                                    ibias1,   ibias2,   voltage_EU); // Add two current bias vectors
+                                    ibias1,   ibias2,   voltage_TM); // Add two current bias vectors
                         }
                     }
                     else {
-                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",tstr3,td2,current_EU,voltage_EU); // Write time, current and voltage
+                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",tstr3,td2,current_TM,voltage_TM); // Write time, current and voltage
                         // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
                     }
                 }   // if(calib) ... else ...

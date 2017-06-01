@@ -15,13 +15,14 @@
 #define LAP_HK_LEN 12
 
 
-/**
+/**=====================================================================================================================================
  * Manually set values for determining when to cancel the science (SC) thread.
  * ---------------------------------------------------------------------------
  * NOTE: The optimal time (timeout & delay) values depend on the speed of execution, i.e. on (1) the speed
  * of the host computer itself (the specification) and (2) whether other processor-intensive applications are running at the same time.
+ * 
  * PROPOSAL: Move these definitions to nice.h.
- */
+ =====================================================================================================================================*/
 // When exiting, try to terminate the science thread only after the science buffer fill value goes below this value
 // (or when exceeding timeout).
 #define SC_THREAD_CANCEL_BUFF_SIZE_THRESHOLD        3000   // [bytes]
@@ -30,6 +31,7 @@
 #define SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT   600   // [seconds], non-negative integer
 // When exiting, after the science buffer is below the threshold (or timeout has passed), wait this long for science buffer to be emptied.
 #define SC_THREAD_CANCEL_POSTTHRESHOLD_DELAY          12   // [seconds]  
+
 
 
 #define M_HEAD     0xAA   // Main header
@@ -122,6 +124,22 @@
 
 
 
+/**=============================================================================================
+ * Values which are SUBTRACTED from all non-negative ADC16 EDITED and CALIB data respectively.
+ * 
+ * CONTEXT: The ADC16s have a flaw that makes them jump betweeen negative and non-negative values.
+ * Therefore one needs to subtract/add a value to non-negative ADC16 values for at least CALIB.
+ * The value should ideally be 2.5.
+ * NOTE: According to LAP team agreement, EDITED should not have this jump (i.e. offset=0), but the functionality is kept to make it possible to
+ * emulate the old behaviour. To emulate pds' old behaviour, set both constants to -2.
+ * NOTE: The value of ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM affects the generation of sweep offsets (bias-dependent; macro 0x104).
+ * write_CALIB_MEAS_files contains a similar constant which must be compatible with the value here.
+ ==============================================================================================*/
+#define ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM    -0      // [ADC16 TM units]. Must be an integer.
+#define ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM     -2.5    // [ADC16 TM units]. Does not have to an integer.
+
+
+
 /**========================================================================================================================
  * Offset between the INTERNAL analog signals that go into ADC20 and ADC16
  * -----------------------------------------------------------------------
@@ -141,13 +159,11 @@
  * ONLY VALID FOR HIGH-GAIN data. Lacking low-gain values, the high-gain values might or might not be used also for
  * low-gain data in the actual implementation that uses these values. See the actual use of these constants in
  * pds_x.xx.c:WritePTABFile.
- *
- * NOTE: Values do not take the moving-average bug into account. /2017-04-25
  * 
  * /Erik P G Johansson 2015-06-11, 2016-09-27, 2017-04-24
  ========================================================================================================================*/
-#define CALIB_ADC20_P1_OFFSET_ADC16TM   77.9601
-#define CALIB_ADC20_P2_OFFSET_ADC16TM   84.8991
+#define CALIB_ADC20_P1_OFFSET_ADC16TM   77.9601   // NOTE: Value does not take the moving-average bug into account. /2017-04-25
+#define CALIB_ADC20_P2_OFFSET_ADC16TM   84.8991   // NOTE: Value does not take the moving-average bug into account. /2017-04-25
 
 
 
