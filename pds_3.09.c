@@ -117,8 +117,9 @@
  * * Added offsets for 8 kHz filter (ADC16), compensation for moving average factor bug (in flight s/w).
  *      /Erik P G Johansson 2017-05-16/30.
  * * Functionality for arbitrary ADC16 jump magnitude for EDITED (integer) and CALIB (decimal number) separately.
- *      /Erik P G Johansson 2017-06-01.
- *
+ *      /Erik P G Johansson 2017-06-01
+ * * Bugfix: Used offset for P1 when writing calibrated P2 fine sweeps. Changed p1_fine_offs --> p2_fine_offs.
+ *      /Erik P G Johansson 2017-06-07
  *
  *
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
@@ -154,9 +155,6 @@
  *      NOTE: 0xe2fc = 58108
  *      NOTE: Both files HK.
  *      NOTE: Code (for HK) which translates macro ID to INSTRUMENT_MODE_ID and INSTRUMENT_MODE_DESC is close to each other, DecodeHK,
- *
- * BUG? Writing calibrated P2 fine sweeps. Uses offsets for P1? (Bugfix: p1_fine_offs --> p2_fine_offs?)
- * /Erik P G Johansson 2017-05-16
  *
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
  *       This is due to dysfunctional automatic indentation in the Kate editor.
@@ -7075,7 +7073,7 @@ int WritePTAB_File(
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
                                             ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2]);   // Write time, current and calibrated voltage
-                                    // NOTE: f_conv.C[ ... ][2] : [2] refers to column 3 in file which is correct (i.e. not P2).
+                                    // NOTE: f_conv.C[ ... ][2] : [2] refers to column 3 in the file from which the data is read (i.e. not P2).
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
@@ -7085,9 +7083,8 @@ int WritePTAB_File(
                                   //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][2];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
-                                            ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][3]);   // Write time, current and calibrated voltage
-                                    // NOTE: f_conv.C[ ... ][3] : [3] refers to column 4 in file which is correct (i.e. not "P3").
-                                    // BUG? p1_fine_offs --> p2_fine_offs ?? See comments at beginning of file.
+                                            ccurrent,   f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3]);   // Write time, current and calibrated voltage
+                                    // NOTE: f_conv.C[ ... ][3] : [3] refers to column 4 in the file from which the data is read (i.e. not P3).
                                 }
                             }
                         }   // if(param_type==SWEEP_PARAMS)
