@@ -120,6 +120,9 @@
  *      /Erik P G Johansson 2017-06-01
  * * Bugfix: Used offset for P1 when writing calibrated P2 fine sweeps. Changed p1_fine_offs --> p2_fine_offs.
  *      /Erik P G Johansson 2017-06-07
+ * * Experimentally using C_ADC20 := C_ADC16 / 16.0, where C=calibration factor, due to the ground calibration being faulty.
+ *      /Erik P G Johansson 2017-06-09
+ * 
  *
  *
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
@@ -6610,11 +6613,13 @@ int WritePTAB_File(
                     //  CASE: P1
                     //============
                     if (is_high_gain_P1) {
-                        ccalf       = mc->CF[valid].c_cal_20b_hg1;
+                        //ccalf       = mc->CF[valid].c_cal_20b_hg1;
+                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1;
                     } else {
-                        ccalf       = mc->CF[valid].c_cal_20b_lg;
+                        //ccalf       = mc->CF[valid].c_cal_20b_lg;
+                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg;
                     }
@@ -6631,11 +6636,13 @@ int WritePTAB_File(
                     //  CASE: P2
                     //============
                     if (is_high_gain_P2) {
-                        ccalf       = mc->CF[valid].c_cal_20b_hg1;
+                        //ccalf       = mc->CF[valid].c_cal_20b_hg1;
+                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1;
                     } else {
-                        ccalf       = mc->CF[valid].c_cal_20b_lg;
+                        //ccalf       = mc->CF[valid].c_cal_20b_lg;
+                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg;
                     }
@@ -6671,7 +6678,8 @@ int WritePTAB_File(
                 //=================
                 //   CASE: ADC20
                 //=================
-                vcalf       = mc->CF[valid].v_cal_20b;
+                //vcalf       = mc->CF[valid].v_cal_20b;
+                vcalf       = mc->CF[valid].v_cal_16b / 16.0;
                 //vcalf_ADC16_old = mc->CF[valid].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16_old). Should always be derived from ADC16 factor.
                 if (data_type==D20T || data_type==D201T || data_type==D202T) {   // If using ADC20 truncated data, compensate calibration factors for this. NOTE: Odd condition with "||"?
                     vcalf *= 16;   // Increase cal factor by 16 for truncated ADC20 data.
