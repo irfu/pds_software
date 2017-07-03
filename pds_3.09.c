@@ -6538,6 +6538,8 @@ int WritePTAB_File(
             
             /*==============================================================================================
             * Offset to remove from all ADC20 data. /Functionality added by Erik P G Johansson 2015-06-02.
+            * 
+            * NOTE: Assumes that C_ADC20 is equal for both probes, but P3 is not used with ADC20 data(?).
             ==============================================================================================*/
             double calib_ADC20_offset_ADC16TM = 0.0/0.0;   // Temporary variable.
             if (data_type!=D16) {
@@ -6614,12 +6616,14 @@ int WritePTAB_File(
                     //============
                     if (is_high_gain_P1) {
                         //ccalf       = mc->CF[valid].c_cal_20b_hg1;
-                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
+                        //ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
+                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P1;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1;
                     } else {
                         //ccalf       = mc->CF[valid].c_cal_20b_lg;
-                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
+                        //ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
+                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0 * ADC_RATIO_P1;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg;
                     }
@@ -6637,12 +6641,14 @@ int WritePTAB_File(
                     //============
                     if (is_high_gain_P2) {
                         //ccalf       = mc->CF[valid].c_cal_20b_hg1;
-                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
+                        //ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
+                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P2;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1;
                     } else {
                         //ccalf       = mc->CF[valid].c_cal_20b_lg;
-                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
+                        //ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
+                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0 * ADC_RATIO_P2;
                         //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
                         ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg;
                     }
@@ -6679,7 +6685,10 @@ int WritePTAB_File(
                 //   CASE: ADC20
                 //=================
                 //vcalf       = mc->CF[valid].v_cal_20b;
-                vcalf       = mc->CF[valid].v_cal_16b / 16.0;
+                //vcalf       = mc->CF[valid].v_cal_16b / 16.0;                
+                if      (writing_P1_data) {   vcalf = mc->CF[valid].v_cal_16b / 16.0 * ADC_RATIO_P1;   }
+                else if (writing_P2_data) {   vcalf = mc->CF[valid].v_cal_16b / 16.0 * ADC_RATIO_P2;   }
+                
                 //vcalf_ADC16_old = mc->CF[valid].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16_old). Should always be derived from ADC16 factor.
                 if (data_type==D20T || data_type==D201T || data_type==D202T) {   // If using ADC20 truncated data, compensate calibration factors for this. NOTE: Odd condition with "||"?
                     vcalf *= 16;   // Increase cal factor by 16 for truncated ADC20 data.

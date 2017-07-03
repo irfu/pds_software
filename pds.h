@@ -141,29 +141,31 @@
 
 
 /**========================================================================================================================
- * Offset between the INTERNAL analog signals that go into ADC20 and ADC16
- * -----------------------------------------------------------------------
- * Values which should be SUBTRACTED from all ADC20 data.
+ * Constants that describe the difference between ADC16 and ADC20 measurements as a linear function
+ * ------------------------------------------------------------------------------------------------
+ * NOTE: The values used here could be used to derive the ADC20 calibration factors from the ADC16 calibration factors.
+ * They would be slightly different for the different probes.
  * 
+ * CALIB_ADC20_Px_OFFSET_ADC16TM = "Adjusted difference" = A_16/A_20*B_20 - B_16 =
+ * = Values which should be SUBTRACTED from all ADC20 data. x = probe 1 or 2.
  * Values are expressed in ADC16 TM units (NOT ADC20) and should thus be multiplied with appropriate ADC16
- * conversion factor (never ADC20 factor) depending on density/E-field and high/low-gain:
+ * conversion factor (never ADC20 factor) depending on density/E-field and high/low-gain.
+ * 
+ * ADC_RATIO_Px = Ratio between the slope constants A_16/A_20 for probe x=1 or 2.
  * 
  * NOTE: Since these offsets refer to a systematic difference between two internal analogue signals, they correspond
  * neither to offsets between analogue input signals, nor between output signals.
  * 
  * NOTE: Values have been derived from a one-time in-flight calibration on 2015-05-28.
- * See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02.
+ * See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02. It defines A_16, A_20, B_16, B_20.
  * Values have been taken from Table 4.
  *
- * NOTE: Current (2015-06-04) calibration values were obtained using HIGH-GAIN ("G1") so values are strictly speaking
- * ONLY VALID FOR HIGH-GAIN data. Lacking low-gain values, the high-gain values might or might not be used also for
- * low-gain data in the actual implementation that uses these values. See the actual use of these constants in
- * pds_x.xx.c:WritePTABFile.
- * 
  * /Erik P G Johansson 2015-06-11, 2016-09-27, 2017-04-24
  ========================================================================================================================*/
-#define CALIB_ADC20_P1_OFFSET_ADC16TM   77.9601   // NOTE: Value does not take the moving-average bug into account. /2017-04-25
-#define CALIB_ADC20_P2_OFFSET_ADC16TM   84.8991   // NOTE: Value does not take the moving-average bug into account. /2017-04-25
+#define CALIB_ADC20_P1_OFFSET_ADC16TM   77.9601
+#define CALIB_ADC20_P2_OFFSET_ADC16TM   84.8991
+#define ADC_RATIO_P1                     1.0030   // Adjusted for the moving-average bug that was not know at the time of the calibration measurement.
+#define ADC_RATIO_P2                     1.0046   // Adjusted for the moving-average bug that was not know at the time of the calibration measurement.
 
 
 
