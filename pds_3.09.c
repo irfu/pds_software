@@ -73,8 +73,8 @@
  *  * Bug fix: StrucDir no longer alters parameter "date".
  *       /Erik P G Johansson 2016-03-21.
  *  * Bug fix: DecodeHK/ExitPDS:
- *    Last HK LBL file in data set: SPACECRAFT_CLOCK_STOP_COUNT was erroneously effectively same as SPACECRAFT_CLOCK_START_COUNT.
- *    Every HK LBL file with only one row (in TAB file): STOP_TIME was only a year.
+ *    Last HK LBL file in data set: SPACECRAFT_CLOCK_STOP_COUNT was erroneously effectively the same as
+ *    SPACECRAFT_CLOCK_START_COUNT. Every HK LBL file with only one row (in TAB file): STOP_TIME was only a year.
  *       /Erik P G Johansson 2016-03-21.
  *  * Bug fix: BUG: HK LBL files always had INSTRUMENT_MODE_DESC = "N/A". Now they use the macro descriptions.
  *       /Erik P G Johansson 2016-03-22
@@ -164,8 +164,18 @@
  * NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
  * NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
  * (Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to)
- * Code that uses this includes (incomplete list): function E2Epoch (used only once), WritePTAB_File, possibly the use of bias e.g. in LoadBias.
- * Empirically (playing with TimeOfDatePDS, pds' default compiler), time_t appears correspond to seconds after 1970-01-01 00:00.00.
+ * Code that uses this includes (incomplete list): function ConvertUtc2Timet_2 (used only once), WritePTAB_File,
+ * possibly the use of bias e.g. in LoadBias. Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler),
+ * time_t appears to correspond to number of seconds after 1970-01-01 00:00.00.
+ * 
+ * 
+ * 
+ * Functions for (1) interpreting time from byte streams, and (2) converting between different time formats, have been renamed to
+ * make their functions easier to understand. The names use the following naming conventions:
+ *  UTC   = A string on the form 2016-09-01T00:16:51.946, although the number of second decimals may vary (or be ignored on reading).
+ *  Timet = Variable which value can be interpreted as time_t, although many times it is actually a double, int, or unsigned int.
+ *  SCCS  = Spacecraft clock count string, e.g. 1/0431309243.15680 (false decimals).
+ *  SCCD  = Spacecraft clock count double, i.e. approximately counting seconds (true decimals).
  *
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
@@ -327,11 +337,11 @@ int  Separate(char *,char *,char *,char,int);                                   
 int  SeparateOnce(char* str, char* strLeft, char* strRight, char separator);    // Separate into left & right tokens.
 int  TrimWN(char *);									// Trims initial and trailing whitespace and all newlines away
 int  TrimQN(char *);									// Trims initial and trailing quotes and all newlines away
-int  ExtendStr(char *dest,char *src,int elen,char ch);					// Make a new string dest using src extended with ch to elen length. 
-void ReplCh(char *str,char ch1,char ch2);						// Replace all characters ch1 in str with characters ch2
+int  ExtendStr(char *dest,char *src,int elen,char ch);	// Make a new string dest using src extended with ch to elen length. 
+void ReplCh(char *str,char ch1,char ch2);				// Replace all characters ch1 in str with characters ch2
 int  IncAlphaNum(char *n);								// Increments the alphanumeric number stored in string n 
 // returns <0 on error
-int  GetAlphaNum(char *n,char *path,char *pattern);					// Get largest alphanumeric value stored in file names matching 
+int  GetAlphaNum(char *n,char *path,char *pattern);		// Get largest alphanumeric value stored in file names matching 
 // a specific pattern
 // In directory path
 int  Alpha2Num(char *n);								// Convert a positive alpha numeric value to a number 
@@ -342,14 +352,14 @@ int  IsNumber(char *str);								// Check if string is a number
 // File handling functions
 //----------------------------------------------------------------------------------------------------------------------------------
 int  FileLen(FILE *);									// Get length of file
-int  FileStatus(FILE *fd,struct stat *sp);						// Return FileStatus
-int  SetupPath(char *error_txt,char *path);						// Resolves,tests and returns a usable path 
+int  FileStatus(FILE *fd,struct stat *sp);				// Return FileStatus
+int  SetupPath(char *error_txt,char *path);				// Resolves,tests and returns a usable path 
 int  TestDir(char *name);								// Test if directory exists
 int  TestFile(char *name);								// Test if file exists and if we can read it.
-int  MakeDir(char *,char *,char *);							// Make a directory for current YYMMDDD, if it's not already there!
-int  StrucDir(char *,char *,char *);							// Test and create directory structure for data
+int  MakeDir(char *,char *,char *);						// Make a directory for current YYMMDDD, if it's not already there!
+int  StrucDir(char *,char *,char *);					// Test and create directory structure for data
 void DumpDir(char *path);								// Dump a directory. Mostly for debugging
-int  GetUnacceptedFName(char *name);							// Get new filename for manual unaccepted file
+int  GetUnacceptedFName(char *name);					// Get new filename for manual unaccepted file
 void FTSDump(FTSENT *fe);								// Dump FTSENT structure for debbuging
 int  Match(char *,char *);								// Match filename to pattern
 
@@ -365,31 +375,31 @@ unsigned int GetBitF(unsigned int word,int nb,int sb);					// Returns nb number 
 
 // Time related functions
 //----------------------------------------------------------------------------------------------------------------------------------
-unsigned int E2Epoch(char *rtime);							// Get seconds from 1970 epoch to epoch "epoch"
-double DecodeSCTime(unsigned char *buff);						// Decoding S/C time, returns raw S/C time in seconds as a double
-double DecodeLAPTime(unsigned char *buff);						// Decoding lap time, returns raw S/C time in seconds as a double
-int DecodeRawTimeEst(double raw,char *stime);						// Decodes raw S/C time (estimates UTC no calibration) and returns 
-// a PDS compliant time string
-int DecodeRawTime(double raw,char *stime,int lfrac);					// Decodes raw S/C time (calibration included) 
+unsigned int ConvertUtc2Timet_2(char *rtime);                       // Get seconds from 1970 epoch to epoch "epoch"
+double DecodeSCTime2Sccd(unsigned char *buff);                      // Decoding S/C time, returns raw S/C time in seconds as a double
+double DecodeLAPTime2Sccd(unsigned char *buff);                     // Decoding lap time, returns raw S/C time in seconds as a double
+//int DecodeRawTimeEst(double raw,char *stime);                       // Decodes raw S/C time (estimates UTC no calibration) and returns 
+// a PDS compliant time string. UNUSED
+int ConvertSccd2Utc(double raw,char *stime,int lfrac);              // Decodes raw S/C time (calibration included) 
 // also returns a PDS compliant time string, lfrac is long or 
 // short fractions of seconds.
-// This function calls Scet2Date_2.
+// This function calls ConvertTimet2Utc.
 
-int Raw2OBT_Str(double raw,int rcount,char *stime);					// Convert raw time to an OBT string (On Board Time)
-int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime);                       // Convert OBT string to raw time.
+int ConvertSccd2Sccs(double raw,int rcount,char *stime);                // Convert raw time to an OBT string (On Board Time)
+int ConvertSccs2Sccd(char *stime, int *resetCounter, double *rawTime);  // Convert OBT string to raw time.
 
 //int Scet2Date(double raw,char *stime,int lfrac);     // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
 
 // Replacement for Scet2Date ESA approach with OASWlib give dubious results. (dj2000 returns 60s instead of 59s etc.)
-int Scet2Date_2(double raw,char *stime,int lfrac);					// Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
+int ConvertTimet2Utc(double raw,char *stime,int lfrac);					// Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
 
-int TimeOfDatePDS(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970) for a PDS date string
+int ConvertUtc2Timet(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970) for a PDS date string
 // NOTE: This is not the inverse of Scet2Date!
 
-int TimeOfDatePDS_midday(char *sdate, time_t *t);
-int GetUTime(char *);									// Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
+int ConvertUtc2Timet_midday(char *sdate, time_t *t);
+int GetCurrentUtc0(char *);									// Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
 
 // LAP Logarithmic decompression functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -400,17 +410,16 @@ int  HighestBit(unsigned int value);
 
 // DDS Archive functions (input archive)
 //----------------------------------------------------------------------------------------------------------------------------------
-void   TraverseDDSArchive(pds_type *p);							// Traverse DDS archive path
-int    Compare(const FTSENT **af, const FTSENT **bf);					// Used for traversal of DDS archives using fts functions
-// also used in DumpDir() ( Can be seen as adding a metric to
-// a mathematical file space :) )
+void   TraverseDDSArchive(pds_type *p);                         // Traverse DDS archive path
+int    Compare(const FTSENT **af, const FTSENT **bf);           // Used for traversal of DDS archives using fts functions.
+// Also used in DumpDir() ( Can be seen as adding a metric to a mathematical file space :) )
 
 void   ProcessDDSFile(unsigned char * ibuff,int len,struct stat *sp,FTSENT *fe); // Process DDS file
-int    DDSFileDuration(char *str);							// Returns DDS file duration in seconds, computed on filename!
-time_t DDSFileStartTime(FTSENT *f);							// Returns the start time of entries in a DDS archive for sorting purposes 
-double DDSTime(unsigned char *ibuff);							// Return DDS packet time
-int    DDSVirtualCh(unsigned char *ibuff);						// Returns DDS packet virtual channel
-void   DDSGroundSN(unsigned short int gsid,char *str);					// Get ground station name
+int    DDSFileDuration(char *str);                          // Returns DDS file duration in seconds, computed on filename!
+time_t DDSFileStartTime(FTSENT *f);                         // Returns the start time of entries in a DDS archive for sorting purposes 
+double DecodeDDSTime2Timet(unsigned char *ibuff);           // Return DDS packet time
+int    DDSVirtualCh(unsigned char *ibuff);                  // Returns DDS packet virtual channel
+void   DDSGroundSN(unsigned short int gsid,char *str);      // Get ground station name
 
 // Dynamic allocation functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -743,7 +752,7 @@ int main(int argc, char *argv[])
         pds.DPLNumber=2;			// Edited data has DPL number 2
     }
     
-    sec_epoch=E2Epoch(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
+    sec_epoch=ConvertUtc2Timet_2(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
     
     // Get mission phase data
     if(InitMissionPhaseStructFromMissionCalendar(&mp,&pds) < 0) {
@@ -776,7 +785,7 @@ int main(int argc, char *argv[])
         
         
         if (GetOption("-ps", argc, argv, tstr1)) {
-            if((status=TimeOfDatePDS(tstr1,&(mp.start))) < 0) {
+            if((status=ConvertUtc2Timet(tstr1,&(mp.start))) < 0) {
                 fprintf(stderr, "Can not convert argument \"%s\" to a time: error code %i\n", tstr1, status);
                 exit(1);
             }
@@ -793,7 +802,9 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "Can not interpret argument \"%s\".\n", tstr1);    // NOTE: Periods shorter than one day are useful for debugging. Therefore permit decimal numbers.
                 exit(1);
             }
-            mp.stop = mp.start + dur*24*3600;  // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) into account.            
+            // Compute end time. NOTE: Approximate since it does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred
+            // in the time interval covered by the data set into account.
+            mp.stop = mp.start + dur*24*3600 + 1;
         }
         else
         {
@@ -898,12 +909,12 @@ int main(int argc, char *argv[])
     sprintf(tstr1,"%sCATALOG/DATASET.CAT",pds.apathpds);  // Get full path
     status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
     
-    Scet2Date_2((double)mp.start,tstr2,0);                // Decode raw time into PDS compliant UTC time
+    ConvertTimet2Utc((double)mp.start,tstr2,0);                // Decode raw time into PDS compliant UTC time
     YPrintf("Mission phase start         : %s\n",tstr2);
     printf( "Mission phase start         : %s\n",tstr2);
     SetP(&cat,"START_TIME",tstr2,1);                      // Set START_TIME
     
-    Scet2Date_2((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
+    ConvertTimet2Utc((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
     YPrintf("Mission phase stop          : %s\n\n",tstr2);
     printf( "Mission phase stop          : %s\n\n",tstr2);
     SetP(&cat,"STOP_TIME",tstr2,1);                       // Set STOP_TIME
@@ -1178,6 +1189,7 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
     fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions.)\n");
     fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
+    fprintf(stream, "                                            Slightly approximate since does not consider leap seconds.\n");
     fprintf(stream, "\n");
     fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -1253,8 +1265,8 @@ void *SCDecodeTM(void *arg)
                         PPrintf("    Weird HK length discarding!\n");
                         continue;
                     }
-                    rawt=DecodeSCTime(&buff[4]);      // Decode S/C time into raw time
-                    DecodeRawTime(rawt,tstr,0);       // Decode raw time to PDS compliant date format
+                    rawt=DecodeSCTime2Sccd(&buff[4]);      // Decode S/C time into raw time
+                    ConvertSccd2Utc(rawt,tstr,0);          // Decode raw time to PDS compliant date format
                     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
                     
                     In(&cbh,HBYTE);         // Keep packet ID high byte
@@ -1398,8 +1410,8 @@ void *SCDecodeTM(void *arg)
                         continue;
                     }
                     
-                    rawt=DecodeSCTime(&buff[4]);      // Decode S/C time into raw time
-                    DecodeRawTime(rawt,tstr,0);       // Decode raw time to PDS compliant date format
+                    rawt=DecodeSCTime2Sccd(&buff[4]);   // Decode S/C time into raw time
+                    ConvertSccd2Utc(rawt,tstr,0);       // Decode raw time to PDS compliant date format
                     PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,length);
                     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
                     GetBuffer(cs,buff,length); 
@@ -1518,8 +1530,8 @@ void *DecodeHK(void *arg)
         // Get first HK packet data and raw time (HK_NUM_LINES per TAB file)
         GetHKPacket(ch,buff,&raw_time);
         
-        DecodeRawTime(raw_time, hk_info.utc_time_str, 0);                       // First convert spacecraft time to UTC to get time calibration right
-        Raw2OBT_Str(raw_time, pds.SCResetCounter, hk_info.obt_time_str);        // Compile OBT string and add reset number of S/C clock
+        ConvertSccd2Utc( raw_time,                     hk_info.utc_time_str, 0);     // First convert spacecraft time to UTC to get time calibration right
+        ConvertSccd2Sccs(raw_time, pds.SCResetCounter, hk_info.obt_time_str);        // Compile OBT string and add reset number of S/C clock
         
         SetP(&hkl, "SPACECRAFT_CLOCK_START_COUNT", hk_info.obt_time_str, 1);    // Set OBT start time
         SetP(&hkl, "START_TIME",                   hk_info.utc_time_str, 1);    // Update START_TIME in common PDS parameters
@@ -1569,7 +1581,7 @@ void *DecodeHK(void *arg)
         
         SetP(&hkl,"PRODUCT_ID",stub_fname,1);                       // Add PRODUCT_ID HK LBL
         
-        GetUTime(prod_creat_time);                                  // Get current UTC time     
+        GetCurrentUtc0(prod_creat_time);                                  // Get current UTC time     
         HPrintf("    UTC Creation Time: %s\n",prod_creat_time,1);
         SetP(&hkl,"PRODUCT_CREATION_TIME",prod_creat_time,1);       // Set creation time in common PDS parameters, no quotes!
         
@@ -1624,8 +1636,8 @@ void *DecodeHK(void *arg)
                     // NOTE: It is necessary to derive both "hk_info.utc_time_str" and "hk_info.obt_time_str" here
                     // in case pds exits (and calls ExitPDS) while GetHKPacket is waiting, so that they are
                     // available in ExitPDS which needs them to finish writing the last LBL file in the data set.
-                    DecodeRawTime(raw_time, hk_info.utc_time_str, 0);                   // Decode raw time to PDS compliant date format
-                    Raw2OBT_Str(raw_time, pds.SCResetCounter, hk_info.obt_time_str);    // Compile OBT string and add reset number of S/C clock
+                    ConvertSccd2Utc( raw_time,                     hk_info.utc_time_str, 0);   // Decode raw time to PDS compliant date format
+                    ConvertSccd2Sccs(raw_time, pds.SCResetCounter, hk_info.obt_time_str);      // Compile OBT string and add reset number of S/C clock
                     
                     HPrintf("S/C time PDS Format: %s Raw Time: %014.3f\n", hk_info.utc_time_str, raw_time);
                     AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble a HK TAB file line
@@ -1938,8 +1950,8 @@ void *DecodeScience(void *arg)
                 GetBuffer(cb,buff,5);        // Get 5 bytes from circular science buffer
                 
                 CPrintf("============================================================================\n");
-                rstime=DecodeLAPTime(buff);    // Get raw time, decode LAP S/C time in Science data
-                DecodeRawTime(rstime,stime,0); // Decode raw time into PDS compliant UTC time
+                rstime = DecodeLAPTime2Sccd(buff);    // Get raw time, decode LAP S/C time in Science data
+                ConvertSccd2Utc(rstime,stime,0);      // Decode raw time into PDS compliant UTC time
                 CPrintf("    SCET time: %s OBT time: %016.6f\n",stime,rstime);
                 CPrintf("Mission ID: %s Phase: %s\n",mp.abbrev,mp.phase_name);
                 SetP(&comm,"MISSION_PHASE_NAME",mp.phase_name,1);  // Set mission phase name in common PDS parameters
@@ -1952,7 +1964,7 @@ void *DecodeScience(void *arg)
                     SetP(&comm,"PRODUCT_TYPE","\"EDR\"",1);
                 }
                 
-                GetUTime(tstr1);                                   // Get current UTC time     
+                GetCurrentUtc0(tstr1);                                   // Get current UTC time     
                 CPrintf("    UTC Creation Time: %s\n",tstr1,1);
                 SetP(&comm,"PRODUCT_CREATION_TIME",tstr1,1);       // Set creation time in common PDS parameters, no quotes!
                 
@@ -3251,11 +3263,11 @@ void *DecodeScience(void *arg)
                                                             curr.offset_time=aqps_seq*32.0;
                                                             curr.seq_time=rstime+curr.offset_time;      // Calculate time of current sequence
                                                             
-                                                            Raw2OBT_Str(curr.seq_time,  pds.SCResetCounter, tstr1); // Compile OBT string and add reset number of S/C clock.
+                                                            ConvertSccd2Sccs(curr.seq_time, pds.SCResetCounter, tstr1); // Compile OBT string and add reset number of S/C clock.
                                                             
                                                             SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
-                                                            DecodeRawTime(curr.seq_time,  tstr1, 0);   // Decode raw time into PDS compliant UTC time
+                                                            ConvertSccd2Utc(curr.seq_time,  tstr1, 0);   // Decode raw time into PDS compliant UTC time
                                                             CPrintf("    Current sequence start time is: %s\n", tstr1);
                                                             SetP(&comm, "START_TIME", tstr1, 1);
                                                             
@@ -3372,11 +3384,11 @@ void *DecodeScience(void *arg)
                                                             }
                                                             curr.stop_time = curr.seq_time + (samples-1)*curr.factor;   // Calculate current STOP time.
                                                             
-                                                            Raw2OBT_Str(curr.stop_time, pds.SCResetCounter, tstr5);   // Compile OBT string and add reset number of S/C clock.
+                                                            ConvertSccd2Sccs(curr.stop_time, pds.SCResetCounter, tstr5);   // Compile OBT string and add reset number of S/C clock.
                                                             
                                                             SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",  tstr5, 1);
                                                             
-                                                            DecodeRawTime(curr.stop_time, tstr5, 0);  // Decode raw time into PDS compliant UTC time.
+                                                            ConvertSccd2Utc(curr.stop_time, tstr5, 0);  // Decode raw time into PDS compliant UTC time.
                                                             CPrintf("    Current sequence stop  time is: %s\n", tstr5);
                                                             SetP(&comm, "STOP_TIME",  tstr5, 1);         // Update STOP_TIME in common PDS parameters.
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
@@ -3407,7 +3419,7 @@ void *DecodeScience(void *arg)
                                                         }
                                                     }
                                                     
-                                                    Raw2OBT_Str(rstime,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
+                                                    ConvertSccd2Sccs(rstime,pds.SCResetCounter,tstr1); // Compile OBT string and add reset number of S/C clock
                                                     
                                                     SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr5,1);
                                                     CPrintf("    OBT time start of measurement cycle: %s \n",tstr5);
@@ -3957,7 +3969,7 @@ void ExitPDS(int status)
             // fragile in case of error, since mp.data_set_id must have been successfully initialized.
             //==============================================================================================
             printf("Compressing log files, please wait\n");
-            GetUTime(tstr3);                                                    // Get local UTC time.
+            GetCurrentUtc0(tstr3);                                              // Get local UTC time.
             ReplCh(tstr3,':','#');                                              // Replace : in time string with #, since 
             // : is not allowed in a file name.
 
@@ -4005,7 +4017,7 @@ int YPrintf(const char *fmt, ...)
         {
             if(pds.ylog_fd!=NULL)
             {
-                GetUTime(strp); // Get universal time
+                GetCurrentUtc0(strp); // Get universal time
                 fprintf(pds.ylog_fd,"%s (UTC): ",strp);
                 va_start(args,fmt);
                 status=vfprintf(pds.ylog_fd,fmt, args);
@@ -4038,7 +4050,7 @@ int DPrintf(const char *fmt, ...)
         {
             if(pds.dlog_fd!=NULL)
             {
-                GetUTime(strp); // Get universal time
+                GetCurrentUtc0(strp); // Get universal time
                 fprintf(pds.dlog_fd,"%s (UTC): ",strp);
                 va_start(args,fmt);
                 status=vfprintf(pds.dlog_fd,fmt, args);
@@ -4073,7 +4085,7 @@ int PPrintf(const char *fmt, ...)
         {
             if(pds.plog_fd!=NULL)
             {
-                GetUTime(strp); // Get universal time
+                GetCurrentUtc0(strp); // Get universal time
                 fprintf(pds.plog_fd,"%s (UTC): ",strp);
                 va_start(args,fmt);
                 status=vfprintf(pds.plog_fd,fmt, args);
@@ -4106,7 +4118,7 @@ int CPrintf(const char *fmt, ...)
         {
             if(pds.clog_fd!=NULL)
             {
-                GetUTime(strp); // Get universal time
+                GetCurrentUtc0(strp); // Get universal time
                 fprintf(pds.clog_fd,"%s (UTC): ",strp);
                 va_start(args,fmt);
                 status=vfprintf(pds.clog_fd,fmt, args);
@@ -4139,7 +4151,7 @@ int HPrintf(const char *fmt, ...)
         {
             if(pds.hlog_fd!=NULL)
             {
-                GetUTime(strp); // Get universal time
+                GetCurrentUtc0(strp); // Get universal time
                 fprintf(pds.hlog_fd,"%s (UTC): ",strp);
                 va_start(args,fmt);
                 status=vfprintf(pds.hlog_fd,fmt, args);
@@ -4650,9 +4662,9 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
         if(line[0] == '\n') continue;  // Empty line.
         if (line[0] == '#') continue;  // Remove comments.
         if(line[0] == ' ')  continue;  // Ignore whitespace line.
-        Separate(line,l_tok,m_tok,'\t',1);  // Separate at first occurrence of a tab character
-        Separate(line,m_tok,r_tok,'\t',2);  // Separate at second occurrence of a tab character
-        TimeOfDatePDS(l_tok,&t);          // Convert time to seconds
+        Separate(line,l_tok,m_tok,'\t',1);   // Separate at first occurrence of a tab character
+        Separate(line,m_tok,r_tok,'\t',2);   // Separate at second occurrence of a tab character
+        ConvertUtc2Timet(l_tok,&t);          // Convert time to seconds
         
         
         if(strstr(m_tok,"*Mode*")==NULL)
@@ -4758,8 +4770,8 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
  *    and therefore as close to the packet data times as possible.
  *    If one had not and the time conversions changed, then one would have to update
  *    the data exclude list.
- * 3) The code only partly contain functions for conversion from human-readable
- *    strings to spacecraft clock counter (TimeOfDatePDS)?
+ * 3) The code only partly contains functions for conversion from human-readable
+ *    strings to spacecraft clock counter?
  *
  * NOTE: Current implementation does not return any information in the event of failure
  * making soft error harder for caller.
@@ -4822,12 +4834,12 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
             return -1;
         }
         
-        if (OBT_Str2Raw(l_tok, &SCResetCounter1, &t_begin)) {
+        if (ConvertSccs2Sccd(l_tok, &SCResetCounter1, &t_begin)) {
             YPrintf("ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
             printf( "ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
             return -1;
         }
-        if (OBT_Str2Raw(r_tok, &SCResetCounter2, &t_end)) {    // NOTE: temp_int2 never used.
+        if (ConvertSccs2Sccd(r_tok, &SCResetCounter2, &t_end)) {    // NOTE: temp_int2 never used.
             YPrintf("ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             printf( "ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             return -1;
@@ -4888,10 +4900,10 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
  * NOTE: Uncertain whether to assume exactly one occurrence of SPACECRAFT_CLOCK_START/STOP_COUNT in property list.
  * 
  * ASSUMES: Spacecraft reset counter is the same for all times involved in the algorithm (or something in that direction...).
- * ALGORITHM: Keeps data if-and-only-if
- *     SPACECRAFT_CLOCK_STOP_COUNT<=t_exclude_begin
+ * ALGORITHM: Excludes data if-and-only-if
+ *     SPACECRAFT_CLOCK_STOP_COUNT>=t_exclude_begin
  *     and
- *     t_exclude_end<=SPACECRAFT_CLOCK_STOP_COUNT.
+ *     SPACECRAFT_CLOCK_START_COUNT<=t_exclude_end.
  *     Note the less-than-or-EQUAL.
  *--------------------------------------------------------------------------------------------*/
 int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData) {
@@ -4923,12 +4935,19 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
     }
     SPACECRAFT_CLOCK_START_COUNT = property1->value;
     SPACECRAFT_CLOCK_STOP_COUNT  = property2->value;
-    if (OBT_Str2Raw(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &file_t_begin)) {
+    
+    /*======================================================
+     * Convert
+     * spacecraft clock count (string; false decimals)
+     * ==>
+     * "raw" spacecraft clock count (double; true decimals)
+     ======================================================*/
+    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &file_t_begin)) {
         YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
         printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
         return -2;
     }
-    if (OBT_Str2Raw(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &file_t_end  )) {
+    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &file_t_end  )) {
         YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
         printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
         return -2;
@@ -5074,7 +5093,7 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
             sprintf(newdate,"20%s-%s-%sT%s:%s:%s",myear,mmon,mday,mhour,mmin,msec); // Setup time
             
             
-            TimeOfDatePDS(newdate,&etime);
+            ConvertUtc2Timet(newdate,&etime);
             if(etime>otime)
             {
                 otime=etime;
@@ -5125,7 +5144,7 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
             nanosleep(&nap,NULL); // Be nice                         
         }
         
-        tcp->SCET[n]=DDSTime(buff); // Get time of DDS packet
+        tcp->SCET[n]=DecodeDDSTime2Timet(buff); // Get time of DDS packet
         
         length=(buff[8]<<24 | buff[9]<<16 | buff[10]<<8 | buff[11]);
         
@@ -5524,7 +5543,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
         TrimWN(LBL_filename);   // Remove leading and trailing whitespace, remove CR (if any). Can be important depending on the exact chosen file format (future PDS compliant).
 
         time_t t_begin, t_end;
-        if ((TimeOfDatePDS(str_t_begin, &t_begin) < 0) || (TimeOfDatePDS(str_t_end, &t_end) < 0)) {
+        if ((ConvertUtc2Timet(str_t_begin, &t_begin) < 0) || (ConvertUtc2Timet(str_t_end, &t_end) < 0)) {
             sprintf(tstr, "Error interpreting time in offset calibration exceptions file: \"%s\"\n", line);
             YPrintf(tstr);
             perror(tstr);
@@ -5651,13 +5670,15 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
         if(!strcmp(m->abbrev,abbrev)) // Matching mission phase abbreviation
         {
             // Get new time from mission calendar, convert to seconds
-            if((stat=TimeOfDatePDS(sdate,&(m->start)))<0) {
+            if((stat=ConvertUtc2Timet(sdate,&(m->start)))<0) {
                 CPrintf("    Error mission phase time conversion: %02d\n",stat);
             }
             
             sscanf(duration,"%d",&dur);
-            
-            m->stop = m->start + dur*24*3600; // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) into account.
+
+            // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred in time interval
+            // into account. Therefore, extend end of data set by one second, just in case.
+            m->stop = m->start + dur*24*3600 + 1;
             
             char* descr;
             if(calib) {
@@ -6169,7 +6190,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      * QUESTION: Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway?
      */
     time_t t_ref;                               // Variable used by function.
-    TimeOfDatePDS(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
+    ConvertUtc2Timet(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
     inline double GetSecondsTime(time_t t)    {   return difftime(t, t_ref);   }
     //######################################################################################################
 
@@ -6203,15 +6224,15 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      * ==> Every day (midnight-to-midnight) gets the same data time. This is to ensure that any change of used calibration (due to the
      * default algorithm) only happens at midnight.
      */
-    TimeOfDatePDS_midday(UTC_data, &t_data);
+    ConvertUtc2Timet_midday(UTC_data, &t_data);
     tp_data = GetSecondsTime(t_data);
-    TimeOfDatePDS(mc->CD[0].validt, &t_calib);
+    ConvertUtc2Timet(mc->CD[0].validt, &t_calib);
     tp_calib2 = GetSecondsTime(t_calib);
     for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
     {
         tp_calib1 = tp_calib2;
 
-        TimeOfDatePDS(mc->CD[i+1].validt, &t_calib);
+        ConvertUtc2Timet(mc->CD[i+1].validt, &t_calib);
         tp_calib2 = GetSecondsTime(t_calib);
 
         double tp_middle = (tp_calib1 + tp_calib2) / 2.0;   // Middle between calibration times.
@@ -6463,9 +6484,9 @@ int WritePTAB_File(
     vcalf = 1.0; // Assume 1 to begin with
     ccalf = 1.0; // Assume 1 to begin with
     
-    DecodeRawTime(curr->seq_time, UTC_str, 0); // First convert spacecraft time to UTC to get time calibration right
+    ConvertSccd2Utc(curr->seq_time, UTC_str, 0); // First convert spacecraft time to UTC to get time calibration right
     
-    TimeOfDatePDS(UTC_str, &stime);            // Convert back to seconds
+    ConvertUtc2Timet(UTC_str, &stime);            // Convert back to seconds
 
     /*===================================================================================================================
      * Determine
@@ -6849,7 +6870,7 @@ int WritePTAB_File(
                 td1 = i*curr->factor;   // Calculate current time relative to first time (first data point).
                 
                 td2 = curr->seq_time + td1;   // Calculate current time.
-                DecodeRawTime(td2,tstr3,1);   // Decode raw time to UTC.
+                ConvertSccd2Utc(td2,tstr3,1);   // Decode raw time to UTC.
                 
                 if(nbias>0 && bias!=NULL)
                 {
@@ -7631,7 +7652,7 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
 //
 // ch   : Circular buffer, source of data
 // buff : Destination buffer for (some) packet data.
-// rawt : Time derived from HK packet.
+// rawt : Time derived from HK packet. Raw, spacecraft clock count (double; true decimals)
 // 
 // NOTE: Does NOT RETURN until it has all the requested data.
 // NOTE: Some buffer data is thrown away.
@@ -7649,7 +7670,7 @@ int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *rawt)
         length=LAP_HK_LEN; // Packet to long, force standard length. Add warning in the future...
     }
     
-    *rawt=DecodeSCTime(&buff[6]);            // Decode S/C time into raw time
+    *rawt=DecodeSCTime2Sccd(&buff[6]);            // Decode S/C time into raw time
     
     GetBuffer(ch,buff,2);                    // Skip 2 bytes
     
@@ -7673,8 +7694,8 @@ void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id)
     
     length=((buff[2]<<8) | buff[3])-9;           // Get "data" length
     PPrintf("    Packet ID: 0x0d%02x , Data length: %d Discarding\n",packet_id,length);
-    rawt=DecodeSCTime(&buff[4]);    // Decode S/C time into raw time
-    DecodeRawTime(rawt,tstr,0);     // Decode raw time to PDS compliant date format
+    rawt=DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time
+    ConvertSccd2Utc(rawt,tstr,0);        // Decode raw time to PDS compliant date format
     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
     Forward(cs,length);// Move forward, thus skip packet
 }
@@ -8114,11 +8135,11 @@ void WriteIndexLBL(prp_type *p,mp_type *m)
         rewind(pds.ilabel_fd); // Rewind index label to start
         
         sprintf(tstr,"%d",index_cnt);
-        SetP(p,"FILE_RECORDS",tstr,1); // Set number of file records in index label file
-        SetP(p,"ROWS",tstr,1);         // Set number of rows
-        SetP(p,"DATA_SET_ID",m->data_set_id,1); // Set DATA SET ID 
+        SetP(p,"FILE_RECORDS",tstr,1);             // Set number of file records in index label file
+        SetP(p,"ROWS",tstr,1);                     // Set number of rows
+        SetP(p,"DATA_SET_ID",m->data_set_id,1);    // Set DATA SET ID 
         
-        GetUTime(tstr);  // Get current UTC time     
+        GetCurrentUtc0(tstr);  // Get current UTC time     
         SetP(p,"PRODUCT_CREATION_TIME",tstr,1); // Set product creation time
         
         FDumpPrp(p,pds.ilabel_fd);     // Dump LAP dictionary to PDS index label file
@@ -8836,7 +8857,7 @@ int GetUnacceptedFName(char *name)
     int lastnum=0;
     int tmp;
     
-    GetUTime(strp); // Get universal time
+    GetCurrentUtc0(strp); // Get universal time
     sprintf(name,"Default_%s.lap",strp);
     
     if((una_dir = opendir(pds.uapath))==NULL) // Open UnAccepted_Data directory
@@ -8962,7 +8983,7 @@ void AssembleHKLine(unsigned char *b, char *line, double time, unsigned int *mac
     int f11dedc;
     double t;
     
-    DecodeRawTime(time,tstr,1); // Decode raw time to UTC
+    ConvertSccd2Utc(time,tstr,1); // Decode raw time to UTC
     
     // Start assembly of table line described above
     sprintf(line,"%s,%016.6f,%1d,%1d,",tstr,time,GetBitF(b[0],3,5),GetBitF(b[0],3,2));   // Set time and pmac and emac   
@@ -9185,15 +9206,26 @@ unsigned int GetBitF(unsigned int word,int nb,int sb)
     return rval;
 }
 
+
+
 // Time related functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Convert PDS time string (without fractional seconds) to number of seconds since epoch 1970.
 
-// ASSUMES: Relies on time_t being interpreted as number of seconds.
-//
-// Return value : Number of seconds.
-unsigned int E2Epoch(char *rtime)
+/*
+ * Convert PDS time string (without fractional seconds) to number of seconds since epoch 1970.
+ *
+ * NOTE: Implementation uses mktime and should likely be understood as APPROXIMATE (ignoring leap seconds).
+ * 
+ * ASSUMES: Relies on time_t being interpreted as number of seconds (which is unwise).
+ * NOTE: There is another function "ConvertUtc2Timet" that at least superficially can do the job of this function.
+ * Not sure why that one has not been used instead.
+ *
+ * Return value : Number of seconds.
+ * 
+ * Function name until 2017-07-05: E2Epoch
+ */
+unsigned int ConvertUtc2Timet_2(char *rtime)
 { 
     struct tm at; // Broken down time structure
     time_t t;
@@ -9215,18 +9247,20 @@ unsigned int E2Epoch(char *rtime)
 }
 
 
+
 // Decodes S/C time 
 //
-// This functions returns the raw S/C time as a double
-//	      
-double DecodeSCTime(unsigned char *buff)
+// buff        : TM bytes
+// Return value: SSCD. Raw S/C time as a raw, spacecraft clock count (double; true decimals).
+//
+// Function name until 2017-07-05: DecodeSCTime
+double DecodeSCTime2Sccd(unsigned char *buff)
 {
     unsigned int full_s; // Full seconds
     double frac_s;       // Fractional seconds
     
-    //Full seconds since 2000 jan 1 00:00:00
-    full_s=((buff[0]<<24) | buff[1]<<16 | buff[2]<<8 | buff[3]); // Full seconds
-    frac_s=((double)(buff[4]<<2 | buff[5]>>6))/1024.0; // Fractional seconds
+    full_s = ((buff[0]<<24) | buff[1]<<16 | buff[2]<<8 | buff[3]);   // Full seconds
+    frac_s = ((double)(buff[4]<<2 | buff[5]>>6))/1024.0;             // Fractional seconds
     
     return(full_s+frac_s);
 }
@@ -9234,20 +9268,21 @@ double DecodeSCTime(unsigned char *buff)
 
 
 // Decodes lap S/C time 
-
-// two highest bits are truncated away fitting the time
-// into five bytes
 //
-// This functions returns the raw S/C time as a double
+// NOTE: The two highest bits are truncated away fitting the time into five bytes.
 //
-double DecodeLAPTime(unsigned char *buff)
+// buff         : TM bytes
+// Return value : Raw S/C time as a double. (NOTE: No reset count.)
+//
+// Function name until 2017-07-05: DecodeLAPTime
+double DecodeLAPTime2Sccd(unsigned char *buff)
 {
     unsigned int full_s; // Full seconds
     double frac_s;       // Fractional seconds
     
-    //Seconds since spacecraft clock reset
-    full_s=((buff[0]<<22) | buff[1]<<14 | buff[2]<<6 | buff[3]>>2); // Full seconds
-    frac_s=((double)((buff[3] & 0x3)<<8 | buff[4]))/1024.0;         // Fractional seconds
+    // Seconds since spacecraft clock reset
+    full_s = ((buff[0]<<22) | buff[1]<<14 | buff[2]<<6 | buff[3]>>2);   // Full seconds
+    frac_s = ((double)((buff[3] & 0x3)<<8 | buff[4]))/1024.0;           // Fractional seconds
     
     return(full_s+frac_s); // Return raw time in seconds
 }
@@ -9303,21 +9338,27 @@ int DecodeRawTimeEst(double raw,char *stime)
 
 
 
-// Decodes and correlates raw time into UTC time
-//
-// Input: raw, 
-// Input: lfrac - choose 3 (false) or 6 (true) digits of fractional seconds.
-// Output: stime
-//
-// NOTE: The function uses the global tcp structure! 
-// 1) Can do this since it's the only user
-// 2) It only reads! No thread conflicts.
-//
-// NOTE: The function and its input value is used by WritePTAB_File to produce the first two columns in (science data) TAB files: 
-//    stime: UTC_TIME (DESCRIPTION = "UTC TIME")
-//    raw:   OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)")
-
-int DecodeRawTime(double raw, char *stime, int lfrac)
+/* Decodes and correlates raw time into UTC time
+ * 
+ * Input:  raw   = SCCD. Spacecraft clock count (double; true decimals)
+ * Input:  lfrac : false=3 decimal digits, true=6 decimal digits of fractional seconds.
+ * Output: stime = UTC string
+ * 
+ * NOTE: The function uses the global tcp structure! 
+ * 1) Can do this since it's the only user.
+ * 2) It only reads! No thread conflicts.
+ * 
+ * NOTE: The function and its input value is used by WritePTAB_File to produce the first two columns in (science data) TAB files:
+ *      stime: UTC_TIME (DESCRIPTION = "UTC TIME")
+ *      raw:   OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)")
+ *     
+ * NOTE: Uses TCORR, not SPICE kernels.
+ * 
+ * ASSUMES: Global variable sec_epoch has been set, although it is only used if there is no (applicable) TCORR information.
+ * 
+ * Function name until 2017-07-05: DecodeRawTime
+ */
+int ConvertSccd2Utc(double raw, char *stime, int lfrac)
 {
     double craw;
     double gradient;
@@ -9331,54 +9372,64 @@ int DecodeRawTime(double raw, char *stime, int lfrac)
     // Default coefficients in case no time calibration data is found.
     gradient=1.0; 
     offset=sec_epoch;
-    
-    for(i=0;i<tcp.netries;i++) // Go through all entries
+
+    /* Go through all entries (i.e. time intervals, each of which represents a linear time conversion function).    
+     * NOTE: The algorithm is built to handle the cases of
+     * (1) there being no linear conversion functions.
+     * (2) no matching time interval. */
+    for(i=0;i<tcp.netries;i++) 
     {
-        correlated=raw*tcp.gradient[i]+tcp.offset[i]; // Compute UTC time using all gradient offset candidates
+        // Try converting time (raw-->correlated) and see if "correlated" ends up outside of range.
+        // If it is not outside of range, then use that conversion function.
+        correlated = raw*tcp.gradient[i]+tcp.offset[i]; // Compute UTC time using all gradient offset candidates
         
         if(i<(tcp.netries-1)) {   // If we are not at the end
-            tmp=tcp.SCET[i+1];   // Use next SCET to test the upper validity limit
+            tmp = tcp.SCET[i+1];    // Use next SCET to test the upper validity limit
         } else {
-                tmp=1e100; // No next SCET. Last correlation packet valid until ground station produces new ones.
+            tmp = 1e100;   // No next SCET. Last correlation packet valid until ground station produces new ones.
         }
-                
-                if(correlated>=tcp.SCET[i] && correlated<tmp) // Test if in valid range
-                {
-                    gradient=tcp.gradient[i]; 
-                    offset=tcp.offset[i];
-                    break;
-                }
+        
+        if (correlated>=tcp.SCET[i] && correlated<tmp) // Test if in valid range
+        {
+            gradient = tcp.gradient[i]; 
+            offset   = tcp.offset[i];
+            break;
+        }
     }
     
-    craw=raw*gradient+offset; // Compute correlation. If no time calibration data found default coefficients are used.
+    craw = raw*gradient + offset; // Compute correlation. If no time calibration data found default coefficients are used.
 
-    Scet2Date_2(craw,stime,lfrac); // Compute a PDS date string
+    ConvertTimet2Utc(craw,stime,lfrac); // Compute a PDS date string
     return 0;
 }
 
 
 
-// Convert RAW time (decimal number of seconds) to a corresponding OBT string.
-// Due to the fact that the point . in:
-//
-// SPACECRAFT_CLOCK_START/STOP_COUNT="1/21339876.237"
-//
-// is not a decimal point (NOT specified in PDS) but now specified
-// in PSA to be a fraction of 2^16 thus decimal .00123 seconds is stored as
-// 0.123*2^16 ~ .81
-//
-// We run the raw time into this function to convert back to fractions
-// and create an apropriate string. Reason for not converting
-// the DecodeSCTime is that other parts of the code rely on this function.
-// In our .TAB files we have a column with UTC and a column with OBT
-// but with higher precision we can not use the 2^16 fractions there
-// it need to be a real_ascii with a true decimal point.
-// 
-// raw : Decimal number of seconds (true decimals)
-// rcount : Reset counter
-// stime : "OBT string", with digits after"decimals" representing the number of fractions 2^-16 [s].
-//
-int Raw2OBT_Str(double raw, int rcount, char *stime)
+/**
+ * Convert
+ * from (1) RAW time (spacecraft clock time; double, true decimals)
+ * to   (2) spacecraft clock count (string; false decimals).
+ * 
+ * NOTE: Due to the fact that the period . in e.g.
+ *      SPACECRAFT_CLOCK_START/STOP_COUNT="1/21339876.237"
+ * is not a decimal mark (NOT specified in PDS) but now specified
+ * in PSA to be a fraction of 2^16 thus decimal .00123 seconds is stored as
+ * 0.123*2^16 ~ .81
+ * 
+ * We run the raw time into this function to convert back to fractions
+ * and create an appropriate string. Reason for not converting
+ * the DecodeSCTime2Sccd is that other parts of the code rely on this function.
+ * In our .TAB files we have a column with UTC and a column with OBT
+ * but with higher precision we can not use the 2^16 fractions there
+ * it need to be a real_ascii with a true decimal point.
+ *  
+ * Input  : raw    : SCCD. Spacecraft clock count (double; true decimals).
+ * Input  : rcount : Reset counter.
+ * Output : stime  : SCCS. Spacecraft clock count string (false decimals).
+ *
+ * Function name until 2017-07-05: Raw2OBT_Str
+ */
+int ConvertSccd2Sccs(double raw, int rcount, char *stime)
 {
     unsigned int sec;
     unsigned int frac;
@@ -9400,14 +9451,14 @@ int Raw2OBT_Str(double raw, int rcount, char *stime)
  * from STRING representation of spacecraft clock counter ("OBT_Str", "stime"; uses false decimals)
  * to   DOUBLE representation of spacecraft clock counter ("raw"; true decimals).
  *
- * NOTE: Opposite conversion of Raw2OBT_Str (hence the name) with the difference that this function
+ * NOTE: Opposite conversion of ConvertSccd2Sccs (hence the name) with the difference that this function
  * does accepts strings both with and without surrounding quotes.
  * The former is used when reading the data exclusion file, the latter is used for reading
  * SPACECRAFT_CLOCK_START/STOP_COUNT values in property lists (property_type).
- *
- * PROPOSAL: Change name? OBT_SCET2Scalar? (SCET/SCT correct term?)
+ * 
+ * Function name until 2017-07-05: OBT_Str2Raw
 --------------------------------------------------------------------------------------------------*/
-int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime)
+int ConvertSccs2Sccd(char *stime, int *resetCounter, double *rawTime)
 {
     int resetCounter_temp;
     double sec, false_frac;
@@ -9421,17 +9472,17 @@ int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime)
     }
     
     // Parse numbers in string.
-    // 1) Use doubles instead of integers (except for reset counter) to ensure that
+    // (1) Use doubles instead of integers (except for reset counter) to ensure that
     // the variables can represent large enough integers. (C's "int" is not guaranteed to have many bits.)
-    // 2) Use two separate doubles for "seconds" and "fractions" since double can represent all (not too
+    // (2) Use two separate doubles for "seconds" and "fractions" since double can represent all (not too
     //    large) integers exactly, but not all decimal numbers.
     if (   (3 != sscanf(s,      "%i/%[^.].%lf", &resetCounter_temp, s_temp, &false_frac))
         || (1 != sscanf(s_temp, "%lf",          &sec)))
     {
         // Error messages are unnecessary if all the calls to this function give error messages instead (which they do).
         // If the calling code also gives context in the error messages, that is even better.
-//         YPrintf("ERROR: OBT_Str2Raw: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
-//         printf( "ERROR: OBT_Str2Raw: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
+//         YPrintf("ERROR: ConvertSccs2Sccd: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
+//         printf( "ERROR: ConvertSccs2Sccd: Can not interpret spacecraft clock counter string: \"%s\"\n", stime);
         return -1;
     }
     
@@ -9471,42 +9522,55 @@ int OBT_Str2Raw(char *stime, int *resetCounter, double *rawTime)
  */
 
 
-// Compute a PDS date from raw time
-//
-// lfrac is used to choose 3 (false) or 6 (true) digits of fractional seconds.
-int Scet2Date_2(double raw,char *stime,int lfrac)
-{ 
+
+/* Converts a time_t (in the form of a double) to a UTC string. Handles the decimals in the double which a time_t can not do.
+ * (Uncertain if conversion is entirely correct, e.g. w.r.t. leap seconds).
+ * 
+ * Input  : raw   : A time_t value in the form of a double.
+ * Input  : lfrac : false=3 decimal digits; true=6 decimal digits (fractional seconds)
+ * Output : stime : Set to a string "YYYY-MM--DDThh:mm:ss.xxx" (3 decimals) or "YYYY-MM-DDThh:mm:ss.xxxxxx" (6 decimals).
+ *
+ * NOTE: Implementation uses gmtime_r.
+ * NOTE/BUG?: Does not appear to care about leap seconds since gmtime_r does not(?). Still experience tells, that
+ * the time conversion errors that DVAL-NG complains about are generally smaller than seconds, which hints that the function
+ * somehow does handle leap seconds.
+ * 
+ * Function name until 2017-07-05: Scet2Date_2
+ */
+// PROPOSAL: Eliminate the backup code for the case that "gmtime_r" fails. It is dangerous.
+int ConvertTimet2Utc(double raw,char *stime,int lfrac)
+{     
     double s;            // Seconds and fractional seconds
     struct tm bt;        // Broken down time
     time_t t;            // Time since 1970 in secs to current S/C time
-    
+
     unsigned int full_s; // Full seconds
-    double frac_s;       // Fractional seconds
+    double       frac_s; // Fractional seconds
     unsigned int d,h,m;  // Days, hours and minutes
-    
-    
-    // Compile time since 1970 jan 1 00:00:00 to current S/C time
-    //t = raw+sec_epoch; // Full secs + seconds from 1970 to reset of S/C clock. 
-    //line edited 10/7 2014. FJ. We need to make sure seconds are rounded properly.
-    if(lfrac)
-    {
-        raw= floor(1000*1000*raw+0.5)/(1000*1000);//need to round value properly, otherwise sprintf will do it for us ( randomly)  
+
+    // Compile time since 1970 jan 1 00:00:00 to current S/C time.
+    // t = raw+sec_epoch; // Full secs + seconds from 1970 to reset of S/C clock.
+
+    // Round depending on the number of digits that will be displayed. Otherwise sprintf will do it (randomly).
+    // line edited 10/7 2014. FJ. We need to make sure seconds are rounded properly.
+    if(lfrac) {
+        raw = floor(1000*1000*raw+0.5)/(1000*1000);
+    } else {
+        raw = floor(1000*raw+0.5)/1000;
     }
-    else
-    {
-        raw= floor(1000*raw+0.5)/1000;//need to round value properly!  
-    }
-    
-    
-    t=raw;  
+
+
+    t=raw;   // Convert double-->time_t.
     
     // Use gmtime to stay POSIX compliant and to be consistent.
-    full_s=raw; // Truncate whole number of seconds and put them in a unsigned integer
-    frac_s=raw-full_s; // Get remaining fractional seconds
-    
-    // Compile plausible date, time and year, use thread-safe version of gmtime
+    full_s = raw;            // double-->unsigned int (truncate decimals)
+    frac_s = raw - full_s;   // Obtain fractional seconds.
+
+    // Compile plausible date, time and year, use thread-safe version of gmtime.
     if((gmtime_r(&t,&bt))==NULL)  
     {
+        // CASE: Error in previous call to "gmtime_r".
+        // NOTE: Does not take leap seconds into account!!
         d=full_s/86400;            // Full number of days.
         h=(full_s-=d*86400)/3600;  // Remaining hours.
         m=(full_s-=h*3600)/60;     // Remaining minutes. 
@@ -9515,42 +9579,46 @@ int Scet2Date_2(double raw,char *stime,int lfrac)
         sprintf(stime,"CCYY-MM-DDT%02d:%02d:%06.3f",h,m,s);
         return -1; 
     }
-    
+
     // Compile PDS compliant time string
-    if(lfrac)
-    {
-        // Use 6 digit fractional seconds
-        sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%09.6f",bt.tm_year+1900,bt.tm_mon+1,bt.tm_mday,bt.tm_hour,bt.tm_min,((double)bt.tm_sec)+frac_s);
+    if(lfrac) {
+        // Use 6-digit fractional seconds
+        sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%09.6f", bt.tm_year+1900, bt.tm_mon+1, bt.tm_mday, bt.tm_hour, bt.tm_min, ((double)bt.tm_sec)+frac_s);
+    } else {
+        // Use 3-digit fractional seconds PDS standard
+        sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%06.3f", bt.tm_year+1900, bt.tm_mon+1, bt.tm_mday, bt.tm_hour, bt.tm_min, ((double)bt.tm_sec)+frac_s);
     }
-    else
-    {
-        // Use 3 digit fractional seconds PDS standard
-        sprintf(stime,"%4d-%02d-%02dT%02d:%02d:%06.3f",bt.tm_year+1900,bt.tm_mon+1,bt.tm_mday,bt.tm_hour,bt.tm_min,((double)bt.tm_sec)+frac_s);
-    }
-    
+
     return 0;
 }
 
+
+
 /*
- * Converts a string of format "YYYY-MM-DD" or "YYYY-MM-DD hh:mm.ss" to a time_t value.
+ * Converts a string of format "YYYY-MM-DD" or "YYYY-MM-DD hh:mm:ss" to a time_t value.
  *
- * NOTE: In reality, the function ignores the characters between the number fields and they can therefore be set arbitrarily (only their absolute positions are important).
- * NOTE: The function will ignore characters after the final "ss" (two-digit seconds) and will therefore ignore decimals in seconds. Fractions can not be returned in time_t anyway.
- * NOTE: Can handle PDS compliant UTC time strings.
- * NOTE: If no hour-minute-seconds are given, then they will take zero (i.e. midnight at beginning of day) as default value.
- * Values are fed into mktime. mktime calculates UTC time since 1970 1 Jan 00:00:00 (For POSIX and UNIX systems).
- * NOTE: Empirically (playing with TimeOfDatePDS, pds' default compiler), time_t appears to correspond to seconds after 1970-01-01 00:00.00,
- * but only for times beginning at 1970-01-01 01:00.00 (!).
+ * NOTE: In reality, the function ignores the characters between the number fields and they can therefore be set arbitrarily
+ *       (only their absolute positions are important).
+ * NOTE: The function will ignore characters after the final "ss" (two-digit seconds) and will therefore ignore decimals in seconds.
+ *       Fractions can not be returned in time_t anyway.
+ * NOTE: Can handle PDS compliant UTC time strings (albeit while ignoring of second decimals).
+ * NOTE: If no hour-minute-seconds are given, then they will taken as zero (i.e. midnight at beginning of day) as default value.
+ *       Values are fed into mktime. mktime calculates UTC(?) time since 1970 1 Jan 00:00:00 (For POSIX and UNIX systems).
+ * NOTE: Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler), time_t appears to correspond to seconds
+ *       after 1970-01-01 00:00.00, but only for times beginning at 1970-01-01 01:00.00 (!).
  *
- *
+ * NOTE: Implementation uses mktime.
+ * NOTE: Handling of timezone seems hackish/suspect.
  * QUESTION: How does this function handle leap seconds?! (Probably not, if one interprets time_t=seconds since 1970.)
  *
  * Return value : 0=Success; Negative value indicates error.
  * 
  * 01234567890123456789012
  * CCYY-MM-DDThh:mm:ss.fff
+ * 
+ * Function name until 2017-07-05: TimeOfDatePDS
  */
-int TimeOfDatePDS(char *sdate, time_t *t)
+int ConvertUtc2Timet(char *sdate, time_t *t)
 {
     char mday[3];
     char month[3];
@@ -9568,6 +9636,7 @@ int TimeOfDatePDS(char *sdate, time_t *t)
     strncpy(year,sdate,4);      // Copy year from sdate
     strncpy(month,&sdate[5],2); // Copy month from sdate
     strncpy(mday,&sdate[8],2);  // Copy day of month to mday
+    
     
     year[4]='\0';  // Terminate
     month[2]='\0'; // Terminate
@@ -9638,7 +9707,7 @@ int TimeOfDatePDS(char *sdate, time_t *t)
 
 
 // Like TimeOfDatePDS, but always sets the time of day to 12:00:00.
-int TimeOfDatePDS_midday(char *sdate, time_t *t)
+int ConvertUtc2Timet_midday(char *sdate, time_t *t)
 {
     char tstr[20];
     const char * midday_str = "12:00.00";
@@ -9651,19 +9720,20 @@ int TimeOfDatePDS_midday(char *sdate, time_t *t)
     strncpy(&(tstr[11]), midday_str, 8);   // (Skip byte 10.) Copy hh:mm.ss to bytes 11-18.
     tstr[19] = '\0';
 
-    return TimeOfDatePDS(tstr, t);
+    return ConvertUtc2Timet(tstr, t);
 }
 
 
 
-
-// Returns current UTC time in CCYY-MM-DDThh:mm:ss  format
+// Returns CURRENT time as a string on format CCYY-MM-DDThh:mm:ss .
+// "0" in the function name = zero decimals (on the second counter).
 //
 // Assumes that ltime has enough space 
 // for the result, at least 20 chars.
-int GetUTime(char *ltime) 
+//
+// Function name until 2017-07-05: GetUTime
+int GetCurrentUtc0(char *ltime) 
 {
-    
     time_t tsec;
     struct tm bt;
     
@@ -9680,6 +9750,8 @@ int GetUTime(char *ltime)
     
     return 0;
 }
+
+
 
 // LAP Logarithmic decompression functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -10045,13 +10117,13 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
             toggle=1; // Indicate monotonic time
         }
         
-        scet=DDSTime(ibuff); // Get time of DDS packet
+        scet = DecodeDDSTime2Timet(ibuff); // Get time of DDS packet
         
         // DEBUG
-        //Scet2Date_2(scet,tmp_str,0); 
+        //ConvertTimet2Utc(scet,tmp_str,0); 
         //printf("DDS scet %f %s mpstart %d mpstop %d\n",scet,tmp_str,mp.start,mp.stop);
         
-        // Select data within the mission phase only
+        // Determine if data lies within the specified data set (time interval).
         if(mp.start>0)
             if(scet<mp.start || scet>mp.stop)
             {
@@ -10074,7 +10146,7 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
                 continue;
             }      
             
-            Scet2Date_2(scet,tmp_str,0);
+            ConvertTimet2Utc(scet,tmp_str,0);
             DPrintf("SCET: %s\n",tmp_str);
             
             DPrintf("Length: %d\n",length);
@@ -10132,7 +10204,7 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
     //tmp_str[24]='\0';                       // Add \0
     //fprintf(pds.ddsp_fd,"@%s:%s\n",tmp_str,fe->fts_path);
     
-    GetUTime(tmp_str);   // Get universal time string.
+    GetCurrentUtc0(tmp_str);   // Get universal time string.
     fprintf(pds.ddsp_fd, "%s (UTC): %s\n", tmp_str, fe->fts_path);
     
     fflush(pds.ddsp_fd);
@@ -10184,11 +10256,12 @@ int DDSFileDuration(char *str)
     return dff;
 }
 
+
+
 // Returns the start time of any file/directory
 // in a DDS archive hierarchy.
 // Function assumes that it is a true DDS archive
 // hierarchy. Start time is in seconds)
-
 time_t DDSFileStartTime(FTSENT *f) 
 {
     char tstr[64]; // Temporary string
@@ -10282,18 +10355,35 @@ time_t DDSFileStartTime(FTSENT *f)
     return t;
 }
 
-// Returns DDS Time from a DDS packet
-double DDSTime(unsigned char *ibuff)
+
+
+/*
+ * Returns DDS Time from a DDS packet.
+ *
+ * ibuff        : Byte stream.
+ * Return value : time_t value as a double, i.e. number of seconds since 1970-01-01 00:00.00 (judging from how the value is used).
+ * 
+ * NOTE: Used by (1) ProcessDDSFile.
+ *               (2) LoadTimeCorr (TCORR, non-SPICE-kernel information on how to convert "spacecraft clock count"
+ *                   to "Earth second count").
+ * 
+ * NOTE: time_t tends to be interpreted with gmtime which does not take leap seconds into account. Therefore kind of approximate.
+ * 
+ * Function name until 2017-07-05: DDSTime
+ */
+double DecodeDDSTime2Timet(unsigned char *ibuff)
 {
     unsigned int secs;
     unsigned int usecs;
     
     // We assume that we run on a little endian system! Linux i386 platform
-    secs=(ibuff[0]<<24 | ibuff[1]<<16 | ibuff[2]<<8 | ibuff[3]);
-    usecs=(ibuff[4]<<24 | ibuff[5]<<16 | ibuff[6]<<8 | ibuff[7]);
+    secs  = (ibuff[0]<<24 | ibuff[1]<<16 | ibuff[2]<<8 | ibuff[3]);
+    usecs = (ibuff[4]<<24 | ibuff[5]<<16 | ibuff[6]<<8 | ibuff[7]);
     
     return((secs+usecs/1.0e6));
 }
+
+
 
 // Returns DDS virtual channel
 int DDSVirtualCh(unsigned char *ibuff)
@@ -10462,12 +10552,11 @@ int main_TEST(int argc, char* argv[]) {
     printf("errorCode = %i\n", errorCode);
     //*/
 
-    const int N = 9+5;
-    char * s[N];
-    time_t t1, t2;
+    char * s[1000];
+    time_t t, t_midday;
     int i = 0;
 
-    s[i++] = "1970-01-01 00:00:00";
+    s[i++] = "1970-01-01 00:00:00"; 
     s[i++] = "1970-01-01 00:00:01";
     s[i++] = "1970-01-01 00:59:59";
     s[i++] = "1970-01-01 01:00:00";
@@ -10477,16 +10566,35 @@ int main_TEST(int argc, char* argv[]) {
     s[i++] = "1970-01-02 00:00:00";
     s[i++] = "1970-01-02 00:00:01";
 
+    const int i1=i;
+    s[i++] = "2015-06-30 21:59:59";
+    s[i++] = "2015-06-30 21:59:60";    // Possibly leap second if happens to be something fishy with the time zone.
+    s[i++] = "2015-06-30 22:00:00";
+    
+    s[i++] = "2015-06-30 22:59:59";
+    s[i++] = "2015-06-30 22:59:60";    // Possibly leap second if happens to be something fishy with the time zone.
+    s[i++] = "2015-06-30 23:00:00";
+    
+    s[i++] = "2015-06-30 23:59:59";
+    s[i++] = "2015-06-30 23:59:60";    // Leap second in UTC. 
+    s[i++] = "2015-07-01 00:00:00";
+    
     s[i++] = "2016-01-01 12:00:00";
     s[i++] = "2016-01-01 23:00:00";
     s[i++] = "2016-01-02 00:00:00";
     s[i++] = "2016-01-02 00:00:01";
     s[i++] = "2016-01-02 12:00:00";
+    const int i2=i;
+    //const int N=i;
 
-    for (i=0; i<N; i++) {
-        TimeOfDatePDS(       s[i], &t1);
-        TimeOfDatePDS_midday(s[i], &t2);
-        printf("%s ==> %i, %i\n", s[i], (int) t1, (int) t2);
+    printf("UTC                 ==> time_t     time_t midday ==> UTC (non-midday)\n");
+    for (i=i1; i<i2; i++) {
+        //char * utc[1024];
+        
+        ConvertUtc2Timet(       s[i], &t);
+        ConvertUtc2Timet_midday(s[i], &t_midday);
+        //ConvertTimet2Utc(t, utc, TRUE);
+        //printf("%19s ==> %10i, %10i ==> %s\n", s[i], (int) t, (int) t_midday, utc);
     }
 
     return -1;
