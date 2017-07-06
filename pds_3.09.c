@@ -122,6 +122,10 @@
  *      /Erik P G Johansson 2017-06-07
  * * Experimentally using C_ADC20 := C_ADC16 / 16.0, where C=calibration factor, due to the ground calibration being faulty.
  *      /Erik P G Johansson 2017-06-09
+ * * Configures SPICE but does not use it.
+ *   Loads SPICE metakernel (extra row in pds.conf specifies the path). Configures SPICE error behaviour. Does not use SPICE
+ *   except for in test code.
+ *      /Erik P G Johansson 2017-07-06
  * 
  *
  *
@@ -224,6 +228,7 @@
 #include "cirbdec.h"      // cirb declarations
 #include "nice.h"         // Sleep definitions etc
 #include <math.h>         // Floor function
+#include <SpiceUsr.h>     // Required for calling CSPICE (SPICE for C) functions.
 
 
 
@@ -235,6 +240,7 @@
 
 
 void printUserHelpInfo(FILE *stream, char *executable_name);    // Print user help info.
+void initSpice(char *metakernel_path);
 
 // Thread functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -244,7 +250,7 @@ void *DecodeScience(void *);					// Decode Science data thread
 
 // Signal handler
 //----------------------------------------------------------------------------------------------------------------------------------
-static void ExitWithGrace(int signo);				// Gracefull exit
+static void ExitWithGrace(int signo);				// Graceful exit
 
 // Logging and exit functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -522,6 +528,7 @@ pds_type pds =
     "",         // Data subdirectory path for PDS HK
     "",         // Path to data that has not been accepted
     "",         // Index table file path.
+    "",         // Path to SPICE metakernel.
     NULL,       // Log file descriptor LAP PDS System log   
     NULL,       // S/C packet filtering log
     NULL,       // Log file descriptor Science Decoding log 
@@ -571,13 +578,13 @@ static pthread_mutex_t protect_log=PTHREAD_MUTEX_INITIALIZER;
 //----------------------------------------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-//     return main_TEST(argc, argv);   // TEST CODE
+    //return main_TEST(argc, argv);   // TEST CODE
 
     struct sigaction act;
-    int status;           // Just a temporary status/error code variable
-    char tstr1[1024];     // Temporary string
-    char tstr2[1024];     // Temporary string
-    char tstr3[1024];     // Temporary string
+    int status;             // Just a temporary status/error code variable
+    char tstr1[MAX_STR];    // Temporary string
+    char tstr2[MAX_STR];    // Temporary string
+    char tstr3[MAX_STR];    // Temporary string
     
     prp_type tmp_lbl;     // Linked property/value list for temporary use
     
@@ -819,16 +826,19 @@ int main(int argc, char *argv[])
     printf( "DATA_SET_ID                 : %s\n",mp.data_set_id);
     
     // Create unquoted data set ID
-    strcpy(tstr1, mp.data_set_id);		// Make temporary copy
-    TrimQN(tstr1);			// Remove quotes in temporary copy
+    strcpy(tstr1, mp.data_set_id);    // Make temporary copy
+    TrimQN(tstr1);                    // Remove quotes in temporary copy
     
     // Loads second part of configuration information into the PDS structure and opens some log/status files.
     // NOTE: Creates data set directory!!
     if((status=LoadConfig2(&pds, tstr1))<0)
     {
+        // NOTE: Misleading error message for error=-3 or -2.
         fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
         exit(1);
     }
+    
+
     
     if(LoadTimeCorr(&pds,&tcp)<0)         // Load the time correlation packets, once and for all!
     {
@@ -918,7 +928,7 @@ int main(int argc, char *argv[])
     
     ConvertTimet2Utc((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
     YPrintf("Mission phase stop          : %s\n\n",tstr2);
-    printf( "Mission phase stop          : %s\n\n",tstr2);
+    printf( "Mission phase stop          : %s\n",  tstr2);
     SetP(&cat,"STOP_TIME",tstr2,1);                       // Set STOP_TIME
     
     SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
@@ -943,6 +953,18 @@ int main(int argc, char *argv[])
 
 
 
+    AddPathsToSystemLog(&pds);   // Add paths to system log file
+    
+    
+    
+    //===================================================
+    // Configure SPICE, including loading the METAKERNEL
+    //===================================================
+    printf("Path to SPICE metakernel    : %s\n\n", pds.pathmk);
+    initSpice(pds.pathmk);
+
+
+
     // Write initial message to system log
     YPrintf("LAP PDS SYSTEM STARTED     \n");
     YPrintf("========================================================================\n");
@@ -950,8 +972,6 @@ int main(int argc, char *argv[])
     if(calib) {
         YPrintf("Generating calibrated PDS data archive\n");
     }
-    
-    AddPathsToSystemLog(&pds); // Add paths to system log file
     
     //==================================================================================================================================
     // Update keywords in the calibration files and get calibration data.
@@ -1194,6 +1214,54 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "                                            Slightly approximate since does not consider leap seconds.\n");
     fprintf(stream, "\n");
     fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
+}
+
+
+
+/* Function for initializing SPICE.
+ * 
+ * It is useful to have a separate function that does this,
+ * (1) to structure the source code (split it into separate, isolated modules), and
+ * (2) to make it easy for test code initialize SPICE the same way.
+ * 
+ * NOTE: Handles errors itself.
+ */
+void initSpice(char *metakernel_path) {
+    char tstr1[MAX_STR];    // Temporary string
+    char tstr2[MAX_STR];    // Temporary string
+    
+    // Configure SPICE's error behaviour
+    // ---------------------------------
+    // Tell SPICE that on error, it should
+    // (1) not abort the executable (exit pds), and
+    // ((2) print the error message on stderr(?) (although empirically, error message seems to end up in stdout instead).
+    // Therefore, for every call to a SPICE function after this command, the caller should
+    // (1) manually check if an error has occurred,
+    // (2) manually retrieve and print/log the error message, and
+    // (3) manually exit pds.
+    erract_c("SET", MAX_STR, "REPORT");
+    
+    // Change working directory
+    // ------------------------
+    // The metakernel file may contain relative paths. Must therefore, at least
+    // temporarily, change current working directory to the directory of the metakernel file.
+    strcpy(tstr1, metakernel_path);
+    strcpy(tstr2, dirname(tstr1));   // NOTE: dirname might modify the argument. ==> Submit copy.
+    if (chdir(tstr2)) {
+        printf( "Failed to change current directory to \"%s\".\n", tstr2);
+        YPrintf("Failed to change current directory to \"%s\".\n", tstr2);
+        ExitPDS(1);
+    }
+
+    // LOAD SPICE METAKERNEL
+    strcpy(tstr1, metakernel_path);        // NOTE: basename might modify the argument.
+    furnsh_c(basename(tstr1));
+    if (failed_c()) {
+        getmsg_c("LONG", MAX_STR, tstr2);
+        printf( "Could not load SPICE metakernel:\n%s\n", tstr2);
+        YPrintf("Could not load SPICE metakernel:\n%s\n", tstr2);
+        ExitPDS(1);
+    }
 }
 
 
@@ -3699,6 +3767,8 @@ static void ExitWithGrace(int signo)
  * Closes logging and exits with status (exit/error code).
  * When a thread wants pds to quit (and all threads to quit), it calls this function.
  * Also used for exiting without error.
+ * 
+ * NOTE: Uncertain what the convention for exit codes is.
  *
  * status : Exit error code
  */
@@ -4189,20 +4259,22 @@ int OpenLogFile(FILE **pfd,char *name,FILE *fderr)
 int AddPathsToSystemLog(pds_type *p)
 {
     YPrintf("LAP PDS System paths\n"); 
-    YPrintf("Mission calendar file     : %s\n",p->mcpath);
-    YPrintf("LAP Macro desc            : %s\n",p->macrop);
-    YPrintf("DataSetVersion            : %3.1f\n",p->DataSetVersion);
-    YPrintf("DPL Number                : %d\n",p->DPLNumber);
-    YPrintf("PDS Archive               : %s\n",p->apathpds);
-    YPrintf("DDS Archive               : %s\n",p->apathdds);
-    YPrintf("LOG Path                  : %s\n",p->lpath);
-    YPrintf("UnAccepted Path           : %s\n",p->uapath);
+    YPrintf("Mission calendar file     : %s\n",    p->mcpath);
+    YPrintf("LAP Macro desc            : %s\n",    p->macrop);
+    YPrintf("DataSetVersion            : %3.1f\n", p->DataSetVersion);
+    YPrintf("DPL Number                : %d\n",    p->DPLNumber);
+    YPrintf("PDS Archive               : %s\n",    p->apathpds);
+    YPrintf("DDS Archive               : %s\n",    p->apathdds);
+    YPrintf("LOG Path                  : %s\n",    p->lpath);
+    YPrintf("UnAccepted Path           : %s\n",    p->uapath);
+    YPrintf("Path to SPICE metakernel  : %s\n",    p->pathmk);
     
-    YPrintf("Path to calibration files : %s\n",p->cpathd);
-    YPrintf(" Path to coarse voltage bias file : %s\n",p->cpathc);
-    YPrintf(" Path to fine voltage bias file   : %s\n",p->cpathf);
-    YPrintf(" Path to current bias file        : %s\n",p->cpathi);
-    YPrintf(" Path to offset files             : %s\n",p->cpathm);
+    YPrintf("Path to calibration files : %s\n", p->cpathd);
+    YPrintf(" Path to coarse voltage bias file : %s\n", p->cpathc);
+    YPrintf(" Path to fine voltage bias file   : %s\n", p->cpathf);
+    YPrintf(" Path to current bias file        : %s\n", p->cpathi);
+    YPrintf(" Path to offset files             : %s\n", p->cpathm);
+    
     return 0;
 }
 
@@ -4234,7 +4306,7 @@ int GetOption(char *opt, int argc, char *argv[], char *arg)
     int i;
     for(i=1;i<argc;i++)
     {
-        if ((argv[i] != NULL) && !strncmp(argv[i], opt, 1024))
+        if ((argv[i] != NULL) && !strncmp(argv[i], opt, MAX_STR))
         {
             // CASE: Found the option.
             if (arg==NULL)
@@ -4248,7 +4320,7 @@ int GetOption(char *opt, int argc, char *argv[], char *arg)
                 // CASE: We DO expect an extra associated argument.
                 if ((i+1<argc) && (argv[i+1]!=NULL))   // If the argument list contains an (unused) argument after this option (flag)...
                 {
-                    strncpy(arg,argv[i+1],1024); // Copy next entry as argument
+                    strncpy(arg, argv[i+1], MAX_STR); // Copy next entry as argument
                     argv[i] = NULL;
                     argv[i+1] = NULL;
                     return 1;     // CASE: We found the extra argument.
@@ -4314,7 +4386,7 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
     sscanf(l_str,"%d",&p->SCResetCounter);   printf("SCResetCounter              : %d\n",p->SCResetCounter);
     
     fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
-    strncpy(p->SCResetClock,l_str,20);   printf("ResetClock                  : %s\n",p->SCResetClock);
+    strncpy(p->SCResetClock,l_str,20);       printf("ResetClock                  : %s\n",p->SCResetClock);
     
     
     fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
@@ -4348,7 +4420,7 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
  *
  * Sets among others: p->apathpds   // Archive path PDS (Out data)
  *
- * NOTE: The function name is deceiving. The function does more than just read configuration file.
+ * NOTE: The function name is deceiving. The function does more than just read the configuration file.
  * NOTE: COPIES TEMPLATE DIRECTORY TO CREATE THE DATA SET DIRECTORY, and probably more.
  */
 int  LoadConfig2(pds_type *p,char *data_set_id) 
@@ -4518,6 +4590,12 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     if(fgets(line,PATH_MAX,fd)==NULL) return -22;
     Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
     sprintf(p->cpathefp2,"%s%s",p->cpathd,l_str); // Add filename to e-field frequency response probe 2
+
+    if(fgets(line,PATH_MAX,fd)==NULL) return -23; // Read line to be ignored since it is used by lap_agility.
+
+    if(fgets(line,PATH_MAX,fd)==NULL) return -24;
+    Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
+    strncpy(p->pathmk, l_str, PATH_MAX);    // Add SPICE metakernel path.
     
     fclose(fd); // Close config file
     
@@ -4573,9 +4651,9 @@ int  LoadAnomalies(prp_type *p,char *path)
 int  LoadModeDesc(prp_type *p,char *path)
 {
     FILE *fd;
-    char line[1024];   // Line buffer
-    char d_tok[1024];  // Description
-    char m_tok[1024];  // Macro mode
+    char line[MAX_STR];   // Line buffer
+    char d_tok[MAX_STR];  // Description
+    char m_tok[MAX_STR];  // Macro mode
     
     
     printf( "Loading human description of macro modes, file: %s\n",path);
@@ -4587,7 +4665,7 @@ int  LoadModeDesc(prp_type *p,char *path)
         return -1;
     }
     
-    while (fgets(line, 1024, fd) != NULL)
+    while (fgets(line, MAX_STR, fd) != NULL)
     {
         if (line[0] == '\n') continue; // Empty line..
         if (line[0] == '#') continue; // Remove comments..
@@ -5532,8 +5610,8 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
     }
 
     YPrintf("Reading offset calibration exceptions table file: %s\n", pathocet);
-    char line[1024];   // Line buffer
-    while (fgets(line, 1024, fd) != NULL)
+    char line[MAX_STR];   // Line buffer
+    while (fgets(line, MAX_STR, fd) != NULL)
     {
         // NOTE: Ignores a wider syntax than PDS (the format) permits.
         //if (line[0] == '\n') continue;   // Ignore empty line.
@@ -5774,7 +5852,7 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
     N_files=scandir(dir_path, &dir_entry_list, 0, alphasort);  // Returns sorted list, although sorting is unnecessary.
     if (N_files < 0)
     {
-        char tstr[1024];
+        char tstr[MAX_STR];
         sprintf(tstr, "Failed to scan directory for files: \"%s\"\n", dir_path);
         YPrintf(tstr);
         perror(tstr);
@@ -8047,7 +8125,7 @@ int SetupIndex(prp_type *p)
 { 
     if(FreePrp(p)>=0) // Free old stuff
     {
-        char tempstr[1024];
+        char tempstr[MAX_STR];
         
         int DATA_SET_ID_length = strlen(mp.data_set_id);    // Current implementation includes quotes in mp.data_set_id but this might change.
         if (mp.data_set_id[0] == '"') {
@@ -8347,7 +8425,11 @@ void DispState(int s,char *str)
  * by the k_sep'th occurrence of "separator".
  * The right substring is bounded by both occurrences of "separator" and of end-of-string.
  *
- * k_sep :
+ * Input  : str   :
+ * Output : left  :
+ * Output : right :
+ * Input  : separator : 
+ * Input  : k_sep :
  * Return value : min(occurs, <nbr of separators in str>)
  */
 int Separate(char *str, char *left, char *right, char separator, int k_sep)
@@ -10579,15 +10661,52 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
 
 
 //##################################################################################################################
-// Alternative main function that can be temporarily used instead of the real one for testing purposes.
-// The real main function can conveniently be renamed (not commented out, not deleted) when using this function.
+// Alternative "main" function that can be temporarily used instead of the real one for testing purposes.
+// The real main function can, as its first command, call this function, which will then exit pds.
 // This is useful for having test code that has access to other pds-internal functions.
-//int main(int argc, char* argv[]) {
+//##################################################################################################################
 int main_TEST(int argc, char* argv[]) {
     printf("###################################################################################\n");
     printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
     printf("###################################################################################\n");
     ProtectPlnkInit();
+    
+    initSpice("/misc/rosetta/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int/mk/ROS_V030.TM");
+    erract_c("SET", 99999, "DEFAULT");
+
+    // Example: RO-C-RPCLAP-2-TF5-EDITED-V0.1___BACKUP_2017-07-06_17.35.07___befSPICE/DATA/EDITED/2016/SEP/D19/RPCLAP160919_001S_RDS24NS.LBL
+    // START_TIME = 2016-09-19T23:58:44.481
+    // STOP_TIME  = 2016-09-19T23:58:45.307
+    // SPACECRAFT_CLOCK_START_COUNT = "1/0432950235.15680"
+    // SPACECRAFT_CLOCK_STOP_COUNT  = "1/0432950236.4278"
+    
+    {
+        char sccs[MAX_STR];
+        double enc_sclk;
+        double et;
+        char utc[MAX_STR];
+        
+        enc_sclk = 432950236.4278*65536;    // DOES NOT SEEM TO WORK;
+        sct2e_c(ROSETTA_SPICE_ID, enc_sclk, &et);
+        et2utc_c(et, "ISOC", 6, MAX_STR, utc);
+        printf("enc_sclk = %f\n", enc_sclk);
+        printf("et       = %f\n", et);
+        printf("utc      = %s\n", utc);
+        // enc_sclk = 28373826694532.300781
+        // et       = 564411412.872962
+        // utc      = 2017-11-20T00:55:44.690127
+        
+        strcpy(sccs, "1/0432950235.15680");
+        scs2e_c(ROSETTA_SPICE_ID, sccs, &et);
+        et2utc_c(et, "ISOC", 6, MAX_STR, utc);
+        printf("sccs = %s\n", sccs);
+        printf("et   = %f\n", et);
+        printf("utc  = %s\n", utc);
+        // sccs = 1/0432950235.15680
+        // et   = 527601592.666569
+        // utc  = 2016-09-19T23:58:44.484171
+    }
+    return -1;
 
 //     RunShellCommand("echo \"SADQWRDSDF\"");
     
@@ -10604,8 +10723,10 @@ int main_TEST(int argc, char* argv[]) {
     errorCode = WriteUpdatedLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL_modif");
     printf("errorCode = %i\n", errorCode);
     //*/
+    
+    
 
-    char * s[1000];
+    char * s[MAX_STR];
     time_t t, t_midday;
     int i = 0;
 
@@ -10642,13 +10763,15 @@ int main_TEST(int argc, char* argv[]) {
 
     printf("UTC                 ==> time_t     time_t midday ==> UTC (non-midday)\n");
     for (i=i1; i<i2; i++) {
-        //char * utc[1024];
+        char utc[MAX_STR];
         
         ConvertUtc2Timet(       s[i], &t);
         ConvertUtc2Timet_midday(s[i], &t_midday);
-        //ConvertTimet2Utc(t, utc, TRUE);
-        //printf("%19s ==> %10i, %10i ==> %s\n", s[i], (int) t, (int) t_midday, utc);
+        ConvertTimet2Utc(t, utc, TRUE);
+        printf("%19s ==> %10i, %10i ==> %s\n", s[i], (int) t, (int) t_midday, utc);
     }
+    
+    
 
     return -1;
 }

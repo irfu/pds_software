@@ -1,18 +1,21 @@
 
+// NOTE: TRUE mostly useful for assignment. NOTE: If all non-zero values represent true, then comparing with
+// this does not work for equality checks ("true==true", but still 1!=2).
 #define FALSE 0
-#define TRUE 1              // NOTE: Mostly useful for assignment. NOTE: If all non-zero values represent true, then comparing with this does not work for equality checks ("true==true", but still 1!=2).
+#define TRUE 1              
 
-#define EPS 1E-10           // Just a small number
-#define MLEN_DSID 1024      // Max length of data set ID. (Officially max 40 char string, according to "Rosetta Archiving Conventions".)
-#define MLEN_DSNA 1024      // Max length of data set name. (Officially max 60 char string, according to "Rosetta Archiving Conventions".)
-#define DDS_TM_FILE_LEN 37  // DDS TM File length in the sorted directories
-#define SC_SIZE    131072   // Length of circular science input buffer 2^17
-#define MC_SIZE    32768    // Length of mirror buffer
-#define HK_SIZE    65536    // Length of circular HK input buffer 2^16
-#define T_SIZE     8192     // Temporary input buffer size ~2 max S/C packets
-#define RIDICULUS  65536    // Length of science data longer than this is ridiculus.
-#define MAX_STR    1024    
-#define LAP_HK_LEN 12
+#define EPS                1E-10   // Just a small number
+#define MLEN_DSID           1024   // Max length of data set ID. (Officially max 40 char string, according to "Rosetta Archiving Conventions".)
+#define MLEN_DSNA           1024   // Max length of data set name. (Officially max 60 char string, according to "Rosetta Archiving Conventions".)
+#define DDS_TM_FILE_LEN       37   // DDS TM File length in the sorted directories
+#define SC_SIZE           131072   // Length of circular science input buffer 2^17
+#define MC_SIZE            32768   // Length of mirror buffer
+#define HK_SIZE            65536   // Length of circular HK input buffer 2^16
+#define T_SIZE              8192   // Temporary input buffer size ~2 max S/C packets
+#define RIDICULUS          65536   // Length of science data longer than this is ridiculus.
+#define MAX_STR             1024   // Intended (likely) as allocation length for all temporary & generic strings. Not applied everywhere though.
+#define LAP_HK_LEN            12 
+
 
 
 /**=====================================================================================================================================
@@ -74,12 +77,12 @@
 #define TIME_CORR_P_SIZE 30    // Size of time correlation packet itself
 
 // HK temperature calibration.
-// Theese constants give the temperature 
+// These constants give the temperature 
 // of an OP amp on the analog board.
 // Accuracy is not that good!
 
-#define T_OFFSET -260    
-#define T_SCALE  0.0215  
+#define T_OFFSET  -260    
+#define T_SCALE   0.0215  
 
 
 #define HK_NUM_LINES       16         // Maximum number of lines (HK packets) per HK TAB file.
@@ -103,24 +106,25 @@
 #define NGSTATIONS 9
 
 //States
-#define S01_GET_MAINH         1
-#define S02_TEST_SYNC         2
-#define S03_GET_TIME_CODE     3
-#define S04_GET_ID_CODE       4
-#define S05_GET_MACRO_ID      5
-#define S06_GET_MACRO_DESC    6
-#define S07_GET_PARAMS        7
-#define S08_DECODE_PARAMS     8
-#define S09_COMPARE_PARAMS    9
-#define S10_NOT_USED          10
-#define S11_GET_LENGTH        11
-#define S12_GET_DATA          12
-#define S13_RECONNECT         13
-#define S14_RESOLVE_MACRO_PARAMETERS 14
-#define S15_WRITE_PDS_FILES   15
+#define S01_GET_MAINH                  1
+#define S02_TEST_SYNC                  2
+#define S03_GET_TIME_CODE              3
+#define S04_GET_ID_CODE                4
+#define S05_GET_MACRO_ID               5
+#define S06_GET_MACRO_DESC             6
+#define S07_GET_PARAMS                 7
+#define S08_DECODE_PARAMS              8
+#define S09_COMPARE_PARAMS             9
+#define S10_NOT_USED                  10
+#define S11_GET_LENGTH                11
+#define S12_GET_DATA                  12
+#define S13_RECONNECT                 13
+#define S14_RESOLVE_MACRO_PARAMETERS  14
+#define S15_WRITE_PDS_FILES           15
 
 
 #define FINITE_YIELDS         5
+#define ROSETTA_SPICE_ID   -226            // ID number used to represent the Rosetta spacecraft in SPICE functions. Set by NASA NAIF.
 
 
 
@@ -359,15 +363,15 @@ typedef struct pds_type_def
   char lpath[PATH_MAX];        // Log path
   char dpathse[PATH_MAX];      // Data path PDS science edited
   char dpathsc[PATH_MAX];      // Data path PDS science calibrated
-  char cpathd[PATH_MAX];       // Root path to calibration data directory (d)
+  char cpathd[PATH_MAX];       // Root path to calibration data directory (d), CALIB/.
   char cpathf[PATH_MAX];       // Path to fine bias calibration data
   char cpathc[PATH_MAX];       // Path to coarse bias calibration data
   char cpathi[PATH_MAX];       // Path to current bias calibration data
   char cpathm[PATH_MAX];       // Path to offset calibration data. The filename part is a filename pattern.
-  char cpathdfp1[PATH_MAX];    // Path to density frequency response probe 1
-  char cpathdfp2[PATH_MAX];    // Path to density frequency response probe 2
-  char cpathefp1[PATH_MAX];    // Path to e-field frequency response probe 1
-  char cpathefp2[PATH_MAX];    // Path to e-field frequency response probe 2
+  char cpathdfp1[PATH_MAX];    // Path to density (d) frequency (f) response probe 1 (p1)
+  char cpathdfp2[PATH_MAX];    // Path to density (d) frequency (f) response probe 2 (p2)
+  char cpathefp1[PATH_MAX];    // Path to E-field (e) frequency (f) response probe 1 (p1)
+  char cpathefp2[PATH_MAX];    // Path to E-field (e) frequency (f) response probe 2 (p2)
   char cpathocel[PATH_MAX];    // Path to offset calibration exceptions (OCE) data (LBL file)
   char cpathocet[PATH_MAX];    // Path to offset calibration exceptions (OCE) data (TAB file)
   char spaths[PATH_MAX];       // Data subdirectory path for PDS science
@@ -375,6 +379,7 @@ typedef struct pds_type_def
   char spathh[PATH_MAX];       // Data subdirectory path for PDS HK
   char uapath[PATH_MAX];       // Path to data that has not been accepted
   char ipath[PATH_MAX];        // Index table file path.
+  char pathmk[PATH_MAX];       // Path to SPICE metakernel.
   FILE *ylog_fd;               // Log file descriptor LAP PDS System log
   FILE *plog_fd;               // S/C packet filtering log
   FILE *clog_fd;               // Log file descriptor Science Decoding log

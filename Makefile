@@ -46,6 +46,9 @@
 #            If -o is not specified, the default is to put an executable file in a.out, the object file for source.suffix in source.o, its assembler file
 #            in source.s, a precompiled header file in source.suffix.gch, and all preprocessed C source on standard output.
 #
+#        -D name
+#            Predefine name as a macro, with definition 1.
+#            
 # NOTE: If one adds debugging info when compiling (gcc -ggdb), then the compiled binary appears to depend on the number of rows, i.e. NOT only on the
 # logic/functionality of the code. The executable changes if one e.g. adds/removes comments.
 # This is bad if one wants to compile two different source code versions that should have the same functionality and then compare the corresponding
@@ -61,20 +64,24 @@ VER = 3.09
 CC	= gcc
 #OBJ1    = pds_$(VER).o plnk.o cirb.o id.o OASWlib.o 
 OBJ1    = pds_$(VER).o plnk.o cirb.o id.o
-EF      = -lefence
+#EF      = -lefence
 #CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
 CFLAGS  = -Wall -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
+
+# Path to CSPICE directory (32-bit). To be system-independent, it should be a path under the pds directory. To put CSPICE outside of pds, use a symlink.
+CSPICE_PATH = CSPICE_32bit/
+
 # Libraries required by Fortran 
-FLIBS   = -lifport -lunwind -lcxa -lifcore #$(EF)
+#FLIBS   = -lifport -lunwind -lcxa -lifcore #$(EF)
 # Fortran includes
-FINCL   = /opt/intel_fc_80/lib
+#FINCL   = /opt/intel_fc_80/lib
 
 
 all: pds 
 
 #edit FJ 10/7 2014 , added math lib <math.h>, by using -lm after(!!) objects
-pds : $(OBJ1) pds.h id.h esatm.h nice.h
-	$(CC) $(CFLAGS) $(OBJ1) -lm -o bin/$@ -lpthread -D_GNU_SOURCE -D_XOPEN_SOURCE=500 
+pds : $(OBJ1) pds.h id.h esatm.h nice.h      # SpiceUsr.h
+	$(CC) $(CFLAGS) $(OBJ1) $(CSPICE_PATH)/lib/cspice.a -lm -o bin/$@ -lpthread -D_GNU_SOURCE -D_XOPEN_SOURCE=500 
 
 #OASWlib.o : OASWlib.f
 #	ifort -w -c $< -o $@ -Iinc -cxxlib-gcc
@@ -85,7 +92,7 @@ id.c    : id.h
 	./doid $<
 
 %.o: %.c nice.h pds.h id.h esatm.h plnk.h cirb.h plnkdec.h cirbdec.h
-	$(CC) $(CFLAGS)  -c $< -o $@ -D_GNU_SOURCE -D_XOPEN_SOURCE=500 
+	$(CC) $(CFLAGS) -I$(CSPICE_PATH)/include   -c $< -o $@ -D_GNU_SOURCE -D_XOPEN_SOURCE=500 
 clean:
 	rm -f *.o 
 	rm -f id.c
