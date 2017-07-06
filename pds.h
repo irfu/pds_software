@@ -208,12 +208,13 @@ typedef struct tc_type_def
 
 
 
-// Calibration data structure
+// Data structure for storing calibration data: bias voltage-dependent current offsets
+// 
 // NOTE: This structure is used inside m_type, but is ALSO used outside of and independently
 // of m_type, notably course/fine bias voltages and current bias calibrations.
 typedef struct c_type_def
 {
-  char validt[32];        // Data is taken/valid at this time (UTC string).
+  char valid_utc[32];     // Data is taken/valid at this time (UTC string).
   int rows;               // Rows
   int cols;               // Columns
   double **C;             // Conversion matrix

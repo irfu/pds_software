@@ -162,20 +162,22 @@
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
  *       This is due to dysfunctional automatic indentation in the Kate editor.
  * NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
- * NOTE: The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
+ * NOTE: time_t:
+ * (1) The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
  * (Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to)
  * Code that uses this includes (incomplete list): function ConvertUtc2Timet_2 (used only once), WritePTAB_File,
  * possibly the use of bias e.g. in LoadBias. Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler),
  * time_t appears to correspond to number of seconds after 1970-01-01 00:00.00.
+ * (2) Code uses standard POSIX C functions that convert time_t <--> ~UTC which appear to NOT take leap seconds into account!
  * 
- * 
- * 
+ * NAMING CONVENTIONS
+ * ------------------
  * Functions for (1) interpreting time from byte streams, and (2) converting between different time formats, have been renamed to
  * make their functions easier to understand. The names use the following naming conventions:
  *  UTC   = A string on the form 2016-09-01T00:16:51.946, although the number of second decimals may vary (or be ignored on reading).
  *  Timet = Variable which value can be interpreted as time_t, although many times it is actually a double, int, or unsigned int.
  *  SCCS  = Spacecraft clock count string, e.g. 1/0431309243.15680 (false decimals).
- *  SCCD  = Spacecraft clock count double, i.e. approximately counting seconds (true decimals).
+ *  SCCD  = Spacecraft clock count double, i.e. approximately counting seconds (true decimals). Note that the reset counter has to be handled separately.
  *
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
@@ -1865,10 +1867,8 @@ void *DecodeScience(void *arg)
         }
     }
     
-    if(nmode>0 && mode!=NULL && debug>1)
-    {
-        for(i=0;i<nmode;i++)
-        {
+    if(nmode>0 && mode!=NULL && debug>1) {
+        for(i=0;i<nmode;i++) {
             printf("Time %d Mode 0x%02x\n",mode[i][0],mode[i][1]);
         }
     }
@@ -3260,8 +3260,8 @@ void *DecodeScience(void *arg)
                                                         if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                         {
                                                             CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
-                                                            curr.offset_time=aqps_seq*32.0;
-                                                            curr.seq_time=rstime+curr.offset_time;      // Calculate time of current sequence
+                                                            curr.offset_time = aqps_seq*32.0;
+                                                            curr.seq_time    = rstime + curr.offset_time;      // Calculate time of current sequence
                                                             
                                                             ConvertSccd2Sccs(curr.seq_time, pds.SCResetCounter, tstr1); // Compile OBT string and add reset number of S/C clock.
                                                             
@@ -4607,8 +4607,29 @@ int  LoadModeDesc(prp_type *p,char *path)
 
 
 
-int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt_s,char *path) // Load bias settings
+// Load bias settings = Load file with commanded biases (pds.bias?)
+// 
+// Output : bias_s     : 2D array of integers, size bias_cnt_s x 3. Contains content of rows where second column is NOT "*Mode*".
+//                       [i][0] = First  file column value = time (time_t).
+//                       [i][1] = Second file column value = voltage bias (high byte=P1, low byte=P2)
+//                       [i][2] = Third  file column value = current bias (high byte=P1, low byte=P2)
+// Output : mode_s     : 2D array of integers, size mode_cnt_s x 2. Contains content of rows where second column IS "*Mode*".
+//                       [i][0] = First file column value = time (time_t).
+//                       [i][1] = THIRD file column value. (Second column value ="*Mode*")
+// Output : bias_cnt_s
+// Output : mode_cnt_s
+// 
+int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt_s,char *path)
 {
+// Excerpt from pds.bias:
+// ----------------------
+// # TIME|TAB|DENSITY P1P2|TAB|EFIELD P2P1|
+// #
+// 2004-03-21T20:24:39.000 *Mode*  0x0011
+// 2004-05-08T11:42:50.000 0xd0d0  0x0000
+// 2004-05-08T16:47:51.000 0xd0d0  0x0000
+// 2004-05-08T21:30:40.387 *Mode*  0x000c
+
     FILE *fd;
     char line[256]; // Line buffer
     char l_tok[80]; // Left token
@@ -4626,7 +4647,7 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     unsigned int de,ef;
     time_t t;
     
-    printf("Loading bias file: %s\n",path);
+    printf( "Loading bias file: %s\n",path);
     YPrintf("Loading bias file: %s\n",path);
     
     if((fd=fopen(path,"r"))==NULL)
@@ -4639,10 +4660,10 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     // Count bias table lines
     while(fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue;  // Empty line.
-        if (line[0] == '#') continue;  // Remove comments.
-        if(line[0] == ' ')  continue;  // Ignore whitespace line.
-        if(strstr(line,"*Mode*")==NULL)
+        if (line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#')  continue;  // Remove comments.
+        if (line[0] == ' ')  continue;  // Ignore whitespace line.
+        if (strstr(line,"*Mode*")==NULL)
             bias_cnt++;
         else
             mode_cnt++;
@@ -4651,20 +4672,19 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     rewind(fd); // Rewind index label to start
     
     
-    bias=CallocIntMatrix(bias_cnt,3); // Allocate a matrix of integers
-    
+    bias=CallocIntMatrix(bias_cnt,3);   // Allocate a matrix of integers.
     mode=CallocIntMatrix(mode_cnt,2);
     
     bias_cnt=0;
     mode_cnt=0;
     while (fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue;  // Empty line.
-        if (line[0] == '#') continue;  // Remove comments.
-        if(line[0] == ' ')  continue;  // Ignore whitespace line.
+        if (line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#')  continue;  // Remove comments.
+        if (line[0] == ' ')  continue;  // Ignore whitespace line.
         Separate(line,l_tok,m_tok,'\t',1);   // Separate at first occurrence of a tab character
         Separate(line,m_tok,r_tok,'\t',2);   // Separate at second occurrence of a tab character
-        ConvertUtc2Timet(l_tok,&t);          // Convert time to seconds
+        ConvertUtc2Timet(l_tok, &t);         // Convert time to seconds
         
         
         if(strstr(m_tok,"*Mode*")==NULL)
@@ -4672,18 +4692,17 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
             sscanf(m_tok,"%x",&de);
             sscanf(r_tok,"%x",&ef);
             
-            bias[bias_cnt][0]=(unsigned int)t; // Safe since time_t is a unsigned int!
-            bias[bias_cnt][1]=de;
-            bias[bias_cnt][2]=ef;
+            bias[bias_cnt][0] = (unsigned int) t; // Safe since time_t is a unsigned int!
+            bias[bias_cnt][1] = de;
+            bias[bias_cnt][2] = ef;
             bias_cnt++;
         }
         else
         {
-            
             sscanf(r_tok,"%x",&mde);
             
-            mode[mode_cnt][0]=(unsigned int)t; // Safe since time_t is a unsigned int!
-            mode[mode_cnt][1]=mde;
+            mode[mode_cnt][0] = (unsigned int) t; // Safe since time_t is a unsigned int!
+            mode[mode_cnt][1] = mde;
             mode_cnt++;
         }
     }
@@ -4883,13 +4902,12 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
  * 
  * Checks whether a LBL/TAB file pair should be created at all depending on the data (time).
  * 
- * Value assigned to *excludeData:
- *      false: do not exclude data.
- *      true:  exclude data.
- *      
+ * Input  : file_properties : LBL file "properties".
+ *                              NOTE: Requires SPACECRAFT_CLOCK_START/STOP_COUNT (used by algo.), START/STOP_TIME (for loggin) to already have been set.
+ * Output : *excludeData    : false = Do not exclude data.
+ *                            true  = Exclude data.
  * Return value: 0 (no error), -1 (error).
  *
- * NOTE: Requires SPACECRAFT_CLOCK_START_COUNT, SPACECRAFT_CLOCK_STOP_COUNT, START_TIME, STOP_TIME to already have been set.
  * 
  * IMPLEMENTATION NOTE: The code determines SPACECRAFT_CLOCK_START_COUNT and SPACECRAFT_CLOCK_STOP_COUNT
  * from property list used for writing LBL file(s). This means that the values are parsed from strings.
@@ -4909,6 +4927,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
 int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData) {
     // PROPOSAL: Reverse exclude/include return result?
     // PROPOSAL: Boolean parameter-by-reference for include/exclude and separate error/no-error return value.
+    // PROPOSAL: Move reading of START/STOP_TIME to inside if-then statement. ==> Speeds up.
     // QUESTION: How handle not finding SPACECRAFT_CLOCK_START/STOP_COUNT? Include?
     // QUESTION: How handle multiple findings for one key/name? Checks?
     property_type *property1 = NULL;
@@ -6063,9 +6082,9 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
     cal->cols=ncols; // Columns
     
     if(property2!=NULL) {
-        strcpy(cal->validt,property2->value); // Copy valid from time
+        strcpy(cal->valid_utc, property2->value); // Copy valid from time
     } else {
-        strcpy(cal->validt,"2003-01-01T00:00:00.000");
+        strcpy(cal->valid_utc, "2003-01-01T00:00:00.000");
     }
     
     
@@ -6112,7 +6131,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
     
     if(debug>2) // If debugging level is larger than 2 
     {
-        printf("Valid from: %s\n",cal->validt);
+        printf("Valid from: %s\n", cal->valid_utc);
         for(i=0;i<nrows;i++)
         {
             for(j=0;j<ncols;j++) {
@@ -6154,11 +6173,11 @@ char GetBiasMode(curr_type *curr, int dop) {
 
 
 /*
- * Function to select which bias voltage current offset calibration data to used for a given point in time.
+ * Function to select which bias voltage-dependent current offsets (calibration data) to use for a given point in time.
  *
  * NOTE: The function will set the flag mc->calibration_used.
  *
- * t_data   : The time for which we have science data.
+ * t_data   : The time for which we have science data that needs to be calibrated.
  * UTC_data : The time for which we have science data as a UTC string.
  * mc       : Calibration data.
  * Return value : An index into the corresponding arrays in "mc".
@@ -6171,30 +6190,30 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      * ASSUMES: Calibrations are sorted in time (increasing).
      *
      * IMPLEMENTATION NOTE: This is potentially unnecessarily slow since every calibration data time stamp must be converted:
-     * mc->CD[i].validt: UTC string --> time_t --> scalar variable
+     * mc->CD[i].valid_utc: UTC --> time_t --> scalar variable
      * (and t_data: time_t --> scalar variable)
      *
-     * Naming convention:
+     * VARIABLE NAMING CONVENTION:
      *    t_*  = Variable of type time_t.
-     *    tp_* = Variable of type double, representing the number of seconds after a common arbitrary reference epoch (same for all tp_* variables).
+     *    tp_* = Variable of type double, representing the number of seconds after a common arbitrary reference epoch (same epoch for all tp_* variables).
      */
 
     //######################################################################################################
     /* FUNCTION: Return number of seconds since an arbitrary epoch (a constant reference point in time).
      *
-     * ASSUMES: The refence epoch variable has been initialized.
+     * ASSUMES: The refence epoch variable "t_ref" has been initialized.
      * RATIONALE: According the time_t documentation, one should really avoid doing arithmetic with time_t variables since its meaning
      * depends on the library implementation. There is also no proper(?) way of converting from time_t to a scalar time (e.g. seconds
      * after some universal reference time, e.g. 1970-01-01, 00:00.00) more than difftime.
      * --
-     * QUESTION: Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway?
+     * QUESTION: Overkill since POSIX & UNIX systems should use time_t=seconds since 1970 anyway, and other pds code uses that assumption anyway?
      */
-    time_t t_ref;                               // Variable used by function.
-    ConvertUtc2Timet(mc->CD[0].validt, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
-    inline double GetSecondsTime(time_t t)    {   return difftime(t, t_ref);   }
+    time_t t_ref;                                     // Variable used by function.
+    ConvertUtc2Timet(mc->CD[0].valid_utc, &t_ref);    // Initialize ref_time - Set it to an arbitrary valid time.
+    inline double GetSecondsTime(time_t t)    {   return difftime(t, t_ref);   }   // difftime : Return time difference in seconds between two time_t variables.
     //######################################################################################################
 
-    double tp_calib1, tp_calib2, tp_data;
+    double tp_data;
     time_t t_calib;        // Calibration time for current calibration.
     int i;
 
@@ -6202,15 +6221,19 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 
     //============================================================================================================
     // Check if t_data is covered by any of pre-defined time intervals in the offset calibration exceptions list.
+    // If so, use that result and return/exit.
     //============================================================================================================
     for (i=0; i<mc->n; i++)   // Iterate over calibrations.
     {
         calib_interval_type *interval = mc->calib_info[i].intervals;
 
         while (interval!=NULL) {
-            if ((GetSecondsTime(interval->t_begin) <= tp_data) && (tp_data <= GetSecondsTime(interval->t_end))) {   // NOTE: Covers equals at both interval beginning and interval end.
+            // NOTE: Covers equals at both interval beginning and interval end.
+            if (   (GetSecondsTime(interval->t_begin) <= tp_data                        )
+                && (                          tp_data <= GetSecondsTime(interval->t_end)) )
+            {
                 mc->calib_info[i].calibration_file_used = TRUE;
-                return i;
+                return i;                                            // RETURN / EXIT FUNCTION
             }
             interval = interval->next;
         }
@@ -6224,19 +6247,21 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
      * ==> Every day (midnight-to-midnight) gets the same data time. This is to ensure that any change of used calibration (due to the
      * default algorithm) only happens at midnight.
      */
-    ConvertUtc2Timet_midday(UTC_data, &t_data);
-    tp_data = GetSecondsTime(t_data);
-    ConvertUtc2Timet(mc->CD[0].validt, &t_calib);
-    tp_calib2 = GetSecondsTime(t_calib);
-    for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
+    double tp_calib1, tp_calib2;   // Times of two subsequent calibrations.
+    ConvertUtc2Timet_midday( UTC_data,            &t_data  );   tp_data   = GetSecondsTime(t_data);
+    ConvertUtc2Timet(        mc->CD[0].valid_utc, &t_calib );   tp_calib2 = GetSecondsTime(t_calib);   // Initial value to start algorithm.
+    for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of subsequent calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
     {
-        tp_calib1 = tp_calib2;
+        tp_calib1 = tp_calib2;                 // Set first calibration time.
 
-        ConvertUtc2Timet(mc->CD[i+1].validt, &t_calib);
-        tp_calib2 = GetSecondsTime(t_calib);
+        ConvertUtc2Timet(mc->CD[i+1].valid_utc, &t_calib);
+        tp_calib2 = GetSecondsTime(t_calib);   // Set second calibration time.
 
-        double tp_middle = (tp_calib1 + tp_calib2) / 2.0;   // Middle between calibration times.
-        if (tp_data <= tp_middle) {
+        double tp_calib_middle = (tp_calib1 + tp_calib2) / 2.0;   // Middle between the two calibration times.
+        // If tp_calib1 is closest to tp_data, then if statement will be triggered
+        // If tp_calib2 is closest to tp_data, then the if statement in the next loop iteration will be triggered.
+        // This is effectively equivalent to choosing the calibration closest to tp_data.
+        if (tp_data <= tp_calib_middle) {
             break;
         }
     }
@@ -6384,14 +6409,14 @@ int WritePTAB_File(
     int samp_plateau)
 {
     char tstr2[256];                // Temporary string
-    char tstr3[256];
-
-    char UTC_str[256];
+    
+    char current_sample_utc[256];
+    char first_sample_utc[256];
 
     int curr_step=3;                // Current sweep step, default value just there to get rid of compilation warning.
     
     double td1;                     // Temporary double
-    double td2;                     // Temporary double
+    double current_sample_sccd;     // Time of current sample (current row) as SCCD.
     
     int i,j,k,l,m;
     int meas_value_TM;               // Measured value (i.e. not bias value) in TM units. NOTE: Integer.
@@ -6434,11 +6459,11 @@ int WritePTAB_File(
     double vcalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
     double ccalf_ADC16 = 0.0/0.0;    // Voltage calibration factor for ADC16.
     
-    time_t old_time;
-    time_t stime;                   // Time of current data
+    time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
+    time_t stime;                   // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
+    double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
     
-    double utime;                   // Current time in UTC for test of extra bias settings.
-    int valid=0;                    // Valid index into structure with calibration data.
+    int i_calib=0;                  // Valid index into structure with calibration data.
     
     property_type *property1;       // declare temporary property1
     
@@ -6481,12 +6506,12 @@ int WritePTAB_File(
 
     
     
-    vcalf = 1.0; // Assume 1 to begin with
-    ccalf = 1.0; // Assume 1 to begin with
+    vcalf = 1.0;   // Assume 1 to begin with.
+    ccalf = 1.0;   // Assume 1 to begin with.
     
-    ConvertSccd2Utc(curr->seq_time, UTC_str, 0); // First convert spacecraft time to UTC to get time calibration right
+    ConvertSccd2Utc(curr->seq_time, first_sample_utc, 0);  // First convert spacecraft time to UTC to get time calibration right
     
-    ConvertUtc2Timet(UTC_str, &stime);            // Convert back to seconds
+    ConvertUtc2Timet(first_sample_utc, &stime);            // Convert back to seconds
 
     /*===================================================================================================================
      * Determine
@@ -6527,9 +6552,9 @@ int WritePTAB_File(
         //=============
 
         // Figure out which calibration data to use for the given time of the data.
-        valid = SelectCalibrationData(stime, UTC_str, mc);
+        i_calib = SelectCalibrationData(stime, first_sample_utc, mc);
         if (debug >= 1) {
-            CPrintf("    Calibration file %i: %s\n", valid, mc->calib_info[valid].LBL_filename);
+            CPrintf("    Calibration file %i: %s\n", i_calib, mc->calib_info[i_calib].LBL_filename);
         }
         
        
@@ -6594,8 +6619,8 @@ int WritePTAB_File(
                     //============
                     //  CASE: P1
                     //============
-                    if (is_high_gain_P1) {   ccalf=mc->CF[valid].c_cal_16b_hg1;   }
-                    else                 {   ccalf=mc->CF[valid].c_cal_16b_lg;    }
+                    if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
+                    else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
                 }
                 
                 if(writing_P2_data)
@@ -6603,8 +6628,8 @@ int WritePTAB_File(
                     //============
                     //  CASE: P2
                     //============
-                    if (is_high_gain_P2) {   ccalf=mc->CF[valid].c_cal_16b_hg1;   }
-                    else                 {   ccalf=mc->CF[valid].c_cal_16b_lg;    }
+                    if (is_high_gain_P2) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
+                    else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
                 }
                 
                 if(writing_P3_data)
@@ -6613,8 +6638,8 @@ int WritePTAB_File(
                     //  CASE: P3
                     //============
                     // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
-                    if (is_high_gain_P1) {   ccalf=mc->CF[valid].c_cal_16b_hg1;   }
-                    else                 {   ccalf=mc->CF[valid].c_cal_16b_lg;    }
+                    if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
+                    else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
                 }
                 
                 ccalf_ADC16 = ccalf;
@@ -6636,17 +6661,17 @@ int WritePTAB_File(
                     //  CASE: P1
                     //============
                     if (is_high_gain_P1) {
-                        //ccalf       = mc->CF[valid].c_cal_20b_hg1;
-                        //ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
-                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P1;
-                        //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1;
+                        //ccalf       = mc->CF[i_calib].c_cal_20b_hg1;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0;
+                        ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P1;
+                        //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
+                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
                     } else {
-                        //ccalf       = mc->CF[valid].c_cal_20b_lg;
-                        //ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
-                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0 * ADC_RATIO_P1;
-                        //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg;
+                        //ccalf       = mc->CF[i_calib].c_cal_20b_lg;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0;
+                        ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P1;
+                        //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_lg / 16;   // Should always be ADC16 value.
+                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
                     }
 
                     if(data_type==D20T || data_type==D201T) { // If using P1 ADC20 truncated data, compensate calibration factors for this.
@@ -6661,17 +6686,17 @@ int WritePTAB_File(
                     //  CASE: P2
                     //============
                     if (is_high_gain_P2) {
-                        //ccalf       = mc->CF[valid].c_cal_20b_hg1;
-                        //ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0;
-                        ccalf       = mc->CF[valid].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P2;
-                        //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[valid].c_cal_16b_hg1;
+                        //ccalf       = mc->CF[i_calib].c_cal_20b_hg1;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0;
+                        ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P2;
+                        //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
+                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
                     } else {
-                        //ccalf       = mc->CF[valid].c_cal_20b_lg;
-                        //ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0;
-                        ccalf       = mc->CF[valid].c_cal_16b_lg / 16.0 * ADC_RATIO_P2;
-                        //ccalf_ADC16_old = mc->CF[valid].c_cal_16b_lg / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[valid].c_cal_16b_lg;
+                        //ccalf       = mc->CF[i_calib].c_cal_20b_lg;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0;
+                        ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P2;
+                        //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_lg / 16;   // Should always be ADC16 value.
+                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
                     }
 
                     if(data_type==D20T || data_type==D202T) { // If using P2 ADC20 truncated data, compensate calibration factors for this.
@@ -6691,13 +6716,13 @@ int WritePTAB_File(
             // CASE: E-FIELD MODE
             //====================
             
-            vcalf_ADC16 = mc->CF[valid].v_cal_16b;
+            vcalf_ADC16 = mc->CF[i_calib].v_cal_16b;
             
             if(data_type==D16) {
                 //=================
                 //   CASE: ADC16
                 //=================
-                vcalf = mc->CF[valid].v_cal_16b;
+                vcalf = mc->CF[i_calib].v_cal_16b;
                 //vcalf_ADC16_old = vcalf;
             }
             else
@@ -6705,12 +6730,12 @@ int WritePTAB_File(
                 //=================
                 //   CASE: ADC20
                 //=================
-                //vcalf       = mc->CF[valid].v_cal_20b;
-                //vcalf       = mc->CF[valid].v_cal_16b / 16.0;                
-                if      (writing_P1_data) {   vcalf = mc->CF[valid].v_cal_16b / 16.0 * ADC_RATIO_P1;   }
-                else if (writing_P2_data) {   vcalf = mc->CF[valid].v_cal_16b / 16.0 * ADC_RATIO_P2;   }
+                //vcalf       = mc->CF[i_calib].v_cal_20b;
+                //vcalf       = mc->CF[i_calib].v_cal_16b / 16.0;                
+                if      (writing_P1_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P1;   }
+                else if (writing_P2_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P2;   }
                 
-                //vcalf_ADC16_old = mc->CF[valid].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16_old). Should always be derived from ADC16 factor.
+                //vcalf_ADC16_old = mc->CF[i_calib].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16_old). Should always be derived from ADC16 factor.
                 if (data_type==D20T || data_type==D201T || data_type==D202T) {   // If using ADC20 truncated data, compensate calibration factors for this. NOTE: Odd condition with "||"?
                     vcalf *= 16;   // Increase cal factor by 16 for truncated ADC20 data.
                     //vcalf_ADC16_old *= 16;
@@ -6794,7 +6819,7 @@ int WritePTAB_File(
                 vbias2 = curr->vbias2;
             }
             
-            old_time=0;
+            utime_old=0;
             
             
             
@@ -6867,32 +6892,38 @@ int WritePTAB_File(
                         j+=2;
                 }
                 
-                td1 = i*curr->factor;   // Calculate current time relative to first time (first data point).
+                td1 = i * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.
                 
-                td2 = curr->seq_time + td1;   // Calculate current time.
-                ConvertSccd2Utc(td2,tstr3,1);   // Decode raw time to UTC.
+                current_sample_sccd = curr->seq_time + td1;                    // Calculate current time (absolute).
+                ConvertSccd2Utc(current_sample_sccd, current_sample_utc, 1);   // Decode raw time to UTC.
                 
+                //==============================================================================
+                // Check for commanded bias (outside of macro lopp). If found, then set biases.
+                //==============================================================================
                 if(nbias>0 && bias!=NULL)
                 {
-                    // Figure out if any extra bias settings have been done outside of macros
-                    utime=(unsigned int)stime+td1; // Current time in raw utc format
+                    // Figure out if any extra bias settings have been done outside of macros.
+                    utime=(unsigned int)stime+td1;   // Current time in raw utc format
                     
                     extra_bias_setting=0;
-                    for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings.
+                    for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
                     {
-                        if(bias[l][0]<=utime && bias[l][0]>old_time)   // Find any bias setting before current time.
+                        if(bias[l][0]<=utime && bias[l][0]>utime_old)   // Find any bias setting before current time.
                         {
                             extra_bias_setting=1;
+                            
+                            // Check if any mode change happened after the found bias setting, but before the current time.
                             for(m=0;m<nmode;m++)
                             {
-                                old_time=utime;
-                                if(mode[m][0]>bias[l][0] && mode[m][0]<=utime)   // Check a mode change happened after a extra bias setting.
+                                utime_old=utime;
+                                if(mode[m][0]>bias[l][0] && mode[m][0]<=utime)
                                 {
+                                    // CASE: A mode change happened (1) after the found bias setting, and (2) before current data (utime).
                                     extra_bias_setting=0;
                                     break;
                                 }
                             }
-                            break;
+                            break;   // Do NOT continue iterating over other bias settings.
                         }
                     }
                     
@@ -6912,7 +6943,7 @@ int WritePTAB_File(
                          * (2) if the code failed in a good way for non-decimal numbers which it seemed to do.
                          * /Erik P G Johansson 2015-12-07
                          */            
-                        //macro_id = atoi(strndup(property1->value+6,4)); // Strip off "MCID0X" and converted to a DECIMAL number.  
+                        //macro_id = atoi(strndup(property1->value+6,4)); // Strip off "MCID0X" and converted to a DECIMAL number.
                         char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
                         sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
                         free(tempstr);
@@ -6920,7 +6951,7 @@ int WritePTAB_File(
                         if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
                         {
                             extra_bias_setting = 0;
-                            YPrintf("Forbidden bias setting found at %s. Macro %x\n", UTC_str, macro_id);
+                            YPrintf("Forbidden bias setting found at %s. Macro %x\n", first_sample_utc, macro_id);
                             // Add some way of detecting that this is the first macro loop with extra_bias_settings?
                         }
                     }
@@ -6937,7 +6968,7 @@ int WritePTAB_File(
                          * curr->ibias2=(bias[l][2] & 0xff);         // Override macro present current bias p2 
                          ***/
                         
-                        CPrintf("    Extra bias setting applied at: %s \n",tstr3);
+                        CPrintf("    Extra bias setting applied at: %s \n", current_sample_utc);
                         CPrintf("      Density P1: 0x%02x P2: 0x%02x\n",vbias1,vbias2);
                         CPrintf("      E_Field P1: 0x%02x P2: 0x%02x\n",ibias1,ibias2);
                         
@@ -7070,24 +7101,24 @@ int WritePTAB_File(
                                 //=========================
                                 // FKJN 2014-09-02
                                 // if 20bit data (non-truncated ADC20), ocalf = 16, otherwise 1.
-                                // ccurrent=ccalf*((double)(current_TM-16*mc->CD[valid].C[voltage_TM][1]));
+                                // ccurrent=ccalf*((double)(current_TM-16*mc->CD[i_calib].C[voltage_TM][1]));
                                 
                                 if(curr->sensor==SENS_P1)
                                 {
                                   //ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][1];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][1];
+                                    ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][1];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[voltage_TM][1]);   // Write time, current and calibrated voltage
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[voltage_TM][1]);   // Write time, current and calibrated voltage
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
                                 {
                                   //ccurrent  = ccalf * ((double)(current_TM));
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][2];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][2];
+                                    ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][2];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[voltage_TM][2]);   // Write time, current and calibrated voltage
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[voltage_TM][2]);   // Write time, current and calibrated voltage
                                 }
                             }
                             else
@@ -7106,10 +7137,10 @@ int WritePTAB_File(
                                     // to a number from 0-255 if we want to use the same offset calibration file
                                     
                                   //ccurrent  = ccalf * ((double)(current_TM));
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][1];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][1];
+                                    ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][1];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
                                             ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2]);   // Write time, current and calibrated voltage
                                     // NOTE: f_conv.C[ ... ][2] : [2] refers to column 3 in the file from which the data is read (i.e. not P2).
                                 }
@@ -7117,10 +7148,10 @@ int WritePTAB_File(
                                 if(curr->sensor==SENS_P2)
                                 {
                                   //ccurrent  = ccalf * ((double)(current_TM));
-                                    ccurrent -= ccalf_ADC16   * mc->CD[valid].C[voltage_TM][2];
-                                  //ccurrent -= ccalf * ocalf * mc->CD[valid].C[voltage_TM][2];
+                                    ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];
+                                  //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][2];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
                                             ccurrent,   f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3]);   // Write time, current and calibrated voltage
                                     // NOTE: f_conv.C[ ... ][3] : [3] refers to column 4 in the file from which the data is read (i.e. not P3).
                                 }
@@ -7140,36 +7171,36 @@ int WritePTAB_File(
                             {
                                 
                               //ccurrent  = ccalf * ((double) current_TM) * ADC20_moving_average_bug_TM_factor;
-                                ccurrent -= ccalf_ADC16             * mc->CD[valid].C[vbias1][1];
-                              //ccurrent -= ccalf_ADC16_old * ocalf * mc->CD[valid].C[vbias1][1];
+                                ccurrent -= ccalf_ADC16             * mc->CD[i_calib].C[vbias1][1];
+                              //ccurrent -= ccalf_ADC16_old * ocalf * mc->CD[i_calib].C[vbias1][1];
                               //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
 
                                 //fprintf(pds.stable_fd, "current_TM=%i;   calf=%14.7e;   ADC20_moving_average_bug_TM_factor=%14.7e;   ccalf_ADC16=%14.7e\r\n", current_TM, ccalf, ADC20_moving_average_bug_TM_factor, ccalf_ADC16);    // DEBUG
-                                //fprintf(pds.stable_fd, "mc->CD[valid].C[vbias1][1]=%14.7e;   local_calib_offset_ADC16TM=%14.7e\r\n",   mc->CD[valid].C[vbias1][1],   ADC20_moving_average_bug_TM_factor);    // DEBUG                                
+                                //fprintf(pds.stable_fd, "mc->CD[i_calib].C[vbias1][1]=%14.7e;   local_calib_offset_ADC16TM=%14.7e\r\n",   mc->CD[i_calib].C[vbias1][1],   ADC20_moving_average_bug_TM_factor);    // DEBUG                                
                                 // Write time, current and calibrated voltage
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[vbias1][1]);
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[vbias1][1]);
                             }
 
                             if(writing_P2_data)
                             {
                               //ccurrent  = ccalf * ((double) current_TM) * ADC20_moving_average_bug_TM_factor;
-                                ccurrent -= ccalf_ADC16             * mc->CD[valid].C[vbias2][2];
-                              //ccurrent -= ccalf_ADC16_old * ocalf * mc->CD[valid].C[vbias2][2];
+                                ccurrent -= ccalf_ADC16             * mc->CD[i_calib].C[vbias2][2];
+                              //ccurrent -= ccalf_ADC16_old * ocalf * mc->CD[i_calib].C[vbias2][2];
                               //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                 
                                 // Write time, current and calibrated voltage 
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[vbias2][2]);
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[vbias2][2]);
                             }
                             
                             if(writing_P3_data)
                             {
                               //ccurrent  = ccalf * ((double) current_TM) * ADC20_moving_average_bug_TM_factor;
-                                ccurrent -= ccalf_ADC16             * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
-                              //ccurrent -= ccalf_ADC16_old * ocalf * (mc->CD[valid].C[vbias1][1] - mc->CD[valid].C[vbias2][2]);
+                                ccurrent -= ccalf_ADC16             * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
+                              //ccurrent -= ccalf_ADC16_old * ocalf * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
                               //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
 
                                 // Write time, current (one difference) and calibrated voltages (one per probe, i.e. two)
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,   ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
                             }
 
                         }   // if(param_type==SWEEP_PARAMS) ... else ...
@@ -7186,17 +7217,17 @@ int WritePTAB_File(
                       //cvoltage -= vcalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;    // NOTE: vcalf_ADC16_old * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
 
                         if(writing_P3_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",tstr3,td2,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
                                     i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                         }
                         
                         if(writing_P1_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
                                     i_conv.C[ibias1][1],   cvoltage); // Write time, calibrated current and voltage
                         }
                         
                         if(writing_P2_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",tstr3,td2,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
                                     i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated current and voltage
                         }
                     }   // if(bias_mode==DENSITY) ... else ...
@@ -7210,15 +7241,16 @@ int WritePTAB_File(
                     {                  
                         // For difference data P1-P2 we need to add two bias vectors. They can be different!
                         if(bias_mode==DENSITY) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",tstr3,td2,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc,current_sample_sccd,
                                     current_TM,   vbias1,   vbias2); // Add two voltage bias vectors
                         } else {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",tstr3,td2,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc,current_sample_sccd,
                                     ibias1,   ibias2,   voltage_TM); // Add two current bias vectors
                         }
                     }
                     else {
-                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",tstr3,td2,current_TM,voltage_TM); // Write time, current and voltage
+                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc,current_sample_sccd,
+                                current_TM,voltage_TM); // Write time, current and voltage
                         // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
                     }
                 }   // if(calib) ... else ...
@@ -9213,15 +9245,16 @@ unsigned int GetBitF(unsigned int word,int nb,int sb)
 
 
 /*
- * Convert PDS time string (without fractional seconds) to number of seconds since epoch 1970.
+ * Convert
+ * from UTC string (without fractional seconds), YYYY-MM-DDThh:mm:ss,
+ * to   number of seconds since epoch 1970.
  *
- * NOTE: Implementation uses mktime and should likely be understood as APPROXIMATE (ignoring leap seconds).
- * 
+ * NOTE/BUG: Implementation uses mktime ==> Does not account for leap seconds.
  * ASSUMES: Relies on time_t being interpreted as number of seconds (which is unwise).
  * NOTE: There is another function "ConvertUtc2Timet" that at least superficially can do the job of this function.
- * Not sure why that one has not been used instead.
+ *       Not sure why that one has not been used instead.
  *
- * Return value : Number of seconds.
+ * Return value : Time as time_t, number of seconds.
  * 
  * Function name until 2017-07-05: E2Epoch
  */
@@ -9344,6 +9377,8 @@ int DecodeRawTimeEst(double raw,char *stime)
  * Input:  lfrac : false=3 decimal digits, true=6 decimal digits of fractional seconds.
  * Output: stime = UTC string
  * 
+ * NOTE/BUG: Function uses ConvertTimet2Utc ==> Does not handle leap seconds if using non-SPICE version of that function.
+ * 
  * NOTE: The function uses the global tcp structure! 
  * 1) Can do this since it's the only user.
  * 2) It only reads! No thread conflicts.
@@ -9352,7 +9387,11 @@ int DecodeRawTimeEst(double raw,char *stime)
  *      stime: UTC_TIME (DESCRIPTION = "UTC TIME")
  *      raw:   OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)")
  *     
- * NOTE: Uses TCORR, not SPICE kernels.
+ * NOTE: Implementation uses TCORR, not SPICE kernels.
+ * 
+ * NOTE/BUG: Function uses ConvertTimet2Utc which in turn does not appear to use leap seconds. This is contradictive,
+ * since experience tells, that the time conversion errors that DVAL-NG complains about are generally smaller
+ * than seconds, which hints that the function somehow does handle leap seconds.
  * 
  * ASSUMES: Global variable sec_epoch has been set, although it is only used if there is no (applicable) TCORR information.
  * 
@@ -9367,7 +9406,6 @@ int ConvertSccd2Utc(double raw, char *stime, int lfrac)
     double correlated;
     double tmp=0.0;
     
-    // CALIBRATE RAW
     
     // Default coefficients in case no time calibration data is found.
     gradient=1.0; 
@@ -9434,8 +9472,8 @@ int ConvertSccd2Sccs(double raw, int rcount, char *stime)
     unsigned int sec;
     unsigned int frac;
     
-    sec=(unsigned int)(raw); // Truncate seconds
-    frac=(unsigned int)(((raw-sec)*65536.0)+0.5); // Get fractions back in terms of 2^16
+    sec  = (unsigned int) (raw); // Truncate seconds
+    frac = (unsigned int) (((raw-sec)*65536.0)+0.5); // Get fractions back in terms of 2^16
     
     sprintf(stime,"\"%d/%010d.%d\"",rcount,sec,frac); // Compile raw S/C time string
     
@@ -9530,10 +9568,9 @@ int ConvertSccs2Sccd(char *stime, int *resetCounter, double *rawTime)
  * Input  : lfrac : false=3 decimal digits; true=6 decimal digits (fractional seconds)
  * Output : stime : Set to a string "YYYY-MM--DDThh:mm:ss.xxx" (3 decimals) or "YYYY-MM-DDThh:mm:ss.xxxxxx" (6 decimals).
  *
- * NOTE: Implementation uses gmtime_r.
- * NOTE/BUG?: Does not appear to care about leap seconds since gmtime_r does not(?). Still experience tells, that
- * the time conversion errors that DVAL-NG complains about are generally smaller than seconds, which hints that the function
- * somehow does handle leap seconds.
+ * NOTE/BUG: Implementation uses gmtime_r. ==> Does not appear to care about leap seconds since gmtime_r does not.
+ * Still experience tells, that the time conversion errors that DVAL-NG complains about are generally smaller
+ * than seconds, which hints that the function somehow does handle leap seconds.
  * 
  * Function name until 2017-07-05: Scet2Date_2
  */
@@ -9562,7 +9599,7 @@ int ConvertTimet2Utc(double raw,char *stime,int lfrac)
 
     t=raw;   // Convert double-->time_t.
     
-    // Use gmtime to stay POSIX compliant and to be consistent.
+    // Use gmtime_r to stay POSIX compliant and to be consistent.
     full_s = raw;            // double-->unsigned int (truncate decimals)
     frac_s = raw - full_s;   // Obtain fractional seconds.
 
@@ -9595,22 +9632,25 @@ int ConvertTimet2Utc(double raw,char *stime,int lfrac)
 
 
 /*
- * Converts a string of format "YYYY-MM-DD" or "YYYY-MM-DD hh:mm:ss" to a time_t value.
+ * Converts UTC --> time_t.
  *
- * NOTE: In reality, the function ignores the characters between the number fields and they can therefore be set arbitrarily
- *       (only their absolute positions are important).
- * NOTE: The function will ignore characters after the final "ss" (two-digit seconds) and will therefore ignore decimals in seconds.
- *       Fractions can not be returned in time_t anyway.
- * NOTE: Can handle PDS compliant UTC time strings (albeit while ignoring of second decimals).
- * NOTE: If no hour-minute-seconds are given, then they will taken as zero (i.e. midnight at beginning of day) as default value.
- *       Values are fed into mktime. mktime calculates UTC(?) time since 1970 1 Jan 00:00:00 (For POSIX and UNIX systems).
- * NOTE: Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler), time_t appears to correspond to seconds
- *       after 1970-01-01 00:00.00, but only for times beginning at 1970-01-01 01:00.00 (!).
- *
- * NOTE: Implementation uses mktime.
+ * NOTE/BUG: Implementation uses mktime. ==> Does not handle leap seconds.
+ * 
+
  * NOTE: Handling of timezone seems hackish/suspect.
  * QUESTION: How does this function handle leap seconds?! (Probably not, if one interprets time_t=seconds since 1970.)
  *
+ * Input  : sdate : UTC string on format "YYYY-MM-DD" (only date) or "YYYY-MM-DD hh:mm:ss" (no second decimals).
+ *                  NOTE: The function will ignore characters after the final "ss" (two-digit seconds) and
+ *                  will therefore ignore decimals in seconds. time_t can not contain fractions (subsecond) anyway.
+ *                  Can thus handle PDS compliant UTC time strings "YYYY-MM-DDThh:mm:ss.xxx..." (albeit while ignoring of second decimals).
+ *                  NOTE: If no hour-minute-seconds are given, then they will taken as zero (i.e. midnight at beginning
+ *                  of day) as default value.
+ *                  NOTE: In reality, the function ignores the characters between the number fields and
+ *                  they can therefore be set arbitrarily (only their absolute positions are important).
+ * Output : t     : time_t
+ *                  NOTE: Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler), time_t appears to correspond to seconds
+ *                  after 1970-01-01 00:00.00, but only for times beginning at 1970-01-01 01:00.00 (!).
  * Return value : 0=Success; Negative value indicates error.
  * 
  * 01234567890123456789012
@@ -9707,6 +9747,8 @@ int ConvertUtc2Timet(char *sdate, time_t *t)
 
 
 // Like TimeOfDatePDS, but always sets the time of day to 12:00:00.
+//
+// NOTE/BUG: Uses ConvertUtc2Timet. ==> Does not handle leap seconds if using non-SPICE-based version of that function.
 int ConvertUtc2Timet_midday(char *sdate, time_t *t)
 {
     char tstr[20];
@@ -9725,13 +9767,16 @@ int ConvertUtc2Timet_midday(char *sdate, time_t *t)
 
 
 
-// Returns CURRENT time as a string on format CCYY-MM-DDThh:mm:ss .
-// "0" in the function name = zero decimals (on the second counter).
-//
-// Assumes that ltime has enough space 
-// for the result, at least 20 chars.
-//
-// Function name until 2017-07-05: GetUTime
+/*
+ * Returns CURRENT time as a string on format CCYY-MM-DDThh:mm:ss .
+ * "0" in the function name = zero decimals (on the second counter).
+ *
+ * Assumes that ltime has enough space for the result, at least 20 chars.
+ * 
+ * NOTE/BUG: Uses gmtime_r which does not handle leap seconds.
+ *
+ * Function name until 2017-07-05: GetUTime
+*/
 int GetCurrentUtc0(char *ltime) 
 {
     time_t tsec;
@@ -10262,10 +10307,15 @@ int DDSFileDuration(char *str)
 // in a DDS archive hierarchy.
 // Function assumes that it is a true DDS archive
 // hierarchy. Start time is in seconds)
+// 
+// NOTE: Derives UTC time from filename or path(?), then converts ~UTC-->time_t with mktime (disregarding leapseconds?).
+// 
 time_t DDSFileStartTime(FTSENT *f) 
 {
-    char tstr[64]; // Temporary string
-    struct tm at; // Broken down time structure
+    //           0123456789012345678901234567890
+    // Example?:  2016/09/30/rpc160930dds00_tlm_sci____00h00m07s_10h39m16s.tm
+    char tstr[64];   // Temporary string
+    struct tm at;    // Broken down time structure
     time_t t;
     
     strncpy(tstr,f->fts_name,64); // Copy to temporary string
@@ -10362,12 +10412,13 @@ time_t DDSFileStartTime(FTSENT *f)
  *
  * ibuff        : Byte stream.
  * Return value : time_t value as a double, i.e. number of seconds since 1970-01-01 00:00.00 (judging from how the value is used).
+ *                Conversions to UTC should probably assume that leap seconds are included in this cound.
  * 
  * NOTE: Used by (1) ProcessDDSFile.
  *               (2) LoadTimeCorr (TCORR, non-SPICE-kernel information on how to convert "spacecraft clock count"
  *                   to "Earth second count").
  * 
- * NOTE: time_t tends to be interpreted with gmtime which does not take leap seconds into account. Therefore kind of approximate.
+ * NOTE: time_t tends to be interpreted with gmtime/gmtime_r which does not take leap seconds into account. Therefore kind of approximate.
  * 
  * Function name until 2017-07-05: DDSTime
  */
@@ -10453,6 +10504,8 @@ double **CallocDoubleMatrix(int rows, int cols)
     return C;
 }
 
+// Allocate 2D array/matrix of integers.
+// Return pointer to array (length "rows") of pointer to arrays (length "cols").
 unsigned int **CallocIntMatrix(int rows, int cols)
 {
     int i;
