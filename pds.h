@@ -122,9 +122,25 @@
 #define S14_RESOLVE_MACRO_PARAMETERS  14
 #define S15_WRITE_PDS_FILES           15
 
-
 #define FINITE_YIELDS         5
-#define ROSETTA_SPICE_ID   -226            // ID number used to represent the Rosetta spacecraft in SPICE functions. Set by NASA NAIF.
+
+#define ROSETTA_SPICE_ID   -226    // ID number used to represent the Rosetta spacecraft in SPICE functions. Set by NASA NAIF.
+
+// TRUE=Use SPICE-based time conversion function(s); FALSE=Use older, non-SPICE-based time conversion function(s).
+// This functionality is implemented as TRUE/FALSE which can be read by C code, rather than #ifdef-#else to deactivate code.
+// This way, test code can have access to both SPICE and non-SPICE code simultaneously so that it can compare them in the same run.
+#define USE_SPICE          TRUE
+// #define USE_SPICE          FALSE
+
+// Rosetta spacecraft clock reset counter (used in SCCS). Used for those parts of the code where
+// it is not/can not be properly obtained from a proper source. The reset counter was 1 for the entire
+// mission (at least after launch) so it should not matter that it is set from a constant sometimes.
+#define ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER   1
+
+// TRUE=Run informal "test code", which normally deactivates the normal functioning of pds.
+// Should always be set to FALSE, except during development.
+// #define RUN_TEST_CODE      TRUE
+#define RUN_TEST_CODE      FALSE
 
 
 
