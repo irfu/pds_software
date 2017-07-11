@@ -5625,18 +5625,25 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
             //===============================================
             // Extract calibration factors from the LBL file
             //===============================================
+            // ADC20 calibration factors used to be read from CALIB_MEAS file labels but are no more.
+            // The corresponding C variables are set to NaN.
             FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_16B",       1, DNTCARE);
             sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
-            FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_20B",       1, DNTCARE);
-            sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_20b);
+            //FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_20B",       1, DNTCARE);
+            //sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_20b);
+            m->CF[i_calib].v_cal_20b = NAN;
+            
             FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G1",    1, DNTCARE);
             sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_hg1);
-            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G1",    1, DNTCARE);
-            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_hg1);
+            //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G1",    1, DNTCARE);
+            //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_hg1);
+            m->CF[i_calib].c_cal_20b_hg1 = NAN;
+            
             FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G0_05", 1, DNTCARE);
             sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_lg);
-            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G0_05", 1, DNTCARE);
-            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_lg);
+            //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G0_05", 1, DNTCARE);
+            //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_lg);
+            m->CF[i_calib].c_cal_20b_lg = NAN;
 
             if(debug>2)
             {
@@ -6623,8 +6630,8 @@ int WritePTAB_File(
     
     double ccurrent;                // Calibrated current
     double cvoltage;                // Calibrated voltage
-    double vcalf;                   // vcalf=Voltage Calibration Factor. Basic conversion TM-to-physical units. Includes ADC20 truncation factor.
-    double ccalf;                   // ccalf=Current Calibration Factor. Basic conversion TM-to-physical units. Includes ADC20 truncation factor.
+    double vcalf = NAN;             // vcalf=Voltage Calibration Factor. Basic conversion TM-to-physical units. Includes ADC20 truncation factor.
+    double ccalf = NAN;             // ccalf=Current Calibration Factor. Basic conversion TM-to-physical units. Includes ADC20 truncation factor.
 
     // Like vcalf, ccalf, but always a conversion factor derived from ADC16 since this value is needed for the calibration
     // of both ADC16 and ADC20 data(!).
@@ -6681,9 +6688,6 @@ int WritePTAB_File(
     int extra_bias_setting;
 
     
-    
-    vcalf = 1.0;   // Assume 1 to begin with.
-    ccalf = 1.0;   // Assume 1 to begin with.
     
     ConvertSccd2Utc(curr->seq_time, first_sample_utc, NULL);  // First convert spacecraft time to UTC to get time calibration right
     
