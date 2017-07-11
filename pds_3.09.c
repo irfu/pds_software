@@ -374,7 +374,7 @@ int  Match(char *,char *);								// Match filename to pattern
 
 // HK Functions
 //----------------------------------------------------------------------------------------------------------------------------------
-void AssembleHKLine(unsigned char *, char *, double, unsigned int *);       // Assemble a HK line entry
+void AssembleHKLine(unsigned char *, char *, double, char*, unsigned int *);       // Assemble a HK line entry
 
 // Low level data functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -390,9 +390,9 @@ double DecodeLAPTime2Sccd(unsigned char *buff);                     // Decoding 
 //int DecodeRawTimeEst(double raw,char *stime);                       // Decodes raw S/C time (estimates UTC no calibration) and returns 
 // a PDS compliant time string. UNUSED
 
-int ConvertSccd2Utc         (double sccd, char *utc, int use_6_digits);         // Decodes raw S/C time (calibration included) 
-int ConvertSccd2Utc_nonSPICE(double sccd, char *utc, int use_6_digits);
-int ConvertSccd2Utc_SPICE   (double sccd, char *utc, int use_6_digits);
+int ConvertSccd2Utc         (double sccd, char *utc_3decimals, char *utc_6decimals);         // Decodes raw S/C time (calibration included) 
+int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decimals);
+int ConvertSccd2Utc_SPICE   (double sccd, char *utc_3decimals, char *utc_6decimals);
 
 int ConvertSccd2Sccs(double sccd, int n_resets, char *sccs, int quote_sccs);    // Convert raw time to an OBT string (On Board Time)
 int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd);              // Convert OBT string to raw time.
@@ -401,7 +401,7 @@ int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd);              
 // lfrac is long or short fractions of seconds.
 
 // Replacement for Scet2Date ESA approach with OASWlib give dubious results. (dj2000 returns 60s instead of 59s etc.)
-int ConvertTimet2Utc(double raw, char *utc, int use_6_digits);          // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
+int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);          // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // use_6_digits is long or short fractions of seconds.
 
 int ConvertUtc2Timet(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970) for a PDS date string
@@ -974,7 +974,6 @@ int main(int argc, char *argv[])
     //===================================================
     // Configure SPICE, including loading the METAKERNEL
     //===================================================
-    printf("Path to SPICE metakernel    : %s\n\n", pds.pathmk);
     initSpice(pds.pathmk);
 
 
@@ -1244,6 +1243,7 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
 void initSpice(char *metakernel_path) {
     char tstr1[MAX_STR];    // Temporary string
     char tstr2[MAX_STR];    // Temporary string
+    char initial_working_dir[MAX_STR];
     
     pthread_mutex_lock(&protect_spice);
     
@@ -1277,7 +1277,8 @@ void initSpice(char *metakernel_path) {
     // The metakernel file may contain relative paths. Must therefore, at least
     // temporarily, change current working directory to the directory of the metakernel file.
     strcpy(tstr1, metakernel_path);
-    strcpy(tstr2, dirname(tstr1));   // NOTE: dirname might modify the argument. ==> Submit copy.
+    strcpy(tstr2, dirname(tstr1));   // NOTE: dirname might modify the second argument(!). ==> Submit copy.
+    getcwd(initial_working_dir, MAX_STR);
     if (chdir(tstr2)) {
         printf( "Failed to change current directory to \"%s\".\n", tstr2);
         YPrintf("Failed to change current directory to \"%s\".\n", tstr2);
@@ -1288,9 +1289,24 @@ void initSpice(char *metakernel_path) {
     }
 
     // LOAD SPICE METAKERNEL
-    strcpy(tstr1, metakernel_path);        // NOTE: basename might modify the argument.
-    furnsh_c(basename(tstr1));
+    printf( "Loading SPICE metakernel: %s\n", metakernel_path);
+    YPrintf("Loading SPICE metakernel: %s\n", metakernel_path);
+    strcpy(tstr1, metakernel_path);
+    furnsh_c(basename(tstr1));        // NOTE: Function "basename" might modify the argument, therefore submit a copy of the string.
     checkSpiceError("Could not load SPICE metakernel", FALSE);
+    
+    
+    // Change back to original working directory.
+    if (chdir(initial_working_dir)) {
+        printf( "Failed to change current directory to \"%s\".\n", initial_working_dir);
+        YPrintf("Failed to change current directory to \"%s\".\n", initial_working_dir);
+        
+        // Exiting pds is not really necessary. pds does seem to work fine even if the working directory is not changed back.
+        // /Erik P G Johansson 2017-07-10
+        pthread_mutex_unlock(&protect_spice);
+        ExitPDS(1);
+        pthread_mutex_lock(&protect_spice);     // This statement should never be reached. It is just there for safety.
+    }
     
     pthread_mutex_unlock(&protect_spice);
 }
@@ -1405,8 +1421,8 @@ void *SCDecodeTM(void *arg)
                         PPrintf("    Weird HK length discarding!\n");
                         continue;
                     }
-                    rawt=DecodeSCTime2Sccd(&buff[4]);      // Decode S/C time into raw time
-                    ConvertSccd2Utc(rawt,tstr,0);          // Decode raw time to PDS compliant date format
+                    rawt = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
+                    ConvertSccd2Utc(rawt, tstr, NULL);     // Decode raw time to PDS compliant date format.
                     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
                     
                     In(&cbh,HBYTE);         // Keep packet ID high byte
@@ -1550,8 +1566,8 @@ void *SCDecodeTM(void *arg)
                         continue;
                     }
                     
-                    rawt=DecodeSCTime2Sccd(&buff[4]);   // Decode S/C time into raw time
-                    ConvertSccd2Utc(rawt,tstr,0);       // Decode raw time to PDS compliant date format
+                    rawt = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
+                    ConvertSccd2Utc(rawt, tstr, NULL);     // Decode raw time to PDS compliant date format.
                     PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,length);
                     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
                     GetBuffer(cs,buff,length); 
@@ -1622,7 +1638,7 @@ void *DecodeHK(void *arg)
     
     property_type *property1;       // Temporary property pointer
     
-    double raw_time;                // Raw time
+    double sccd;                    // Raw time
     
     unsigned ti;                    // Temporary integer
     buffer_struct_type *ch;         // Pointer to circular buffer structure type, for HK decoding
@@ -1668,22 +1684,22 @@ void *DecodeHK(void *arg)
         //=======================================================================
         
         // Get first HK packet data and raw time (HK_NUM_LINES per TAB file)
-        GetHKPacket(ch,buff,&raw_time);
-        
-        ConvertSccd2Utc( raw_time,                     hk_info.utc_time_str, 0);       // First convert spacecraft time to UTC to get time calibration right
-        ConvertSccd2Sccs(raw_time, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock
-        
-        SetP(&hkl, "SPACECRAFT_CLOCK_START_COUNT", hk_info.obt_time_str, 1);    // Set OBT start time
-        SetP(&hkl, "START_TIME",                   hk_info.utc_time_str, 1);    // Update START_TIME in common PDS parameters
-        
-        HPrintf("S/C time PDS Format: %s, Raw Time: %014.3f\n", hk_info.utc_time_str, raw_time);
-        HPrintf("Mission ID: %s, Phase: %s\n", mp.abbrev, mp.phase_name);
+        GetHKPacket(ch,buff,&sccd);
         
         sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
         SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
 
-        AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble the very first HK line (of HK_NUM_LINES per TAB file).
+        AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble the very first HK line (of HK_NUM_LINES per TAB file).
         
+        //ConvertSccd2Utc( sccd,                     hk_info.utc_time_str, NULL);    // First convert spacecraft time to UTC to get time calibration right
+        ConvertSccd2Sccs(sccd, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock
+        
+        SetP(&hkl, "SPACECRAFT_CLOCK_START_COUNT", hk_info.obt_time_str, 1);    // Set OBT start time
+        SetP(&hkl, "START_TIME",                   hk_info.utc_time_str, 1);    // Update START_TIME in common PDS parameters
+        
+        HPrintf("S/C time PDS Format: %s, Raw Time: %014.3f\n", hk_info.utc_time_str, sccd);
+        HPrintf("Mission ID: %s, Phase: %s\n", mp.abbrev, mp.phase_name);
+
         sprintf(tstr1, "MCID0X%04x", macro_id);
         SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
         
@@ -1771,23 +1787,24 @@ void *DecodeHK(void *arg)
                 // (Start at hk_cnt = 1 to skip counting the line already written above.)
                 for (hk_info.hk_cnt=1; hk_info.hk_cnt<HK_NUM_LINES; hk_info.hk_cnt++)
                 {
-                    GetHKPacket(ch,buff,&raw_time);
-
-                    // NOTE: It is necessary to derive both "hk_info.utc_time_str" and "hk_info.obt_time_str" here
+                    GetHKPacket(ch,buff,&sccd);
+                    
+                    AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble a HK TAB file line
+                    
+                    // NOTE: It is necessary to derive/set both "hk_info.utc_time_str" and "hk_info.obt_time_str" here
                     // in case pds exits (and calls ExitPDS) while GetHKPacket is waiting, so that they are
                     // available in ExitPDS which needs them to finish writing the last LBL file in the data set.
-                    ConvertSccd2Utc( raw_time,                     hk_info.utc_time_str, 0);       // Decode raw time to PDS compliant date format
-                    ConvertSccd2Sccs(raw_time, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock
-                    
-                    HPrintf("S/C time PDS Format: %s Raw Time: %014.3f\n", hk_info.utc_time_str, raw_time);
-                    AssembleHKLine(buff, line, raw_time, &macro_id);        // Assemble a HK TAB file line
+                    //ConvertSccd2Utc( sccd,                     hk_info.utc_time_str, NULL);    // Decode raw time to PDS compliant date format.
+                    ConvertSccd2Sccs(sccd, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock.
+                    HPrintf("S/C time PDS Format: %s Raw Time: %014.3f\n", hk_info.utc_time_str, sccd);                    
+
                     HPrintf("%s", line);                                    // Print HK TAB file content to log(!)
                     fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);              // Write line to HK TAB file.
                     fflush(pds.htable_fd);
                 }
                 fclose(pds.htable_fd);
             }
-            
+
             // NOTE: The function "ExitPDS" will execute the following commands too if it thinks the file has not been closed.
             SetP(&hkl, "SPACECRAFT_CLOCK_STOP_COUNT", hk_info.obt_time_str, 1);     // Set OBT stop time
             SetP(&hkl, "STOP_TIME",                   hk_info.utc_time_str, 1);     // Update STOP_TIME in common PDS parameters
@@ -2089,7 +2106,7 @@ void *DecodeScience(void *arg)
                 
                 CPrintf("============================================================================\n");
                 rstime = DecodeLAPTime2Sccd(buff);    // Get raw time/SCCD, decode LAP S/C time in Science data.
-                if (ConvertSccd2Utc(rstime,stime,0) == -1) {      // Decode raw time/SCCD into PDS compliant UTC time.
+                if (ConvertSccd2Utc(rstime, stime, NULL) == -1) {      // Decode raw time/SCCD into PDS compliant UTC time.
                     // CASE: ConvertSccd2Utc/SPICE could not interpret SCCD, (most likely) due to value not existing
                     // in the stated partition count/reset count. This indicates an illegal SCCD value
                     // (unreasonably large/small), which likely indicates the state machine being out of sync or
@@ -3419,7 +3436,7 @@ void *DecodeScience(void *arg)
                                                             
                                                             SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
-                                                            ConvertSccd2Utc(curr.seq_time, tstr1, 0);   // Decode raw time into PDS compliant UTC time
+                                                            ConvertSccd2Utc(curr.seq_time, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
                                                             CPrintf("    Current sequence start time is: %s\n", tstr1);
                                                             SetP(&comm, "START_TIME", tstr1, 1);
                                                             
@@ -3540,7 +3557,7 @@ void *DecodeScience(void *arg)
                                                             
                                                             SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",  tstr5, 1);
                                                             
-                                                            ConvertSccd2Utc(curr.stop_time, tstr5, 0);  // Decode raw time into PDS compliant UTC time.
+                                                            ConvertSccd2Utc(curr.stop_time, tstr5, NULL);  // Decode raw time into PDS compliant UTC time.
                                                             CPrintf("    Current sequence stop  time is: %s\n", tstr5);
                                                             SetP(&comm, "STOP_TIME",  tstr5, 1);         // Update STOP_TIME in common PDS parameters.
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
@@ -3955,7 +3972,7 @@ void ExitPDS(int status)
     {
         HPrintf("Finish last HK LBL file after HK thread has been canceled.\n");
         
-        SetP(&hkl, "SPACECRAFT_CLOCK_STOP_COUNT", hk_info.obt_time_str,1);  // Set OBT stop time
+        SetP(&hkl, "SPACECRAFT_CLOCK_STOP_COUNT", hk_info.obt_time_str,1);  // Set OBT stop time. NOTE: hk_info is a global variable.
         SetP(&hkl, "STOP_TIME",                   hk_info.utc_time_str,1);  // Update STOP_TIME in common PDS parameters
         sprintf(tstr1, "%d", hk_info.hk_cnt);
         SetP(&hkl, "FILE_RECORDS", tstr1, 1);                               // Set number of records
@@ -6668,7 +6685,7 @@ int WritePTAB_File(
     vcalf = 1.0;   // Assume 1 to begin with.
     ccalf = 1.0;   // Assume 1 to begin with.
     
-    ConvertSccd2Utc(curr->seq_time, first_sample_utc, 0);  // First convert spacecraft time to UTC to get time calibration right
+    ConvertSccd2Utc(curr->seq_time, first_sample_utc, NULL);  // First convert spacecraft time to UTC to get time calibration right
     
     ConvertUtc2Timet(first_sample_utc, &stime);            // Convert back to seconds
 
@@ -7055,7 +7072,7 @@ int WritePTAB_File(
                 
                 current_sample_sccd = curr->seq_time + td1;                    // Calculate current time (absolute).
                 
-                ConvertSccd2Utc(current_sample_sccd, current_sample_utc, 1);   // Decode raw time to UTC.
+                ConvertSccd2Utc(current_sample_sccd, NULL, current_sample_utc);   // Decode raw time to UTC.
                 
                 //==============================================================================
                 // Check for commanded bias (outside of macro lopp). If found, then set biases.
@@ -7876,17 +7893,17 @@ int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *rawt)
 void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id)
 {
     unsigned int length;
-    char tstr[32];
-    double rawt;
+    char utc[32];
+    double sccd;
     unsigned char buff[14];
     
     GetBuffer(cs,buff,14); // Get 14 bytes from circular buffer
     
     length=((buff[2]<<8) | buff[3])-9;           // Get "data" length
     PPrintf("    Packet ID: 0x0d%02x , Data length: %d Discarding\n",packet_id,length);
-    rawt=DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time
-    ConvertSccd2Utc(rawt,tstr,0);        // Decode raw time to PDS compliant date format
-    PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
+    sccd = DecodeSCTime2Sccd(&buff[4]);       // Decode S/C time into raw time
+    ConvertSccd2Utc(sccd, utc, NULL);        // Decode raw time to PDS compliant date format
+    PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n", utc, sccd);
     Forward(cs,length);// Move forward, thus skip packet
 }
 
@@ -9135,8 +9152,12 @@ int Match(char *stra, char *strb)
 
 // Construct a string of HK data that can be written as row/line to a HK TAB file.
 //
-// macro_id : Will be set to macro ID number.
-// line : must be a pointer to a buffer of at least 165 characters
+// ARGUMENTS
+// line       : must be a pointer to a buffer of at least 165 characters
+// utc_return : UTC that is derived from sccd and that is RETURNED to the caller. The content of the string is thus overwritten.
+//              This value is returned so that the caller does need to derive the value, which can then be used to minimize
+//              the number of calls to SPICE, which speeds up pds.
+// macro_id   : Will be set to macro ID number.
 //
 //
 // HOUSE KEEPING EXAMPLE ROW
@@ -9167,21 +9188,21 @@ int Match(char *stra, char *strb)
 // 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345677778888
 // ITY,DENSITY,DENSITY,DENSITY,DENSITY,DENSITY,LAP,DISABLED,RX,DENSITY,FLOAT,RX,DENSITY,FLOAT,255,255,00000,00<CR><LF>
 //
-void AssembleHKLine(unsigned char *b, char *line, double time, unsigned int *macro_id)
+void AssembleHKLine(unsigned char *b, char *line, double sccd, char *utc_3decimals_return, unsigned int *macro_id)
 {
     char ldlmode_str[4][8]={"NONE   ","MIXED 0"," NORMAL","MIXED 1"};
-    char tstr[80]; // Temporary string
+    char tstr[MAX_STR]; // Temporary string
     
     int temp;
     int f22dedc;
     int f11dedc;
     double t;
 
-    ConvertSccd2Utc(time,tstr,1); // Decode raw time to UTC
-    
+    ConvertSccd2Utc(sccd, utc_3decimals_return, tstr);    // Decode raw time/SCCD to UTC.
+
     // Start assembly of table line described above
-    sprintf(line,"%s,%016.6f,%1d,%1d,",tstr,time,GetBitF(b[0],3,5),GetBitF(b[0],3,2));   // Set time and pmac and emac   
-    
+    sprintf(line,"%s,%016.6f,%1d,%1d,", tstr, sccd, GetBitF(b[0],3,5), GetBitF(b[0],3,2));    // Set time and pmac and emac.
+
     if(GetBitF(b[0],1,1)) // Make watchd string
         strcpy(tstr,"ENABLED ,");
     else
@@ -9533,15 +9554,15 @@ int DecodeRawTimeEst(double raw,char *stime)
 
 
 
-// See ConvertSccd2Utc_nonSPICE
-int ConvertSccd2Utc(double sccd, char *utc, int use_6_digits)
+// See ConvertSccd2Utc_nonSPICE/SPICE
+int ConvertSccd2Utc(double sccd, char *utc_3decimals, char *utc_6decimals)
 {
     int exit_code;
     
     if (USE_SPICE) {
-        exit_code = ConvertSccd2Utc_SPICE   (sccd, utc, use_6_digits);
+        exit_code = ConvertSccd2Utc_SPICE   (sccd, utc_3decimals, utc_6decimals);
     } else {
-        exit_code = ConvertSccd2Utc_nonSPICE(sccd, utc, use_6_digits);
+        exit_code = ConvertSccd2Utc_nonSPICE(sccd, utc_3decimals, utc_6decimals);
     }
     
     return exit_code;
@@ -9551,10 +9572,10 @@ int ConvertSccd2Utc(double sccd, char *utc, int use_6_digits)
 
 /* Decodes and correlates SCCS time (Reine Gill: "raw" time) into UTC time.
  * 
- * Input:  sccd         : SCCD. Spacecraft clock count (double; true decimals)
- * Input:  use_6_digits : False=3 decimal digits; True=6 decimal digits of fractional seconds.
- * Output: utc          : UTC string
- * Return value         : Always zero.
+ * Input:  sccd          : SCCD. Spacecraft clock count (double; true decimals)
+ * Output: utc_3decimals : If NULL, then ignore it. If non-NULL, then write UTC with 3 decimals of fractional seconds.
+ * Output: utc_6decimals : If NULL, then ignore it. If non-NULL, then write UTC with 6 decimals of fractional seconds.
+ * Return value          : Always zero.
  * 
  * NOTE/BUG: Function uses ConvertTimet2Utc ==> Does not handle leap seconds if using non-SPICE version of that function.
  * 
@@ -9576,7 +9597,7 @@ int ConvertSccd2Utc(double sccd, char *utc, int use_6_digits)
  * 
  * Function name until 2017-07-05: DecodeRawTime
  */
-int ConvertSccd2Utc_nonSPICE(double sccd, char *utc, int use_6_digits)
+int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
 {
     // PROPOSAL: Error on not finding any relevant TCORR information.
     
@@ -9617,7 +9638,14 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc, int use_6_digits)
     }
     
     craw = sccd*gradient + offset; // Compute correlation. If no time calibration data found default coefficients are used.
-    ConvertTimet2Utc(craw, utc, use_6_digits); // Compute a PDS date string
+    
+    //ConvertTimet2Utc(craw, utc, use_6_digits); // Compute a PDS date string
+    if (utc_3decimals != NULL) {
+        ConvertTimet2Utc(craw, utc_3decimals, FALSE);
+    }
+    if (utc_6decimals != NULL) {
+        ConvertTimet2Utc(craw, utc_6decimals, TRUE);
+    }    
     
     return 0;
 }
@@ -9632,7 +9660,7 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc, int use_6_digits)
  * NOTE: Reacts on errors (exits pds), rather than returning error code. Most (all?) calls to this function do not check the error code anyway.
  * NOTE: This function is THREAD-SAFE and used the SPICE mutex.
  */ 
-int ConvertSccd2Utc_SPICE(double sccd, char *utc, int use_6_digits)
+int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
 {
     SpiceChar sccs[MAX_STR];
     SpiceChar utc_temp[MAX_STR];
@@ -9653,22 +9681,26 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc, int use_6_digits)
     }
 
     // Convert et-->UTC
-    if (use_6_digits) {
-        et2utc_c(et, "ISOC", 6, MAX_STR, utc_temp);
-    } else {
+    // 
+    // NOTE: UTC string written to temporary buffer, then copied to the caller's buffers.
+    // ----------------------------------------------------------------------------------
+    // Allowing et2utc to write directly to the caller's string buffers
+    // crashes the program, presumably because et2utc requires
+    // a string buffer of known length and then overwrites it completely, whereas
+    // "utc_3decimals" and "utc_6decimals" are buffers of unknown length.
+    if (utc_3decimals != NULL) {
         et2utc_c(et, "ISOC", 3, MAX_STR, utc_temp);
+        checkSpiceError("SPICE failed to convert et-->UTC", TRUE);
+        strcpy(utc_3decimals, utc_temp);
     }
-    checkSpiceError("SPICE failed to convert et-->UTC", TRUE);
+    if (utc_6decimals != NULL) {
+        et2utc_c(et, "ISOC", 6, MAX_STR, utc_temp);
+        checkSpiceError("SPICE failed to convert et-->UTC", TRUE);
+        strcpy(utc_6decimals, utc_temp);
+    }
     
     pthread_mutex_unlock(&protect_spice);
 
-    // Copy from temporary buffer to the caller's buffer.
-    // --------------------------------------------------
-    // Allowing et2utc to write to "utc" crashes the program, presumably because et2utc requires
-    // a string buffer of known length and then overwrites it completely, whereas
-    // "utc" is a buffer of unknown length.
-    strcpy(utc, utc_temp);     
-    
     return 0;
 }
 
@@ -9812,10 +9844,13 @@ int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd)
  * Still experience tells, that the time conversion errors that DVAL-NG complains about are generally smaller
  * than seconds, which hints that the function somehow does handle leap seconds.
  * 
+ * IMPLEMENTATION NOTE: Not implemented with two potential return UTC values (like ConvertSccd2Utc) since the rounding
+ * means that no processing can be saved that way.
+ * 
  * Function name until 2017-07-05: Scet2Date_2
  */
 // PROPOSAL: Eliminate the backup code for the case that "gmtime_r" fails. It is dangerous.
-int ConvertTimet2Utc(double raw, char *utc, int use_6_digits)
+int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals)
 {     
     double s;            // Seconds and fractional seconds
     struct tm bt;        // Broken down time
@@ -9830,7 +9865,7 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_digits)
 
     // Round depending on the number of digits that will be displayed. Otherwise sprintf will do it (randomly).
     // line edited 10/7 2014. FJ. We need to make sure seconds are rounded properly.
-    if(use_6_digits) {
+    if(use_6_decimals) {
         raw = floor(1000*1000*raw+0.5)/(1000*1000);
     } else {
         raw = floor(1000*raw+0.5)/1000;
@@ -9858,7 +9893,7 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_digits)
     }
 
     // Compile PDS compliant time string.
-    if(use_6_digits) {
+    if(use_6_decimals) {
         // Use 6-digit fractional seconds.
         sprintf(utc, "%4d-%02d-%02dT%02d:%02d:%09.6f", bt.tm_year+1900, bt.tm_mon+1, bt.tm_mday, bt.tm_hour, bt.tm_min, ((double)bt.tm_sec)+frac_s);
     } else {
@@ -10867,8 +10902,8 @@ int main_TEST(int argc, char* argv[]) {
         char utc1[MAX_STR];
         char utc2[MAX_STR];
         ConvertSccs2Sccd(sccs, &n_resets, &sccd);
-        ConvertSccd2Utc_nonSPICE(sccd, utc1, TRUE);    // Requires loaded TCORR!
-        ConvertSccd2Utc_SPICE   (sccd, utc2, TRUE);
+        ConvertSccd2Utc_nonSPICE(sccd, NULL, utc1);    // Requires loaded TCORR data structures!
+        ConvertSccd2Utc_SPICE   (sccd, NULL, utc2);
         
         printf("%17s --> %16f --> %s\n", sccs, sccd, utc1);
         printf("                                            %s\n", utc2);
