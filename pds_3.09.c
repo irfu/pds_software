@@ -126,6 +126,7 @@
  *   Loads SPICE metakernel (extra row in pds.conf specifies the path). Configures SPICE error behaviour. Does not use SPICE
  *   except for in test code.
  *      /Erik P G Johansson 2017-07-06
+ * * Will not write files for makro 710 P2 HF, and makro 910 P1 HF. /Erik P G Johansson 2017-07-14
  * 
  *
  *
@@ -1979,7 +1980,29 @@ void *DecodeScience(void *arg)
         SetP(&comm,"FILE_NAME",tstr10,1);      // Set filename in common PDS parameters
         sprintf(tstr10,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
         SetP(&comm,"^TABLE",tstr10,1);         // Set link to table in common PDS parameters
-        
+
+        //===========================================
+        // Exclude files for specific cases of data:
+        // (1) makro 710 P2 HF
+        // (2) makro 910 P1 HF
+        //===========================================
+        if ((param_type!=SWEEP_PARAMS) && (param_type!=ADC20_PARAMS)) {
+            // CASE: HF data (not sweep, not ADC20). Conditions taken from the filenaming code.
+            // param_type=NO_PARAMS might work instead judging from the source code, since param_type only appears to
+            // only take on three values.
+            if ((curr.sensor==SENS_P1 || dop==1) && (macro_id==0x0910)) {
+                CPrintf("Excluding makro 910 P1 HF data (does not write TAB+LBL file).\n");
+                return;
+            }
+            if ((curr.sensor==SENS_P2 || dop==2) && (macro_id==0x0710)) {
+                CPrintf("Excluding makro 710 P2 HF data (does not write TAB+LBL file).\n");
+                return;
+            }
+        }
+
+        //====================
+        // Write LBL+TAB file
+        //====================
         if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, dop, ini_samples,param_type)>=0)
         {
             WritePTAB_File(
