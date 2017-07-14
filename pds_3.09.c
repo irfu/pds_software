@@ -241,7 +241,7 @@
 
 void printUserHelpInfo(FILE *stream, char *executable_name);    // Print user help info.
 void initSpice(char *metakernel_path);
-int checkSpiceError(char *pds_error_msg, int exit_pds);
+int checkSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout);
 
 // Thread functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -1250,16 +1250,20 @@ void initSpice(char *metakernel_path) {
     // Configure SPICE's error behaviour
     // ---------------------------------
     // Tell SPICE that on error, it should
-    // (1) not abort the executable (exit pds), and
-    // ((2) print the error message on stderr(?) (although empirically, error message seems to end up in stdout instead).
+    // (1) not abort the executable (exit pds; from the SPICE function itself), and
+    // (2) print the error message (depends on other SPICE settings)
     // Therefore, for every call to a SPICE function after this command, the caller should
     // (1) manually check if an error has occurred,
     // (2) manually retrieve and print/log the error message, and
     // (3) manually exit pds.
     erract_c("SET", MAX_STR, "REPORT");
     
-    // Disable "tracing" in SPICE functions.
-    // This should speed up execution, but make debugging harder.
+    // Configure SPICE to not print any error messages by itself.
+    // (pds uses failed_c, getmsg_c via checkSpiceError instead.)
+    errprt_c("SET", -1, "NONE");
+    
+    // Disable "tracing" inside SPICE functions.
+    // This should speed up execution, but potentially make debugging harder.
     // 
     // Example 2017-07-10: birra, small ddsData/ directory, time pds -mp AST1 -vid 9999 -dsv 0.1  (Note: No -stctt flag.)
     //  Without trcoff_c():
@@ -1293,7 +1297,7 @@ void initSpice(char *metakernel_path) {
     YPrintf("Loading SPICE metakernel: %s\n", metakernel_path);
     strcpy(tstr1, metakernel_path);
     furnsh_c(basename(tstr1));        // NOTE: Function "basename" might modify the argument, therefore submit a copy of the string.
-    checkSpiceError("Could not load SPICE metakernel", FALSE);
+    checkSpiceError("Could not load SPICE metakernel.", TRUE, TRUE);
     
     
     // Change back to original working directory.
@@ -1315,27 +1319,34 @@ void initSpice(char *metakernel_path) {
 
 /* Function that can/should be called after every call to a SPICE function to handle SPICE errors, if any has occurred.
  * 
- * pds_error_msg : Manually composed error message. Intended as a one-line message.
- *                 Not to be confused with error messages produced by SPICE itself and which
- *                 this function (might) in addition obtain and print & log.
- * exit_pds      : TRUE/FALSE for whether the function should exit pds itself when detecting SPICE error.
- * Return value  :  0=No SPICE error.
- *                 -1=SPICE error (and implicitly, the function does not exit PDS by itself).
+ * caller_error_msg : Manually composed error message. Intended as a one-line message.
+ *                    This should not to be confused with error messages produced by SPICE itself and which
+ *                    this function (might) in addition obtains and prints & logs.
+ * exit_pds         : TRUE/FALSE for whether the function should exit pds itself when detecting SPICE error.
+ * print_to_stdout  : TRUE/FALSE for whether additionally to print to stdout.
+ * Return value     :  0=No SPICE error.
+ *                    -1=SPICE error (and implicitly, the function does not exit PDS by itself).
  * 
  * NOTE: This function by itself is NOT TREAD-SAFE (uses no mutex despite calling not-threadsafe SPICE functions).
  * The caller is responsible for using the SPICE mutex.
  */
-int checkSpiceError(char *pds_error_msg, int exit_pds)
+int checkSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout)
 {
     // PROPOSAL: "Inline" the function.
+    // PROPOSAL: Add flag for printing error messages to stdout.
     if (failed_c()) {
-        char error_msg[MAX_STR];
+        char SPICE_error_msg[MAX_STR];
         
-//         getmsg_c("SHORT", MAX_STR, error_msg);
-        getmsg_c("LONG", MAX_STR, error_msg);
-//         getmsg_c("EXPLAIN", MAX_STR, error_msg);
-        printf( "%s:\n%s\n", pds_error_msg, error_msg);
-        YPrintf("%s:\n%s\n", pds_error_msg, error_msg);
+//         getmsg_c("SHORT", MAX_STR, SPICE_error_msg);
+        getmsg_c("LONG", MAX_STR, SPICE_error_msg);
+//         getmsg_c("EXPLAIN", MAX_STR, SPICE_error_msg);
+        
+        if (print_to_stdout) {
+            printf("%s\n", caller_error_msg);
+            printf("   SPICE-generated error message: %s\n", SPICE_error_msg);            
+        }
+        YPrintf("%s\n", caller_error_msg);
+        YPrintf("   SPICE-generated error message: %s\n", SPICE_error_msg);
 
         if (exit_pds) {
             ExitPDS(1);                                          // EXIT PDS
@@ -2115,9 +2126,12 @@ void *DecodeScience(void *arg)
                     // EXAMPLE: 2016-09-20. After 2016-09-20T16:48:20.504, some invalid
                     // dates/times appear: 2036-12-24T06:17:57.845, 2009-12-31T05:55:29.838, ...
                     
-                    printf( "Read illegal SCCD=%g from bitstream (SPICE failed to convert it). Trying to resync.\n", rstime);
-                    CPrintf("Read illegal SCCD=%g from bitstream (SPICE failed to convert it).\n", rstime);
-                    CPrintf("Trying to resync.\n", rstime);
+                    
+                    // NOTE: Log messages manually line-broken to fit the width of the science log.
+                    //       ============================================================================
+                    CPrintf("SPICE failed to convert SCCD (spacecraft clock count, double) value from\n");
+                    CPrintf("bytestream, likely (but not necessarily) because of illegal value\n");
+                    CPrintf("SCCD=%g. Trying to resync.\n", rstime);
                     in_sync = 0;                // Indicate not nicely in sync
                     state   = S01_GET_MAINH;    // Not in sync! try to get in sync!
                     break;
@@ -9675,7 +9689,7 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     pthread_mutex_lock(&protect_spice);
 
     scs2e_c(ROSETTA_SPICE_ID, sccs, &et);    // Convert SCCS-->et    
-    if (checkSpiceError("SPICE failed to convert SCCD (spacecraft clock count string)-->et, probably because of out-of-range SCCD", FALSE)) {
+    if (checkSpiceError("SPICE failed to convert SCCS (spacecraft clock count string)-->et, probably because of out-of-range SCCS.", FALSE, FALSE)) {
         // NOTE: Will not exit PDS for this error. This error may occur "legitimately" because of errors in the data,
         // or the (calling) state machine not being synched to the byte stream (it makes the wrong assumption of where to
         // find what data in the byte stream), which leads to strange SSCDs being used. Failure here is used
@@ -9694,12 +9708,12 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     // "utc_3decimals" and "utc_6decimals" are buffers of unknown length.
     if (utc_3decimals != NULL) {
         et2utc_c(et, "ISOC", 3, MAX_STR, utc_temp);
-        checkSpiceError("SPICE failed to convert et-->UTC", TRUE);
+        checkSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
         strcpy(utc_3decimals, utc_temp);
     }
     if (utc_6decimals != NULL) {
         et2utc_c(et, "ISOC", 6, MAX_STR, utc_temp);
-        checkSpiceError("SPICE failed to convert et-->UTC", TRUE);
+        checkSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
         strcpy(utc_6decimals, utc_temp);
     }
     
