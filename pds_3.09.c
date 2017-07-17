@@ -385,7 +385,6 @@ unsigned int GetBitF(unsigned int word,int nb,int sb);					// Returns nb number 
 
 // Time-related functions
 //----------------------------------------------------------------------------------------------------------------------------------
-unsigned int ConvertUtc2Timet_2(char *rtime);                       // Get seconds from 1970 epoch to epoch "epoch"
 double DecodeSCTime2Sccd(unsigned char *buff);                      // Decoding S/C time, returns raw S/C time in seconds as a double
 double DecodeLAPTime2Sccd(unsigned char *buff);                     // Decoding lap time, returns raw S/C time in seconds as a double
 //int DecodeRawTimeEst(double raw,char *stime);                       // Decodes raw S/C time (estimates UTC no calibration) and returns 
@@ -402,14 +401,15 @@ int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd);              
 // lfrac is long or short fractions of seconds.
 
 // Replacement for Scet2Date ESA approach with OASWlib give dubious results. (dj2000 returns 60s instead of 59s etc.)
-int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);          // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
+int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);            // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // use_6_digits is long or short fractions of seconds.
 
-int ConvertUtc2Timet(char *sdate,time_t *t);						// Returns UTC time in seconds (since 1970) for a PDS date string
+int ConvertUtc2Timet(char *sdate,time_t *t);                                // Returns UTC time in seconds (since 1970) for a PDS date string
 // NOTE: This is not the inverse of Scet2Date!
+unsigned int ConvertUtc2Timet_2(char *rtime);                               // Get seconds from 1970 epoch to epoch "epoch"
 
 int ConvertUtc2Timet_midday(char *sdate, time_t *t);
-int GetCurrentUtc0(char *);									// Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
+int GetCurrentUtc0(char *);                                                 // Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
 
 // LAP Logarithmic decompression functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -9468,43 +9468,6 @@ unsigned int GetBitF(unsigned int word,int nb,int sb)
 //----------------------------------------------------------------------------------------------------------------------------------
 
 
-/*
- * Convert
- * from UTC string (without fractional seconds), YYYY-MM-DDThh:mm:ss,
- * to   number of seconds since epoch 1970.
- *
- * NOTE/BUG: Implementation uses mktime ==> Does not account for leap seconds.
- * ASSUMES: Relies on time_t being interpreted as number of seconds (which is unwise).
- * NOTE: There is another function "ConvertUtc2Timet" that at least superficially can do the job of this function.
- *       Not sure why that one has not been used instead.
- *
- * Return value : Time as time_t, number of seconds.
- * 
- * Function name until 2017-07-05: E2Epoch
- */
-unsigned int ConvertUtc2Timet_2(char *rtime)
-{ 
-    struct tm at; // Broken down time structure
-    time_t t;
-    
-    // Put year,month,day,hour,minutes and seconds in structure
-    sscanf(rtime,"%4d-%2d-%2dT%2d:%2d:%2d",&at.tm_year,&at.tm_mon,&at.tm_mday,&at.tm_hour,&at.tm_min,&at.tm_sec); 
-    
-    at.tm_mon--;      // Month ranges from 0 to 11 and not as usual 1 to 12
-    at.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
-    
-    at.tm_wday=0;     // Day of week doesn't matter here
-    at.tm_yday=0;     // Day of year doesn't matter here
-    at.tm_isdst=0;    // Daylight saving unknown
-    
-    t=mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
-    
-    t+=at.tm_gmtoff; // Add number of second east of UTC to get UTC.
-    return t;
-}
-
-
-
 // Decodes S/C time 
 //
 // buff        : TM bytes
@@ -10058,6 +10021,43 @@ int ConvertUtc2Timet(char *sdate, time_t *t)
     // timezone is defined as negative number for Sweden so thus it needs to be a minus sign.
     
     return 0; // Ok!
+}
+
+
+
+/*
+ * Convert
+ * from UTC string (without fractional seconds), YYYY-MM-DDThh:mm:ss,
+ * to   number of seconds since epoch 1970.
+ *
+ * NOTE/BUG: Implementation uses mktime ==> Does not account for leap seconds.
+ * ASSUMES: Relies on time_t being interpreted as number of seconds (which is unwise).
+ * NOTE: There is another function "ConvertUtc2Timet" that at least superficially can do the job of this function.
+ *       Not sure why that one has not been used instead.
+ *
+ * Return value : Time as time_t, number of seconds. NOTE: Integer; no fractional seconds.
+ * 
+ * Function name until 2017-07-05: E2Epoch
+ */
+unsigned int ConvertUtc2Timet_2(char *rtime)
+{
+    struct tm at; // Broken down time structure
+    time_t t;
+    
+    // Put year,month,day,hour,minutes and seconds in structure
+    sscanf(rtime,"%4d-%2d-%2dT%2d:%2d:%2d",&at.tm_year,&at.tm_mon,&at.tm_mday,&at.tm_hour,&at.tm_min,&at.tm_sec); 
+    
+    at.tm_mon--;      // Month ranges from 0 to 11 and not as usual 1 to 12
+    at.tm_year -= 1900; // Get number of years since 1900, that's what mktime wants 
+    
+    at.tm_wday  = 0;     // Day of week doesn't matter here
+    at.tm_yday  = 0;     // Day of year doesn't matter here
+    at.tm_isdst = 0;    // Daylight saving unknown
+    
+    t = mktime(&at);   // Calculates UTC time in seconds since 1970 1 Jan 00:00:00
+    
+    t += at.tm_gmtoff; // Add number of second east of UTC to get UTC.
+    return t;
 }
 
 
