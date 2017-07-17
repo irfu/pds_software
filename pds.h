@@ -44,6 +44,7 @@
 #define MAX_MACROS_INBL 256 // This is 8 physically in instrument..but to accomodate for extra versions it is set higher.
 #define MAX_LINES       1024
 
+// Used by pds_x.xx.c: DecodeScience: param_type
 #define NO_PARAMS    0 // Parameter type indicator, no parameters
 #define SWEEP_PARAMS 1 // Parameter type indicator, sweep parameters
 #define ADC20_PARAMS 2 // Parameter type indicator, ADC 20 Bit parameters
@@ -139,8 +140,8 @@
 
 // TRUE=Run informal "test code", which normally deactivates the normal functioning of pds.
 // Should always be set to FALSE, except during development.
-// #define RUN_TEST_CODE      TRUE
 #define RUN_TEST_CODE      FALSE
+// #define RUN_TEST_CODE      TRUE
 
 
 
@@ -335,8 +336,8 @@ typedef struct curr_type_def
 {
   unsigned int sensor;      // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
   unsigned int transmitter; // LAP currently transmitting sensor
-  double       seq_time;    // Current time of a mesurment sequence in a macro cycle
-  double       stop_time;   // Current stop time of a mesurment sequence in a macro cycle
+  double       seq_time;    // Current time (SCCD) of a mesurment sequence in a macro cycle.
+  double       stop_time;   // Current stop time (SCCD) of a mesurment sequence in a macro cycle.
   double       offset_time; // Time since raw start time
   double       old_time;    // Used to test if we have extra bias settings
   unsigned int old_macro;   // Used to test if we have a new macro
@@ -463,7 +464,7 @@ typedef struct mission_phase_struct
 typedef struct hk_lbl_info_struct
 {
   char utc_time_str[256];         // Stop/start UTC time string
-  char obt_time_str[256];         // Stop/start OBT time string
+  char obt_time_str[256];         // Stop/start OBT time string (SCCS).
   int hk_cnt;                     // House keeping packet counter
 
 } hk_info_type;
@@ -478,6 +479,6 @@ typedef struct data_exclude_times_struct
 {
   int      N_intervals;       // Length of arrays = Number of time intervals.
   int     *SCResetCounter_begin_list;
-  double  *t_begin_list;    // Spacecraft clock counter as double (true decimals). Pointer to array.
-  double  *t_end_list;      // Spacecraft clock counter as double (true decimals). Pointer to array.
+  double  *sccd_begin_list;    // Spacecraft clock counter as double (true decimals). Pointer to array.
+  double  *sccd_end_list;      // Spacecraft clock counter as double (true decimals). Pointer to array.
 } data_exclude_times_type;

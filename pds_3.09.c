@@ -126,6 +126,8 @@
  *   Loads SPICE metakernel (extra row in pds.conf specifies the path). Configures SPICE error behaviour. Does not use SPICE
  *   except for in test code.
  *      /Erik P G Johansson 2017-07-06
+ * * Uses SPICE for ConvertSccd2Utc and implicitly for LBL (PDS keywords) and TAB files (columns). (Other conversions UTC<-->time_ still do not use SPICE.)
+ *      /Erik P G Johansson 2017-07-10
  * * Will not write files for makro 710 P2 HF, and makro 910 P1 HF. /Erik P G Johansson 2017-07-14
  * 
  *
@@ -394,6 +396,8 @@ int ConvertSccd2Utc         (double sccd, char *utc_3decimals, char *utc_6decima
 int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decimals);
 int ConvertSccd2Utc_SPICE   (double sccd, char *utc_3decimals, char *utc_6decimals);
 
+int ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd);         // For testing.
+
 int ConvertSccd2Sccs(double sccd, int n_resets, char *sccs, int quote_sccs);    // Convert raw time to an OBT string (On Board Time)
 int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd);              // Convert OBT string to raw time.
 
@@ -406,7 +410,7 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);            // D
 
 int ConvertUtc2Timet(char *sdate,time_t *t);                                // Returns UTC time in seconds (since 1970) for a PDS date string
 // NOTE: This is not the inverse of Scet2Date!
-unsigned int ConvertUtc2Timet_2(char *rtime);                               // Get seconds from 1970 epoch to epoch "epoch"
+unsigned int ConvertUtc2Timet_2(char *utc);                                 // Get seconds from 1970 epoch to epoch "epoch"
 
 int ConvertUtc2Timet_midday(char *sdate, time_t *t);
 int GetCurrentUtc0(char *);                                                 // Returns current UTC date and time as string CCYY-MM-DDThh:mm:ss
@@ -1942,16 +1946,21 @@ void *DecodeScience(void *arg)
     
     
     //#############################################################################################################################
-    /* Function to remove repetition and shorten the code that writes TABL/LFL file pairs.
+    /* Function to remove repetition and shorten the code that writes TAB/LBL file pairs.
      * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
      * 
      * IMPORTANT NOTE: The function uses MANY variables defined in the enclosing outer function
      * (DecodeScience) to avoid a very long and awkward argument list, but none of these are temporary variables.
-     * PROPOSAL: Re-write as true function with all input data as parameters.
+     * 
+     * NOTE: Will modify lbl_fname, tab_fname, and prod_id.
+     * lbl_fname, tab_fname: Sets byte 19 (E=E-field/D=Density) and 21 (probe number) 
+     * prod_id:              Same as for lbl_fname, tab_fname but for byte 20 and 22, presumably because the first byte/character is a quote.
      * 
      * dop : Defined in analogy with in "WritePTAB_File".
      */
     void WriteTABLBL_FilePair(int dop, unsigned int probeNbr) {
+        // PROPOSAL: Re-write as true function, not using variables defined outside of function, and with all input data as parameters.
+
         char tempChar;
         char tstr10[256];
         char indexStr[256];
@@ -2014,7 +2023,7 @@ void *DecodeScience(void *arg)
             
             WriteToIndexTAB(indexStr, tstr10, property2->value);
         }
-    }
+    }   // WriteTABLBL_FilePair
     //#############################################################################################################################
     
     
@@ -3469,8 +3478,7 @@ void *DecodeScience(void *arg)
                                                             curr.offset_time = aqps_seq*32.0;
                                                             curr.seq_time    = rstime + curr.offset_time;      // Calculate time of current sequence
                                                             
-                                                            ConvertSccd2Sccs(curr.seq_time, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.
-                                                            
+                                                            ConvertSccd2Sccs(curr.seq_time, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.                                                            
                                                             SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
                                                             ConvertSccd2Utc(curr.seq_time, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
@@ -3510,10 +3518,10 @@ void *DecodeScience(void *arg)
                                                             // Currently we have 2 unused characters.
                                                             // See the EAICD (document) for details on file naming convention.
                                                             // [16] : T=20 bit, S=16 bit
-                                                            // [18] : [C]alibrated or Calibrated [R]aw
+                                                            // [18] : [C]alibrated or Calibrated [R]aw (=Edited)
                                                             // [19] : [E]-Field or [D]ensity
                                                             // [20] : [S]weep or [B]ias.
-                                                            // [21] : P[1], P[2], P[3].
+                                                            // [21] : Probe. P[1], P[2], P[3].
                                                             // [22] : [4]/[8] kHz filter
                                                             // Note: [i] : i=byte index in string (i=0: first character)
                                                             // NOTE: Sets probe number and density/E field to "x" since these will be overwritten later (case S15_WRITE_PDS_FILES).
@@ -3521,11 +3529,9 @@ void *DecodeScience(void *arg)
                                                                     &tstr1[2], &tstr1[5], &tstr1[8],
                                                                     alphanum_s, curr.afilter, tm_rate);     // Compile product ID=base filename (filename without extension).
                                                                     
-//                                                             CPrintf("    Tentative basis for filename & product ID: tstr2=\"%s\"\n", tstr2);
-
                                                             if(param_type==ADC20_PARAMS)    { tstr2[16]='T'; }  // Set to [T]wenty bit ADC:s or keep [S]ixteen bit.
-                                                            if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated or keep Calibrated [R]aw.
-                                                            if(param_type==SWEEP_PARAMS)    { tstr2[20]='S'; }  // Set to [S]weep or keep [B]ias.
+                                                            if(calib)                       { tstr2[18]='C'; }  // Set to [C]alibrated       or keep Calibrated [R]aw.
+                                                            if(param_type==SWEEP_PARAMS)    { tstr2[20]='S'; }  // Set to [S]weep            or keep [B]ias.
 
                                                             strcpy(lbl_fname,tstr2);              // Save product ID as label filename.
                                                             strcpy(tab_fname,tstr2);              // Save product ID as table filename.
@@ -3627,8 +3633,8 @@ void *DecodeScience(void *arg)
                                                     
                                                     ConvertSccd2Sccs(rstime, pds.SCResetCounter, tstr1, TRUE); // Compile OBT string and add reset number of S/C clock
                                                     
-                                                    SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr5,1);
-                                                    CPrintf("    OBT time start of measurement cycle: %s \n",tstr5);
+                                                    SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr5,1);                 // BUG? Meant to read tstr1?
+                                                    CPrintf("    OBT time start of measurement cycle: %s \n",tstr5);    // BUG? Meant to read tstr1?
                                                     
                                                     if(param_type==NO_PARAMS) 
                                                     {
@@ -3706,13 +3712,13 @@ void *DecodeScience(void *arg)
                                                         }
                                                     }
                                                     
-                                                    // ------------------------------------------------------------------------------------
-                                                    // Look for the existence of a macro ID before checking for (CALIB) macros to exclude.
+                                                    // -------------------------------------------------------------------------------------
+                                                    // Look for the existence of a macro ID before checking for macros to exclude in CALIB.
                                                     // Early macros (before the first flight software update in space) did not have macro
                                                     // descriptions/IDs since that functionality had not been implemented yet.
                                                     // /Erik P G Johansson summarizing Reine Gill 2015-03-26.
-                                                    // ------------------------------------------------------------------------------------
-                                                    if(!macro_descr_NOT_found) // IF we have a macro description (macro_descr_NOT_found==0 means we have).
+                                                    // -------------------------------------------------------------------------------------
+                                                    if(!macro_descr_NOT_found) // IF we do HAVE a macro description (macro_descr_NOT_found==0 means we have).
                                                     {
                                                         if(calib)
                                                         {
@@ -3785,7 +3791,7 @@ void *DecodeScience(void *arg)
                                                          * <=>   Not (ADC20 and both probes).
                                                          * NOTE: The if condition _APPEARS_TO_BE_ a very crude way of determining
                                                          * if-and-only-if there is data from exactly one probe (P3 counts as one probe).
-                                                         * Not sure why it must should work, but it does seem to be consistent with id.h:
+                                                         * Not sure why it should work, but it does seem to be consistent with id.h:
                                                          * no subheaders read ADC16 from both probes.
                                                          * Why not use (curr.sensor==SENS_P1 || curr.sensor==SENS_P2), or curr.sensor!=SENS_P1P2?
                                                          * /Erik P G Johansson 2016-03-10
@@ -4305,7 +4311,8 @@ int PPrintf(const char *fmt, ...)
     return(status);
 }                  
 
-// As printf but everything goes into Science decoding log.
+// Like printf but everything goes into Science decoding log.
+// Mostly used in the state machine and some related functions.
 int CPrintf(const char *fmt, ...)
 {
     int status;
@@ -4827,7 +4834,7 @@ int  LoadModeDesc(prp_type *p,char *path)
 //                       [i][1] = Second file column value = voltage bias (high byte=P1, low byte=P2)
 //                       [i][2] = Third  file column value = current bias (high byte=P1, low byte=P2)
 // Output : mode_s     : 2D array of integers, size mode_cnt_s x 2. Contains content of rows where second column IS "*Mode*".
-//                       [i][0] = First file column value = time (time_t).
+//                       [i][0] = First file column value = time (time_t, ConvertUtc2Timet).
 //                       [i][1] = THIRD file column value. (Second column value ="*Mode*")
 // Output : bias_cnt_s
 // Output : mode_cnt_s
@@ -4870,35 +4877,41 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     }
     
     
-    // Count bias table lines
+    //=======================
+    // Count bias table rows
+    //=======================
     while(fgets(line,255,fd) != NULL)
     {
-        if (line[0] == '\n') continue;  // Empty line.
-        if (line[0] == '#')  continue;  // Remove comments.
-        if (line[0] == ' ')  continue;  // Ignore whitespace line.
+        if (line[0] == '\n') continue;   // Empty line.
+        if (line[0] == '#')  continue;   // Remove comments.
+        if (line[0] == ' ')  continue;   // Ignore whitespace line.
         if (strstr(line,"*Mode*")==NULL)
             bias_cnt++;
         else
             mode_cnt++;
     }
-    
     rewind(fd); // Rewind index label to start
+    
     
     
     bias=CallocIntMatrix(bias_cnt,3);   // Allocate a matrix of integers.
     mode=CallocIntMatrix(mode_cnt,2);
+
     
+    
+    //========================================
+    // Fill "bias" and "mode" and with values
+    //========================================
     bias_cnt=0;
     mode_cnt=0;
     while (fgets(line,255,fd) != NULL)
     {
-        if (line[0] == '\n') continue;  // Empty line.
-        if (line[0] == '#')  continue;  // Remove comments.
-        if (line[0] == ' ')  continue;  // Ignore whitespace line.
-        Separate(line,l_tok,m_tok,'\t',1);   // Separate at first occurrence of a tab character
-        Separate(line,m_tok,r_tok,'\t',2);   // Separate at second occurrence of a tab character
+        if (line[0] == '\n') continue;   // Empty line.
+        if (line[0] == '#')  continue;   // Remove comments.
+        if (line[0] == ' ')  continue;   // Ignore whitespace line.
+        Separate(line,l_tok,m_tok,'\t',1);   // Separate at first occurrence of a tab character.
+        Separate(line,m_tok,r_tok,'\t',2);   // Separate at second occurrence of a tab character.
         ConvertUtc2Timet(l_tok, &t);         // Convert time to seconds
-        
         
         if(strstr(m_tok,"*Mode*")==NULL)
         {
@@ -5017,8 +5030,8 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     int    i = 0;
     int    SCResetCounter1 = 0;
     int    SCResetCounter2 = 0;
-    double t_begin = 0.0;
-    double t_end = 0.0;
+    double sscd_begin = 0.0;
+    double sccd_end   = 0.0;
     char   l_tok[256]; // Left token
     char   r_tok[256]; // Right token  
     data_exclude_times_type dataExcludeTimes_temp;
@@ -5048,8 +5061,8 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     
     rewind(fd); // Set position of stream to beginning.
     dataExcludeTimes_temp.SCResetCounter_begin_list = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
-    dataExcludeTimes_temp.t_begin_list              = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
-    dataExcludeTimes_temp.t_end_list                = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
+    dataExcludeTimes_temp.sccd_begin_list              = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
+    dataExcludeTimes_temp.sccd_end_list                = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
     
     i = 0;
     YPrintf("Ingested data exclude time intervals: file contents strings and interpretations (true decimals)\n");  // Print to "pds system log".
@@ -5066,29 +5079,29 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
             return -1;
         }
         
-        if (ConvertSccs2Sccd(l_tok, &SCResetCounter1, &t_begin)) {
+        if (ConvertSccs2Sccd(l_tok, &SCResetCounter1, &sscd_begin)) {
             YPrintf("ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
             printf( "ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
             return -1;
         }
-        if (ConvertSccs2Sccd(r_tok, &SCResetCounter2, &t_end)) {    // NOTE: temp_int2 never used.
+        if (ConvertSccs2Sccd(r_tok, &SCResetCounter2, &sccd_end)) {    // NOTE: temp_int2 never used.
             YPrintf("ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             printf( "ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             return -1;
         }
         
-        if (t_begin > t_end) {
-            YPrintf("ERROR: Found time interval runs backwards (t_begin > t_end) in data exclude times file.\n");
-            printf( "ERROR: Found time interval runs backwards (t_begin > t_end) in data exclude times file.\n");
+        if (sscd_begin > sccd_end) {
+            YPrintf("ERROR: Found time interval runs backwards (sscd_begin > sccd_end) in data exclude times file.\n");
+            printf( "ERROR: Found time interval runs backwards (sscd_begin > sccd_end) in data exclude times file.\n");
         }
         dataExcludeTimes_temp.SCResetCounter_begin_list[i] = SCResetCounter1;
-        dataExcludeTimes_temp.t_begin_list[i]              = t_begin;
-        dataExcludeTimes_temp.t_end_list[i]                = t_end;
+        dataExcludeTimes_temp.sccd_begin_list[i]              = sscd_begin;
+        dataExcludeTimes_temp.sccd_end_list[i]                = sccd_end;
         
         // Print to "pds system log".
         // Useful for double-checking that the code interprets the file correctly. Could be deactivated
         // together with introductory "title line" that is also printed to the log before the loop.
-        YPrintf("   %s %s  = %i/%f %i/%f\n", l_tok, r_tok, SCResetCounter1, t_begin, SCResetCounter1, t_end);
+        YPrintf("   %s %s  = %i/%f %i/%f\n", l_tok, r_tok, SCResetCounter1, sscd_begin, SCResetCounter1, sccd_end);
         
         i++;
     }
@@ -5132,9 +5145,9 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
  * 
  * ASSUMES: Spacecraft reset counter is the same for all times involved in the algorithm (or something in that direction...).
  * ALGORITHM: Excludes data if-and-only-if
- *     SPACECRAFT_CLOCK_STOP_COUNT>=t_exclude_begin
+ *     SPACECRAFT_CLOCK_STOP_COUNT >= t_exclude_begin
  *     and
- *     SPACECRAFT_CLOCK_START_COUNT<=t_exclude_end.
+ *     SPACECRAFT_CLOCK_START_COUNT <= t_exclude_end.
  *     Note the less-than-or-EQUAL.
  *--------------------------------------------------------------------------------------------*/
 int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData) {
@@ -5151,8 +5164,8 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
     char *STOP_TIME  = NULL;
     int junk_int, i = -1;
     int file_SCResetCounter_begin = -1;
-    double file_t_begin = -1;
-    double file_t_end   = -1;    
+    double sccd_file_begin = -1;
+    double sccd_file_end   = -1;    
     
 
     
@@ -5174,12 +5187,12 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
      * ==>
      * "raw" spacecraft clock count (double; true decimals)
      ======================================================*/
-    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &file_t_begin)) {
+    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &sccd_file_begin)) {
         YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
         printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
         return -2;
     }
-    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &file_t_end  )) {
+    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &sccd_file_end  )) {
         YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
         printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
         return -2;
@@ -5193,8 +5206,8 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
         (FindP(file_properties, &property1, "START_TIME", 1, DNTCARE) < 0) ||
         (FindP(file_properties, &property2, "STOP_TIME",  1, DNTCARE) < 0)
     ) {
-        YPrintf("DecideWhetherToExcludeData: Can not find occurrence of CLOCK_START/STOP_COUNT.\n");
-        printf( "DecideWhetherToExcludeData: Can not find occurrence of CLOCK_START/STOP_COUNT.\n");
+        YPrintf("DecideWhetherToExcludeData: Can not find occurrence of SPACECLOCK_START/STOP_COUNT.\n");
+        printf( "DecideWhetherToExcludeData: Can not find occurrence of SPACECLOCK_START/STOP_COUNT.\n");
         return -1;
     }
     START_TIME = property1->value;
@@ -5207,8 +5220,8 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
         // If it does, then it is not necessary to check with other data exclusion intervals.
         if (
             (file_SCResetCounter_begin == dataExcludeTimes->SCResetCounter_begin_list[i])
-            && (file_t_end   >= dataExcludeTimes->t_begin_list[i])
-            && (file_t_begin <= dataExcludeTimes->t_end_list[i])
+            && (sccd_file_end   >= dataExcludeTimes->sccd_begin_list[i])
+            && (sccd_file_begin <= dataExcludeTimes->sccd_end_list[i])
         )
         {
             CPrintf("DecideWhetherToExcludeData: Data for file with data in the stated time interval should be excluded:\n");
@@ -5916,8 +5929,8 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
             sscanf(duration,"%d",&dur);
 
             // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred in time interval
-            // into account. Therefore, extend end of data set by one second, just in case.
-            m->stop = m->start + dur*24*3600 + 1;
+            // into account.
+            m->stop = m->start + dur*24*3600;
             
             char* descr;
             if(calib) {
@@ -5936,7 +5949,7 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
     fclose(fd);
     
     printf("Could not find the mission phase in the mission calendar file.\n");
-    CPrintf("    Could not find the mission phase in the mission calendar file.\n");
+    YPrintf("    Could not find the mission phase in the mission calendar file.\n");
     return -3; // No phase found
 }  // InitMissionPhaseStructFromMissionCalendar
 
@@ -6582,9 +6595,9 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
  *    NOTE: "dop" seems different from curr_type_def.sensor. sensor==0 has different meaning at the very least.
  *    NOTE: In this function, whenever dop is used together with something else in a (boolean) condition (many of those),
  *          it is one of these three conditions:
- *      (1)  (curr->sensor==SENS_P1P2 && dop==0)
- *      (2)  (curr->sensor==SENS_P1 || dop==1)
- *      (3)  (curr->sensor==SENS_P2 || dop==2)
+ *      P1  (curr->sensor==SENS_P1   || dop==1)
+ *      P2  (curr->sensor==SENS_P2   || dop==2)
+ *      P3  (curr->sensor==SENS_P1P2 && dop==0)
  *
  *    Erik P G Johansson's GUESS: curr-->sensor refers to the probe(s) for which there is data.
  *    Erik P G Johansson's GUESS: The combination of curr.sensor and "dop" determines which probe is being written to disk.
@@ -6628,7 +6641,7 @@ int WritePTAB_File(
     int ini_samples,
     int samp_plateau)
 {
-    char tstr2[256];                // Temporary string
+    char file_path[PATH_MAX];                // Temporary string
     
     char current_sample_utc[256];
     char first_sample_utc[256];
@@ -6679,9 +6692,9 @@ int WritePTAB_File(
     double vcalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
     double ccalf_ADC16 = 0.0/0.0;    // Voltage calibration factor for ADC16.
     
-    time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
-    time_t stime;                   // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
     double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
+    time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
+    time_t t_first_sample;          // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
     
     int i_calib=0;                  // Valid index into structure with calibration data.
     
@@ -6726,9 +6739,8 @@ int WritePTAB_File(
 
     
     
-    ConvertSccd2Utc(curr->seq_time, first_sample_utc, NULL);  // First convert spacecraft time to UTC to get time calibration right
-    
-    ConvertUtc2Timet(first_sample_utc, &stime);            // Convert back to seconds
+    ConvertSccd2Utc(curr->seq_time, first_sample_utc, NULL);   // First convert spacecraft time to UTC to get time calibration right.
+    ConvertUtc2Timet(first_sample_utc, &t_first_sample);       // Convert back to seconds.
 
     /*===================================================================================================================
      * Determine
@@ -6749,9 +6761,9 @@ int WritePTAB_File(
         ADC20_moving_average_enabled = FALSE;
         ADC20_moving_average_bug_TM_factor = 1.0;
     }
-    
-    
-    
+
+
+
     /* Declare constants which replace the conditions in many "if" statements. This clarifies the code.
      * NOTE: For unknown reasons, the expressions represented by the constants here are not used for sweeps,
      * Possibly because "param_type==SWEEP_PARAMS" implies that P3 is not used and therefore "dop" does not need to be read.
@@ -6769,7 +6781,7 @@ int WritePTAB_File(
         //=============
 
         // Figure out which calibration data to use for the given time of the data.
-        i_calib = SelectCalibrationData(stime, first_sample_utc, mc);
+        i_calib = SelectCalibrationData(t_first_sample, first_sample_utc, mc);
         if (debug >= 1) {
             CPrintf("    Calibration file %i: %s\n", i_calib, mc->calib_info[i_calib].LBL_filename);
         }
@@ -6972,8 +6984,8 @@ int WritePTAB_File(
     //###############################
     //###############################
     
-    strcpy(tstr2,pds.spaths);  // Copy data path
-    strcat(tstr2,fname);       // For now put in root path, so add file name!
+    strcpy(file_path, pds.spaths);  // Copy data path
+    strcat(file_path, fname);       // For now put in root path, so add file name!
     
     // TABLE COLUMNS AND POSITIONS                                        
     // 1234567890123456789012345<26><27>  POSITIONS                  
@@ -6981,9 +6993,9 @@ int WritePTAB_File(
     
     
     CPrintf("    Writing PDS Data table file: %s\n",fname);
-    if((pds.stable_fd=fopen(tstr2,"w"))==NULL)                       // Open table file
+    if((pds.stable_fd=fopen(file_path, "w"))==NULL)                       // Open table file
     {
-        CPrintf("    Couldn't open PDS TAB data file: %s!!\n",tstr2);
+        CPrintf("    Couldn't open PDS TAB data file: %s!!\n", file_path);
         return -1;
     }
     else
@@ -6998,12 +7010,12 @@ int WritePTAB_File(
             
             if(param_type==SWEEP_PARAMS)
             {
-                if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) { // Decode the four sweep types
-                    curr_step=-sw_info->height; // Store height of step and set sign to a down sweep 
+                if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) {   // Decode the four sweep types
+                    curr_step=-sw_info->height;   // Store height of step and set sign to a down sweep 
                 } else {
-                    curr_step=sw_info->height;  // Store height of step and set sign to a up sweep
+                    curr_step = sw_info->height;   // Store height of step and set sign to a up sweep
                 }
-                ti2=sw_info->start_bias;      // Get start bias
+                ti2 = sw_info->start_bias;         // Get start bias
             }
             
             //============
@@ -7086,7 +7098,8 @@ int WritePTAB_File(
                         meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i>>1)])>>(4*((i+1)%2))) & 0x0F);
                         SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                         if(ADC20_moving_average_enabled) {
-                            meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
+                            // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless (~random).
+                            meas_value_TM = meas_value_TM & 0xFFFF0;
                         }
                         j+=2;
                         break;
@@ -7109,10 +7122,12 @@ int WritePTAB_File(
                         j+=2;
                 }
                 
-                td1 = i * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.
                 
-                current_sample_sccd = curr->seq_time + td1;                    // Calculate current time (absolute).
-                
+                //==========================================================
+                // Derive different measures of time for the current sample.
+                //==========================================================
+                td1 = i * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
+                current_sample_sccd = curr->seq_time + td1;                       // Calculate SCCD.
                 ConvertSccd2Utc(current_sample_sccd, NULL, current_sample_utc);   // Decode raw time to UTC.
                 
                 //==============================================================================
@@ -7121,7 +7136,7 @@ int WritePTAB_File(
                 if(nbias>0 && bias!=NULL)
                 {
                     // Figure out if any extra bias settings have been done outside of macros.
-                    utime=(unsigned int)stime+td1;   // Current time in raw utc format
+                    utime = (unsigned int)t_first_sample + td1;   // Current time in raw UTC format
                     
                     extra_bias_setting=0;
                     for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
@@ -7153,7 +7168,7 @@ int WritePTAB_File(
                     // FKJN 2014-10-31 added macro 515 & 807
                     if(extra_bias_setting)
                     {
-                        FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	 //tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
+                        FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	  // tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
                         
                         /* BUG FIX: Old code interpreted string as a decimal number when it should be a hexadecimal number.
                          * Old code should not have been a problem as long as
@@ -9710,6 +9725,27 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
 
 
 
+// Inverse function to ConvertSccd2Utc_* (made for testing/comparing ConvertSccd2Utc_*).
+// Not presently used by pds itself. /Erik P G Johansson 2017-07-17
+int ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
+{
+    double et;
+    char sccs[MAX_STR];
+    
+    utc2et_c(utc, &et);
+    checkSpiceError("SPICE failed to convert UTC-->et.", TRUE, TRUE);
+    
+    sce2s_c(ROSETTA_SPICE_ID, et, MAX_STR, sccs);
+    checkSpiceError("SPICE failed to et-->SCCS.", TRUE, TRUE);
+    
+    ConvertSccs2Sccd(sccs, reset_counter, sccd);
+    
+    return 0;
+}
+
+
+
+
 /**
  * Convert
  * from (1) spacecraft clock count double (true decimals; Reine Gill: RAW time)
@@ -9952,19 +9988,19 @@ int ConvertUtc2Timet(char *sdate, time_t *t)
     
     if(sdate==NULL) return -1; // Error no input date
     
-    strncpy(year,sdate,4);      // Copy year from sdate
-    strncpy(month,&sdate[5],2); // Copy month from sdate
-    strncpy(mday,&sdate[8],2);  // Copy day of month to mday
+    strncpy(year,   sdate,4);      // Copy year from sdate
+    strncpy(month, &sdate[5], 2); // Copy month from sdate
+    strncpy(mday,  &sdate[8], 2);  // Copy day of month to mday
     
     
-    year[4]='\0';  // Terminate
-    month[2]='\0'; // Terminate
-    mday[2]='\0';  // Terminate  
+    year[4]  = '\0';   // Terminate
+    month[2] = '\0';   // Terminate
+    mday[2]  = '\0';   // Terminate  
     
     // Set default values (midnight) in case they are not supplied by the caller (sdate).
-    atime.tm_sec=0;
-    atime.tm_min=0;
-    atime.tm_hour=0;
+    atime.tm_sec  = 0;
+    atime.tm_min  = 0;
+    atime.tm_hour = 0;
     
     if((len=strlen(sdate))>10) // If we have a full PDS time string with more than just YYYY-MM-DD (year-month-day). Assume hour-minute-second.
     {
@@ -10004,12 +10040,12 @@ int ConvertUtc2Timet(char *sdate, time_t *t)
         return -7;       // Err only do time after 1970, could be 2000.
     }
     
-    atime.tm_year-=1900; // Get number of years since 1900, that's what mktime wants 
-    atime.tm_mon-=1;     // Month ranges from 0 to 11 and not as usual 1 to 12
+    atime.tm_year -= 1900;   // Get number of years since 1900, that's what mktime wants 
+    atime.tm_mon  -= 1;      // Month ranges from 0 to 11 and not as usual 1 to 12
     
-    atime.tm_wday=0;     // Day of week doesn't matter here
-    atime.tm_yday=0;     // Day in year doesn't matter here
-    atime.tm_isdst=0;    // Daylight saving unknown
+    atime.tm_wday  = 0;      // Day of week doesn't matter here
+    atime.tm_yday  = 0;      // Day in year doesn't matter here
+    atime.tm_isdst = 0;      // Daylight saving unknown
 
     // Calculates UTC time in seconds since 1970 1 Jan 00:00:00.
     // NOTE: mktime interprets "atime" as a local time and hence ADDS a timezone shift (despite that what we input is UTC).
@@ -10039,13 +10075,13 @@ int ConvertUtc2Timet(char *sdate, time_t *t)
  * 
  * Function name until 2017-07-05: E2Epoch
  */
-unsigned int ConvertUtc2Timet_2(char *rtime)
+unsigned int ConvertUtc2Timet_2(char *utc)
 {
     struct tm at; // Broken down time structure
     time_t t;
     
     // Put year,month,day,hour,minutes and seconds in structure
-    sscanf(rtime,"%4d-%2d-%2dT%2d:%2d:%2d",&at.tm_year,&at.tm_mon,&at.tm_mday,&at.tm_hour,&at.tm_min,&at.tm_sec); 
+    sscanf(utc,"%4d-%2d-%2dT%2d:%2d:%2d",&at.tm_year,&at.tm_mon,&at.tm_mday,&at.tm_hour,&at.tm_min,&at.tm_sec); 
     
     at.tm_mon--;      // Month ranges from 0 to 11 and not as usual 1 to 12
     at.tm_year -= 1900; // Get number of years since 1900, that's what mktime wants 
@@ -10620,7 +10656,7 @@ int DDSFileDuration(char *str)
 // Function assumes that it is a true DDS archive
 // hierarchy. Start time is in seconds)
 // 
-// NOTE: Derives UTC time from filename or path(?), then converts ~UTC-->time_t with mktime (disregarding leapseconds?).
+// NOTE: Derives UTC time from filename or path(?), then converts ~UTC-->time_t with mktime (disregarding leap seconds?).
 // 
 time_t DDSFileStartTime(FTSENT *f) 
 {
@@ -10901,7 +10937,7 @@ int main_TEST(int argc, char* argv[]) {
     printf("###################################################################################\n");
     ProtectPlnkInit();
     
-    initSpice("/misc/rosetta/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int/mk/ROS_V030.TM");
+    initSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V030___birra.TM");
 //     erract_c("SET", 99999, "DEFAULT");
 
     // Example: RO-C-RPCLAP-2-TF5-EDITED-V0.1___BACKUP_2017-07-06_17.35.07___befSPICE/DATA/EDITED/2016/SEP/D19/RPCLAP160919_001S_RDS24NS.LBL
@@ -10936,86 +10972,118 @@ int main_TEST(int argc, char* argv[]) {
         // et   = 527601592.666569
         // utc  = 2016-09-19T23:58:44.484171
     }
-    {
-        char sccs[MAX_STR] = "1/0432950235.15680";
-        double sccd;
-        int n_resets;
-        char utc1[MAX_STR];
-        char utc2[MAX_STR];
-        ConvertSccs2Sccd(sccs, &n_resets, &sccd);
-        ConvertSccd2Utc_nonSPICE(sccd, NULL, utc1);    // Requires loaded TCORR data structures!
-        ConvertSccd2Utc_SPICE   (sccd, NULL, utc2);
+
+    /*=====================================
+     * Compare
+     *      ConvertSccd2Utc_nonSPICE, and
+     *      ConvertSccd2Utc_SPICE
+    =====================================*/
+    if (TRUE) {
+//         double sccd_array[MAX_STR];
+        const int N_seq = 10000;
+        const double sccd_seq_1=1e8, sccd_seq_2=4.025e8;
+        const double sccd_diff_threshold_1 = 0.001;
+        const double sccd_diff_threshold_2 = 1.0;
+
+        int i = 0, N_timestamps = -1;
+        char sccs_array[1024*10][100];    // 2016-09-30T12:00:00.000000 ==> 26 tecken.
+        int N_over_threshold_1 = 0;
+        int N_over_threshold_2 = 0;
+
+        // Add timestamps linearly distributed between two specified timestamps.
+        int j = 0;
+        for (j=0; j<N_seq; j++) {
+            ConvertSccd2Sccs(
+                sccd_seq_1 + j/(1.0*N_seq-1) * (sccd_seq_2-sccd_seq_1),
+                ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+        }
+
+        // Add timestamps on and around leap second 2015-06-30.
+//         const double sccd_ls2015 = 394329522.327700;    // Approximately leap second 2017-06-30 23:59:60 (according to SPICE).
+//         ConvertSccd2Sccs(sccd_ls2015-100, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015  -2, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015  -1, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015,     ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015  +1, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015  +2, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015  +5, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015 +10, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
+//         ConvertSccd2Sccs(sccd_ls2015+100, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_array[i++], FALSE);
         
-        printf("%17s --> %16f --> %s\n", sccs, sccd, utc1);
-        printf("                                            %s\n", utc2);
-
-    }
-    return -1;
-
-//     RunShellCommand("echo \"SADQWRDSDF\"");
-    
-    /*
-    prp_type p;
-    int errorCode;
-    printf("Read file\n");
-//  int ReadLabelFile(prp_type *lb_data,char *name)
-    errorCode = ReadLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL");
-    printf("errorCode = %i\n", errorCode);
-
-    printf("Write file\n");
-    //  int WriteUpdatedLabelFile(prp_type *lb_data,char *name)
-    errorCode = WriteUpdatedLabelFile(&p, "/home/erjo/temp/RPCLAP030101_CALIB_FRQ_E_P2.LBL_modif");
-    printf("errorCode = %i\n", errorCode);
-    //*/
-    
-    
-
-    char * s[MAX_STR];
-    time_t t, t_midday;
-    int i = 0;
-
-    s[i++] = "1970-01-01 00:00:00"; 
-    s[i++] = "1970-01-01 00:00:01";
-    s[i++] = "1970-01-01 00:59:59";
-    s[i++] = "1970-01-01 01:00:00";
-    s[i++] = "1970-01-01 01:00:01";
-    s[i++] = "1970-01-01 12:00:00";
-    s[i++] = "1970-01-01 23:59:59";
-    s[i++] = "1970-01-02 00:00:00";
-    s[i++] = "1970-01-02 00:00:01";
-
-    const int i1=i;
-    s[i++] = "2015-06-30 21:59:59";
-    s[i++] = "2015-06-30 21:59:60";    // Possibly leap second if happens to be something fishy with the time zone.
-    s[i++] = "2015-06-30 22:00:00";
-    
-    s[i++] = "2015-06-30 22:59:59";
-    s[i++] = "2015-06-30 22:59:60";    // Possibly leap second if happens to be something fishy with the time zone.
-    s[i++] = "2015-06-30 23:00:00";
-    
-    s[i++] = "2015-06-30 23:59:59";
-    s[i++] = "2015-06-30 23:59:60";    // Leap second in UTC. 
-    s[i++] = "2015-07-01 00:00:00";
-    
-    s[i++] = "2016-01-01 12:00:00";
-    s[i++] = "2016-01-01 23:00:00";
-    s[i++] = "2016-01-02 00:00:00";
-    s[i++] = "2016-01-02 00:00:01";
-    s[i++] = "2016-01-02 12:00:00";
-    const int i2=i;
-    //const int N=i;
-
-    printf("UTC                 ==> time_t     time_t midday ==> UTC (non-midday)\n");
-    for (i=i1; i<i2; i++) {
-        char utc[MAX_STR];
+        N_timestamps = i;
         
-        ConvertUtc2Timet(       s[i], &t);
-        ConvertUtc2Timet_midday(s[i], &t_midday);
-        ConvertTimet2Utc(t, utc, TRUE);
-        printf("%19s ==> %10i, %10i ==> %s\n", s[i], (int) t, (int) t_midday, utc);
+        printf("SCCS --> SCCD --> (non-SPICE) UTC, (SPICE) UTC --> SCCD, SCCD --> SCCD abs.diff\n");
+        for (i=0; i<N_timestamps; i++) {
+            char utc1[MAX_STR], utc2[MAX_STR];
+            double sccd, sccd1, sccd2;
+            int reset_counter;
+            
+            ConvertSccs2Sccd(sccs_array[i], &reset_counter, &sccd);
+            ConvertSccd2Utc_nonSPICE(sccd, NULL, utc1);    // Requires loaded TCORR data structures!
+            ConvertSccd2Utc_SPICE   (sccd, NULL, utc2);
+            ConvertUtc2Sccd_SPICE(utc1, &reset_counter, &sccd1);
+            ConvertUtc2Sccd_SPICE(utc2, &reset_counter, &sccd2);
+            double sccd_diff = fabs(sccd1-sccd2);
+            printf("%-18s --> %16f --> %s, %s --> %16f, %16f --> %f\n", sccs_array[i], sccd, utc1, utc2, sccd1, sccd2, sccd_diff);
+            
+            if (sccd_diff >= sccd_diff_threshold_1) {   N_over_threshold_1++;   }            
+            if (sccd_diff >= sccd_diff_threshold_2) {   N_over_threshold_2++;   }
+        }
+        printf("Number of tested timestamps: %i\n", N_timestamps);
+        printf("Fraction of diffs > threshold=%f: %f\n", sccd_diff_threshold_1, (1.0*N_over_threshold_1)/N_timestamps);
+        printf("Fraction of diffs > threshold=%f: %f\n", sccd_diff_threshold_2, (1.0*N_over_threshold_2)/N_timestamps);
     }
-    
-    
+
+
+
+    /* Compare UTC-->time_t-->UTC (ConvertUtc2Timet, ConvertTimet2Utc)
+     */
+    if (FALSE) {
+        char * utc_array[MAX_STR];
+        time_t t, t_midday;
+        int i = 0;
+
+        utc_array[i++] = "1970-01-01 00:00:00"; 
+        utc_array[i++] = "1970-01-01 00:00:01";
+        utc_array[i++] = "1970-01-01 00:59:59";
+        utc_array[i++] = "1970-01-01 01:00:00";
+        utc_array[i++] = "1970-01-01 01:00:01";
+        utc_array[i++] = "1970-01-01 12:00:00";
+        utc_array[i++] = "1970-01-01 23:59:59";
+        utc_array[i++] = "1970-01-02 00:00:00";
+        utc_array[i++] = "1970-01-02 00:00:01";
+
+        const int i1=i;
+        utc_array[i++] = "2015-06-30 21:59:59";
+        utc_array[i++] = "2015-06-30 21:59:60";    // Possibly leap second if happens to be something fishy with the time zone.
+        utc_array[i++] = "2015-06-30 22:00:00";
+        
+        utc_array[i++] = "2015-06-30 22:59:59";
+        utc_array[i++] = "2015-06-30 22:59:60";    // Possibly leap second if happens to be something fishy with the time zone.
+        utc_array[i++] = "2015-06-30 23:00:00";
+        
+        utc_array[i++] = "2015-06-30 23:59:59";
+        utc_array[i++] = "2015-06-30 23:59:60";    // Leap second in UTC. 
+        utc_array[i++] = "2015-07-01 00:00:00";
+        
+        utc_array[i++] = "2016-01-01 12:00:00";
+        utc_array[i++] = "2016-01-01 23:00:00";
+        utc_array[i++] = "2016-01-02 00:00:00";
+        utc_array[i++] = "2016-01-02 00:00:01";
+        utc_array[i++] = "2016-01-02 12:00:00";
+        const int i2=i;
+        //const int N=i;
+
+        printf("UTC                 ==> time_t     time_t midday ==> UTC (non-midday)\n");
+        for (i=i1; i<i2; i++) {
+            char utc[MAX_STR];
+            
+            ConvertUtc2Timet(       utc_array[i], &t);
+            ConvertUtc2Timet_midday(utc_array[i], &t_midday);
+            ConvertTimet2Utc(t, utc, TRUE);
+            printf("%19s ==> %10i, %10i ==> %s\n", utc_array[i], (int) t, (int) t_midday, utc);
+        }
+    }
 
     return -1;
 }
