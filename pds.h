@@ -213,6 +213,22 @@
 
 
 
+/*===========================================================================================================================
+ * ADC20 data is timestamped some time after the actual measurement. Therefore, the below number is SUBTRACTED
+ * from the TM timestamp.
+ * NOTE: The subtraction takes place in SCCD/spacecraft clock for performance reasons, not e.g. "et" (ephemeris time;
+ * proper second counter), and is therefore slightly approximate (effectively: the actually subtracted value varies
+ * slightly over time).
+ * Unit: seconds
+ * 
+ * The value 20 ms can be found in the paper "RPC-LAP: The Rosetta Langmuir Probe Instrument", A. I. Eriksson et.al., 2006,
+ * Figure 6, caption.
+ ==========================================================================================================================*/
+#define ADC20_DELAY_S    0.020
+// #define ADC20_DELAY_S    0.000    // For testing
+
+
+
 // Time correlation structure
 //
 // 1) UTC_TIME=OBT_TIME*gradient(n)+offset(n) 
@@ -336,8 +352,9 @@ typedef struct curr_type_def
 {
   unsigned int sensor;      // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
   unsigned int transmitter; // LAP currently transmitting sensor
-  double       seq_time;    // Current time (SCCD) of a mesurment sequence in a macro cycle.
-  double       stop_time;   // Current stop time (SCCD) of a mesurment sequence in a macro cycle.
+  double       seq_time_TM;           // Current time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
+  double       seq_time_corrected;    // Like seq_time_TM, but (possibly) adjusted for analog signal delays.
+  double       stop_time_corrected;   // Current stop time (SCCD) of a measurement sequence in a macro cycle, but (possibly) adjusted for analog signal delays.
   double       offset_time; // Time since raw start time
   double       old_time;    // Used to test if we have extra bias settings
   unsigned int old_macro;   // Used to test if we have a new macro

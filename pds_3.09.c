@@ -177,6 +177,7 @@
  * time_t appears to correspond to number of seconds after 1970-01-01 00:00.00.
  * (2) Code uses standard POSIX C functions that convert time_t <--> ~UTC which appear to NOT take leap seconds into account!
  * 
+ * 
  * NAMING CONVENTIONS
  * ------------------
  * Functions for (1) interpreting time from byte streams, and (2) converting between different time formats, have been renamed to
@@ -1381,10 +1382,10 @@ int checkSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout)
 //
 void *SCDecodeTM(void *arg)
 {
-    char tstr[64];
+    char utc[64];
     unsigned int length;           // Length of data
     unsigned char packet_id;       // S/C packet ID, low byte
-    double rawt;                   // Raw time
+    double sccd;                   // Raw time
     buffer_struct_type *cs;        // Pointer to circular buffer structure type, for S/C TM decoding
     unsigned char buff[RIDICULUS];  // Temporary in buffer
     
@@ -1437,9 +1438,9 @@ void *SCDecodeTM(void *arg)
                         PPrintf("    Weird HK length discarding!\n");
                         continue;
                     }
-                    rawt = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
-                    ConvertSccd2Utc(rawt, tstr, NULL);     // Decode raw time to PDS compliant date format.
-                    PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
+                    sccd = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
+                    ConvertSccd2Utc(sccd, utc, NULL);      // Decode raw time to PDS compliant date format.
+                    PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",utc,sccd);
                     
                     In(&cbh,HBYTE);         // Keep packet ID high byte
                     In(&cbh,HK);            // Keep packet ID low  byte
@@ -1582,10 +1583,10 @@ void *SCDecodeTM(void *arg)
                         continue;
                     }
                     
-                    rawt = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
-                    ConvertSccd2Utc(rawt, tstr, NULL);     // Decode raw time to PDS compliant date format.
+                    sccd = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
+                    ConvertSccd2Utc(sccd, utc, NULL);      // Decode raw time to PDS compliant date format.
                     PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,length);
-                    PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",tstr,rawt);
+                    PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",utc,sccd);
                     GetBuffer(cs,buff,length); 
                     
                     
@@ -1868,7 +1869,7 @@ void *DecodeScience(void *arg)
     int in_sync;                    // Indicates if we are in sync or not
     int id_code=0;                  // Temporary ID code variable
     int params=0;                   // Parameter flag, indicates if parameters exists in science stream
-    int param_type=0;               // Indicate type of parameters
+    int param_type=0;               // Indicate type of parameters. Only set under S04_GET_ID_CODE.
     unsigned int length=0;          // Length of science data,
     unsigned int hb=0;              // high
     unsigned int lb=0;              // and low byte.
@@ -1892,7 +1893,8 @@ void *DecodeScience(void *arg)
     // that we compensate for in this code.
     
     // Structure with current settings for various parameters
-    curr_type curr={0,0,0,0,0,0,0,0,0,0x7f,0x7f,0}; 
+//     curr_type curr={0,0,0,0,0,0,0,0,0,0x7f,0x7f,0};
+    curr_type curr={0,0,0,0,0,0,0,0,0,0, 0x7f, 0x7f, 0};
     
     int          finger_printing=0; // Are we doing fingerprinting ?
     sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
@@ -1911,9 +1913,9 @@ void *DecodeScience(void *arg)
     int val,ti1;                    // Temporary integers
     
     char *tp;                       // Temporary string pointer
-    char stime[30];                 // S/C time string in PDS format
+    char utc[30];                   // S/C time string in PDS format
     char tm_rate='Z';               // Telemetry rate (Z)ero,(M)inimum,(N)ormal and (B)urst
-    double rstime=0.0;              // Raw S/C time in seconds
+    double sccd=0.0;                // Raw S/C time in seconds
     
     // Status string for 20 Bit ADC:s
     char a20status[16][10]={"EMPTY","P2T","P1T","P1T & P2T","","P2F","","P1T P2F","","","P1F","P1F P2T","","","","P1F & P2F"};
@@ -2129,6 +2131,7 @@ void *DecodeScience(void *arg)
                 break;
                 
             case S02_TEST_SYNC:
+                // NOTE: State can only be arrived at from: Launch of state machine, (and) S01_GET_MAINH.
                 DispState(state,"STATE = S02_TEST_SYNC\n");
                 ClearCommonPDS(&comm);         // Clear common PDS parameters
                 ClearDictPDS(&dict);           // Clear dictionary PDS LAP parameters
@@ -2143,13 +2146,14 @@ void *DecodeScience(void *arg)
                 break;
                 
             case S03_GET_TIME_CODE:
+                // NOTE: State can only be arrived at from S02_TEST_SYNC.
                 DispState(state,"STATE = S03_GET_TIME_CODE\n");
                 
                 GetBuffer(cb,buff,5);        // Get 5 bytes from circular science buffer
                 
                 CPrintf("============================================================================\n");
-                rstime = DecodeLAPTime2Sccd(buff);    // Get raw time/SCCD, decode LAP S/C time in Science data.
-                if (ConvertSccd2Utc(rstime, stime, NULL) == -1) {      // Decode raw time/SCCD into PDS compliant UTC time.
+                sccd = DecodeLAPTime2Sccd(buff);    // Get raw time/SCCD, decode LAP S/C time in Science data.
+                if (ConvertSccd2Utc(sccd, utc, NULL) == -1) {      // Decode raw time/SCCD into PDS compliant UTC time.
                     // CASE: ConvertSccd2Utc/SPICE could not interpret SCCD, (most likely) due to value not existing
                     // in the stated partition count/reset count. This indicates an illegal SCCD value
                     // (unreasonably large/small), which likely indicates the state machine being out of sync or
@@ -2163,12 +2167,12 @@ void *DecodeScience(void *arg)
                     //       ============================================================================
                     CPrintf("SPICE failed to convert SCCD (spacecraft clock count, double) value from\n");
                     CPrintf("bytestream, likely (but not necessarily) because of illegal value\n");
-                    CPrintf("SCCD=%g. Trying to resync.\n", rstime);
+                    CPrintf("SCCD=%g. Trying to resync.\n", sccd);
                     in_sync = 0;                // Indicate not nicely in sync
                     state   = S01_GET_MAINH;    // Not in sync! try to get in sync!
                     break;
                 }
-                CPrintf("    SCET time: %s OBT time: %016.6f\n",stime,rstime);
+                CPrintf("    SCET time: %s OBT time: %016.6f\n",utc,sccd);
                 CPrintf("Mission ID: %s Phase: %s\n",mp.abbrev,mp.phase_name);
                 SetP(&comm,"MISSION_PHASE_NAME",mp.phase_name,1);  // Set mission phase name in common PDS parameters
                 SetP(&comm,"TARGET_TYPE",mp.target_type,1);        // Set target type in common PDS parameters
@@ -2190,9 +2194,13 @@ void *DecodeScience(void *arg)
                 SetP(&comm,"LABEL_REVISION_NOTE",tstr2,1);         // Set LABEL Revision note
                 
                 curr.old_macro=macro_id; // Remember old macro ID at this point
-                
-                // Do we correct for anomalies ?
-                if(FindP(&anom,&property1,stime,1,DNTCARE)>0)
+
+                //================================================================================================================
+                // Search for UTC times in anomalies list that matches the current UTC.
+                // NOTE/BUG: This appears unsafe, since UTC values can change with updated conversion SCCD-->UTC (kernels/TCORR).
+                // NOTE: This is the UTC value BEFORE any timestamp modification due to ADC20 delay.
+                //================================================================================================================
+                if(FindP(&anom,&property1,utc,1,DNTCARE)>0)
                 {
                     //printf("TIME: %s SELECT: %s\n",property1->name,property1->value);
                     macro_priority=1; // Set higher priority on macro description, thus trust it above information in data
@@ -2214,8 +2222,13 @@ void *DecodeScience(void *arg)
                 
                 //##############################################
                 // NOTE: BAD INDENTATION, CHANGE IN INDENTATION
-                //##############################################                
+                //##############################################
+                
+                //###################
+                //###################
                 case S04_GET_ID_CODE:
+                //###################
+                //###################
                     DispState(state,"STATE = S04_GET_ID_CODE\n");
                     GetBuffer(cb,buff,1); // Get a byte from circular science buffer
                     
@@ -2225,9 +2238,9 @@ void *DecodeScience(void *arg)
                         
                         id_code=buff[0];        // Remember ID code
                         
-                        params=0;               // Assume no parameters in science stream
-                        param_type=NO_PARAMS;   // Default type of parameters, none
-                        state=S11_GET_LENGTH;   // Assume next state is this one
+                        params     = 0;                // Assume no parameters in science stream
+                        param_type = NO_PARAMS;        // Default type of parameters, none
+                        state      = S11_GET_LENGTH;   // Assume next state is this one
                         
                         curr.sensor=SENS_NONE;      // Set current sensor to 0=none. (1=Sens 1, 2=Sens 2, and 3=Sens 1 & 2)
                         curr.transmitter=SENS_NONE; // Set current transmitter to none.
@@ -2370,8 +2383,8 @@ void *DecodeScience(void *arg)
                                 params=6;
                                 meas_seq++;                 // Increase number of measurement sequences
                                 CPrintf("    Found sweep science data, ID CODE: 0x%.2x Sequence: %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                param_type=SWEEP_PARAMS;
-                                state=S07_GET_PARAMS;
+                                param_type = SWEEP_PARAMS;
+                                state      = S07_GET_PARAMS;
                                 break;
 
                             case E_P1_D_P2_INTRL_20_BIT_RAW_BIP:
@@ -2403,8 +2416,8 @@ void *DecodeScience(void *arg)
                                 params=2;
                                 meas_seq++;   // Increase number of measurement sequences
                                 CPrintf("    Found science data, ID CODE: 0x%.2x Sequence %d Sensor: %d\n",id_code,meas_seq,curr.sensor);
-                                param_type=ADC20_PARAMS;
-                                state=S07_GET_PARAMS;
+                                param_type = ADC20_PARAMS;
+                                state      = S07_GET_PARAMS;
                                 break;
                                 
                             case D_DIFF_P1P2:
@@ -2694,7 +2707,11 @@ void *DecodeScience(void *arg)
                                         break;
                                         
                                         
+                                        //######################
+                                        //######################
                                         case S09_COMPARE_PARAMS:
+                                        //######################
+                                        //######################
                                             DispState(state,"STATE = S09_COMPARE_PARAMS\n");
                                             if(!macro_descr_NOT_found && !macro_priority) // If a macro description exists and macro description has lowest priority over data parameters
                                             {
@@ -2751,7 +2768,11 @@ void *DecodeScience(void *arg)
                                             state=S14_RESOLVE_MACRO_PARAMETERS; // Resolve macro parameters
                                             break;
                                             
+                                            //##################
+                                            //##################
                                             case S11_GET_LENGTH:
+                                            //##################
+                                            //##################
                                                 DispState(state,"STATE = S11_GET_LENGTH\n");
                                                 
                                                 GetBuffer(cb,buff,2); // Get 2 bytes from circular science buffer
@@ -2801,7 +2822,11 @@ void *DecodeScience(void *arg)
                                                 DispState(state,"STATE = S13_RECONNECT\n");
                                                 break;
 
+                                            //################################
+                                            //################################
                                             case S14_RESOLVE_MACRO_PARAMETERS:
+                                            //################################
+                                            //################################
                                                 DispState(state,"STATE = S14_RESOLVE_MACRO_PARAMETERS\n");
                                                 
                                                 
@@ -3476,13 +3501,36 @@ void *DecodeScience(void *arg)
                                                         {
                                                             CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
                                                             curr.offset_time = aqps_seq*32.0;
-                                                            curr.seq_time    = rstime + curr.offset_time;      // Calculate time of current sequence
+                                                            curr.seq_time_TM = sccd + curr.offset_time;   // Calculate time of current sequence.
                                                             
-                                                            ConvertSccd2Sccs(curr.seq_time, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.                                                            
+                                                            /*==================================================
+                                                            // Adjust the timing of calibrated-level ADC20 data.
+                                                            //==================================================
+                                                            // NOTE: This change should affect
+                                                            // (1) data (TAB files contents),
+                                                            // (2) SPACECRAFT_CLOCK_START/STOP_COUNT,
+                                                            // (3) START/STOP_TIME
+                                                            // NOTE: On the one hand, the time is also used for other purposes and care has to be taken to make sure that these
+                                                            // use the desired time. On the other hand, the actual effect on these is very, very small, given the size of the
+                                                            // time delay, but still, in principle, the delay can affect all of these.
+                                                            // (1) When commanded bias (pds.bias) is interpreted as having been set.
+                                                            // (2) How anomaly timestamps (pds.anomalies) are interpreted.
+                                                            //     NOTE: This requires exact matching of timestamps. Approximate does not give approximate result (?).
+                                                            // (3) Which bias-dependent current offset to use (CALIB_MEAS).
+                                                            // (4) In which day directory a data file ends up.
+                                                            // Therefore, both the original TM value and the adjusted ("corrected") value are kept.
+                                                            */
+                                                            if (calib && (param_type==ADC20_PARAMS)) {
+                                                                curr.seq_time_corrected = curr.seq_time_TM - ADC20_DELAY_S;
+                                                            } else {
+                                                                curr.seq_time_corrected = curr.seq_time_TM;
+                                                            }
+                                                            
+                                                            ConvertSccd2Sccs(curr.seq_time_corrected, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.                                                            
                                                             SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
-                                                            ConvertSccd2Utc(curr.seq_time, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
-                                                            CPrintf("    Current sequence start time is: %s\n", tstr1);
+                                                            ConvertSccd2Utc(curr.seq_time_corrected, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
+                                                            CPrintf("    Current sequence start time (possibly corrected for delay) is: %s\n", tstr1);
                                                             SetP(&comm, "START_TIME", tstr1, 1);
                                                             
                                                             
@@ -3574,33 +3622,36 @@ void *DecodeScience(void *arg)
                                                                     }
                                                                 }
                                                                 
+                                                                //=================
+                                                                // Set curr.factor
+                                                                //=================
                                                                 switch(curr.sensor)
                                                                 {
                                                                     case SENS_P1:
                                                                         if(param_type==ADC20_PARAMS)
-                                                                            curr.factor=a20_info.resampling_factor/SAMP_FREQ_ADC20; 
+                                                                            curr.factor = a20_info.resampling_factor/SAMP_FREQ_ADC20; 
                                                                         else
-                                                                            curr.factor=dsa16_p1/SAMP_FREQ_ADC16;
+                                                                            curr.factor = dsa16_p1/SAMP_FREQ_ADC16;
                                                                         break;
                                                                     case SENS_P2:
                                                                     case SENS_P1P2: // In this case dsa16_p1==dsa16_p2
                                                                         if(param_type==ADC20_PARAMS)
-                                                                            curr.factor=a20_info.resampling_factor/SAMP_FREQ_ADC20; 
+                                                                            curr.factor = a20_info.resampling_factor/SAMP_FREQ_ADC20; 
                                                                         else
-                                                                            curr.factor=dsa16_p2/SAMP_FREQ_ADC16; 
+                                                                            curr.factor = dsa16_p2/SAMP_FREQ_ADC16; 
                                                                         break;
                                                                     default:
-                                                                        curr.factor=1/SAMP_FREQ_ADC16;
+                                                                        curr.factor = 1/SAMP_FREQ_ADC16;
                                                                         break;
                                                                 }
                                                             }
-                                                            curr.stop_time = curr.seq_time + (samples-1)*curr.factor;   // Calculate current STOP time.
+                                                            curr.stop_time_corrected = curr.seq_time_corrected + (samples-1)*curr.factor;   // Calculate current STOP time.
                                                             
-                                                            ConvertSccd2Sccs(curr.stop_time, pds.SCResetCounter, tstr5, TRUE);  // Compile OBT string and add reset number of S/C clock.
+                                                            ConvertSccd2Sccs(curr.stop_time_corrected, pds.SCResetCounter, tstr5, TRUE);  // Compile OBT string and add reset number of S/C clock.
                                                             
                                                             SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",  tstr5, 1);
                                                             
-                                                            ConvertSccd2Utc(curr.stop_time, tstr5, NULL);  // Decode raw time into PDS compliant UTC time.
+                                                            ConvertSccd2Utc(curr.stop_time_corrected, tstr5, NULL);  // Decode raw time into PDS compliant UTC time.
                                                             CPrintf("    Current sequence stop  time is: %s\n", tstr5);
                                                             SetP(&comm, "STOP_TIME",  tstr5, 1);         // Update STOP_TIME in common PDS parameters.
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
@@ -3631,7 +3682,7 @@ void *DecodeScience(void *arg)
                                                         }
                                                     }
                                                     
-                                                    ConvertSccd2Sccs(rstime, pds.SCResetCounter, tstr1, TRUE); // Compile OBT string and add reset number of S/C clock
+                                                    ConvertSccd2Sccs(sccd, pds.SCResetCounter, tstr1, TRUE); // Compile OBT string and add reset number of S/C clock
                                                     
                                                     SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT",tstr5,1);                 // BUG? Meant to read tstr1?
                                                     CPrintf("    OBT time start of measurement cycle: %s \n",tstr5);    // BUG? Meant to read tstr1?
@@ -3681,10 +3732,14 @@ void *DecodeScience(void *arg)
                                                         InsertTopQV(&dict,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",dsa16_p2);
                                                     }
                                                 }
-                                                state=S15_WRITE_PDS_FILES; // Change state
+                                                state = S15_WRITE_PDS_FILES;   // Change state
                                                 break;
 
+                                                //#######################
+                                                //#######################
                                                 case S15_WRITE_PDS_FILES:
+                                                //#######################
+                                                //#######################
                                                     DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
                                                     //CPrintf("1 dsa16_p1=%i\n", dsa16_p1);
                                                     //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
@@ -4766,8 +4821,8 @@ int  LoadAnomalies(prp_type *p,char *path)
     char m_tok[80]; // Macro/Select token
     
     
-    printf("Loading anomaly file: %s\n",path);
-    YPrintf("Loading anomaly file: %s\n",path);
+    printf( "Loading anomaly file: %s\n", path);
+    YPrintf("Loading anomaly file: %s\n", path);
     
     if((fd=fopen(path,"r"))==NULL)
     {
@@ -4777,11 +4832,11 @@ int  LoadAnomalies(prp_type *p,char *path)
     
     while (fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue; // Empty line..
-        if (line[0] == '#') continue; // Remove comments..
-        Separate(line,t_tok,m_tok,'\t',1); // Separate at first occurrence of a tab character
+        if (line[0] == '\n') continue;   // Empty line..
+        if (line[0] == '#')  continue;   // Remove comments..
+        Separate(line, t_tok, m_tok, '\t', 1);   // Separate at first occurrence of a tab character
         TrimWN(m_tok);
-        InsertTopK(p,t_tok,m_tok); // Insert into linked list of property name value pairs.
+        InsertTopK(p, t_tok, m_tok);   // Insert into linked list of property name value pairs.
     }
     fclose(fd);
     return 0;
@@ -6641,15 +6696,19 @@ int WritePTAB_File(
     int ini_samples,
     int samp_plateau)
 {
-    char file_path[PATH_MAX];                // Temporary string
+    // Variable naming convention:
+    // *_TM        : (1) Quantity in TM units. (2) Time derived from TM without correcting for signal delay (ADC20).
+    // *_corrected : Time adjusted for signal delay (ADC20).
     
-    char current_sample_utc[256];
-    char first_sample_utc[256];
+    char file_path[PATH_MAX];        // Temporary string
+    
+    char current_sample_utc_corrected[256];
+    char first_sample_utc_TM[256];
 
-    int curr_step=3;                // Current sweep step, default value just there to get rid of compilation warning.
+    int curr_step=3;                 // Current sweep step, default value just there to get rid of compilation warning.
     
-    double td1;                     // Temporary double
-    double current_sample_sccd;     // Time of current sample (current row) as SCCD.
+    double td1;                             // Temporary double
+    double current_sample_sccd_corrected;   // Time of current sample (current row) as SCCD.
     
     int i,j,k,l,m;
     int meas_value_TM;               // Measured value (i.e. not bias value) in TM units. NOTE: Integer.
@@ -6694,11 +6753,11 @@ int WritePTAB_File(
     
     double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
     time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
-    time_t t_first_sample;          // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
+    time_t t_first_sample_TM;       // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
     
     int i_calib=0;                  // Valid index into structure with calibration data.
     
-    property_type *property1;       // declare temporary property1
+    property_type *property1;       // Temporary property1
     
     int ADC20_moving_average_enabled;                  // ADC20 Moving average boolean. Used for correcting for flight s/w bug.
     
@@ -6739,8 +6798,8 @@ int WritePTAB_File(
 
     
     
-    ConvertSccd2Utc(curr->seq_time, first_sample_utc, NULL);   // First convert spacecraft time to UTC to get time calibration right.
-    ConvertUtc2Timet(first_sample_utc, &t_first_sample);       // Convert back to seconds.
+    ConvertSccd2Utc(curr->seq_time_TM, first_sample_utc_TM, NULL);   // First convert spacecraft time to UTC to get time calibration right.
+    ConvertUtc2Timet(first_sample_utc_TM, &t_first_sample_TM);    // Convert back to seconds.
 
     /*===================================================================================================================
      * Determine
@@ -6781,7 +6840,7 @@ int WritePTAB_File(
         //=============
 
         // Figure out which calibration data to use for the given time of the data.
-        i_calib = SelectCalibrationData(t_first_sample, first_sample_utc, mc);
+        i_calib = SelectCalibrationData(t_first_sample_TM, first_sample_utc_TM, mc);
         if (debug >= 1) {
             CPrintf("    Calibration file %i: %s\n", i_calib, mc->calib_info[i_calib].LBL_filename);
         }
@@ -7011,7 +7070,7 @@ int WritePTAB_File(
             if(param_type==SWEEP_PARAMS)
             {
                 if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) {   // Decode the four sweep types
-                    curr_step=-sw_info->height;   // Store height of step and set sign to a down sweep 
+                    curr_step=-sw_info->height;    // Store height of step and set sign to a down sweep 
                 } else {
                     curr_step = sw_info->height;   // Store height of step and set sign to a up sweep
                 }
@@ -7127,8 +7186,8 @@ int WritePTAB_File(
                 // Derive different measures of time for the current sample.
                 //==========================================================
                 td1 = i * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
-                current_sample_sccd = curr->seq_time + td1;                       // Calculate SCCD.
-                ConvertSccd2Utc(current_sample_sccd, NULL, current_sample_utc);   // Decode raw time to UTC.
+                current_sample_sccd_corrected = curr->seq_time_corrected + td1;                       // Calculate SCCD.
+                ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);   // Decode raw time to UTC.
                 
                 //==============================================================================
                 // Check for commanded bias (outside of macro lopp). If found, then set biases.
@@ -7136,7 +7195,7 @@ int WritePTAB_File(
                 if(nbias>0 && bias!=NULL)
                 {
                     // Figure out if any extra bias settings have been done outside of macros.
-                    utime = (unsigned int)t_first_sample + td1;   // Current time in raw UTC format
+                    utime = (unsigned int)t_first_sample_TM + td1;   // Current time in raw UTC format
                     
                     extra_bias_setting=0;
                     for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
@@ -7184,7 +7243,7 @@ int WritePTAB_File(
                         if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
                         {
                             extra_bias_setting = 0;
-                            YPrintf("Forbidden bias setting found at %s. Macro %x\n", first_sample_utc, macro_id);
+                            YPrintf("Forbidden bias setting found at %s (not corrected for delay). Macro %x\n", first_sample_utc_TM, macro_id);
                             // Add some way of detecting that this is the first macro loop with extra_bias_settings?
                         }
                     }
@@ -7201,7 +7260,7 @@ int WritePTAB_File(
                          * curr->ibias2=(bias[l][2] & 0xff);         // Override macro present current bias p2 
                          ***/
                         
-                        CPrintf("    Extra bias setting applied at: %s \n", current_sample_utc);
+                        CPrintf("    Extra bias setting applied at: %s \n", current_sample_utc_corrected);
                         CPrintf("      Density P1: 0x%02x P2: 0x%02x\n",vbias1,vbias2);
                         CPrintf("      E_Field P1: 0x%02x P2: 0x%02x\n",ibias1,ibias2);
                         
@@ -7342,7 +7401,7 @@ int WritePTAB_File(
                                     ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];
                                   //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][1];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[voltage_TM][1]);   // Write time, current and calibrated voltage
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   v_conv.C[voltage_TM][1]);   // Write time, current and calibrated voltage
                                 }
                                 
                                 if(curr->sensor==SENS_P2)
@@ -7351,7 +7410,7 @@ int WritePTAB_File(
                                     ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];
                                   //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][2];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[voltage_TM][2]);   // Write time, current and calibrated voltage
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   v_conv.C[voltage_TM][2]);   // Write time, current and calibrated voltage
                                 }
                             }
                             else
@@ -7373,7 +7432,7 @@ int WritePTAB_File(
                                     ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];
                                   //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][1];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                             ccurrent,   f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2]);   // Write time, current and calibrated voltage
                                     // NOTE: f_conv.C[ ... ][2] : [2] refers to column 3 in the file from which the data is read (i.e. not P2).
                                 }
@@ -7384,7 +7443,7 @@ int WritePTAB_File(
                                     ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];
                                   //ccurrent -= ccalf * ocalf * mc->CD[i_calib].C[voltage_TM][2];
                                   //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
-                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
+                                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                             ccurrent,   f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3]);   // Write time, current and calibrated voltage
                                     // NOTE: f_conv.C[ ... ][3] : [3] refers to column 4 in the file from which the data is read (i.e. not P3).
                                 }
@@ -7409,7 +7468,7 @@ int WritePTAB_File(
                               //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
 
                                 // Write time, current and calibrated voltage
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[vbias1][1]);
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   v_conv.C[vbias1][1]);
                             }
 
                             if(writing_P2_data)
@@ -7420,7 +7479,7 @@ int WritePTAB_File(
                               //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
                                 
                                 // Write time, current and calibrated voltage 
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[vbias2][2]);
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   v_conv.C[vbias2][2]);
                             }
                             
                             if(writing_P3_data)
@@ -7431,7 +7490,7 @@ int WritePTAB_File(
                               //ccurrent -= ccalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;
 
                                 // Write time, current (one difference) and calibrated voltages (one per probe, i.e. two)
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,   ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
+                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
                             }
 
                         }   // if(param_type==SWEEP_PARAMS) ... else ...
@@ -7448,17 +7507,17 @@ int WritePTAB_File(
                       //cvoltage -= vcalf_ADC16_old * ocalf * local_calib_offset_ADC16TM;    // NOTE: vcalf_ADC16_old * ocalf should be a constant here (wrt. truncated/non-truncated ADC20).
 
                         if(writing_P3_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                     i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                         }
                         
                         if(writing_P1_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                     i_conv.C[ibias1][1],   cvoltage); // Write time, calibrated current and voltage
                         }
                         
                         if(writing_P2_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc,current_sample_sccd,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                     i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated current and voltage
                         }
                     }   // if(bias_mode==DENSITY) ... else ...
@@ -7472,15 +7531,15 @@ int WritePTAB_File(
                     {                  
                         // For difference data P1-P2 we need to add two bias vectors. They can be different!
                         if(bias_mode==DENSITY) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc,current_sample_sccd,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                     current_TM,   vbias1,   vbias2); // Add two voltage bias vectors
                         } else {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc,current_sample_sccd,
+                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                     ibias1,   ibias2,   voltage_TM); // Add two current bias vectors
                         }
                     }
                     else {
-                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc,current_sample_sccd,
+                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                                 current_TM,voltage_TM); // Write time, current and voltage
                         // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
                     }
@@ -7915,11 +7974,11 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
 //
 // ch   : Circular buffer, source of data
 // buff : Destination buffer for (some) packet data.
-// rawt : Time derived from HK packet. Raw, spacecraft clock count (double; true decimals)
+// sccd : Time derived from HK packet. Raw, spacecraft clock count (double; true decimals)
 // 
 // NOTE: Does NOT RETURN until it has all the requested data.
 // NOTE: Some buffer data is thrown away.
-int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *rawt)
+int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *sccd)
 {
     unsigned int length; // Length variable
     
@@ -7933,7 +7992,7 @@ int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *rawt)
         length=LAP_HK_LEN; // Packet to long, force standard length. Add warning in the future...
     }
     
-    *rawt=DecodeSCTime2Sccd(&buff[6]);            // Decode S/C time into raw time
+    *sccd = DecodeSCTime2Sccd(&buff[6]);            // Decode S/C time into raw time
     
     GetBuffer(ch,buff,2);                    // Skip 2 bytes
     
@@ -8574,15 +8633,14 @@ void DispState(int s,char *str)
 //----------------------------------------------------------------------------------------------------------------------------------
 
 /*
- * Routine to separate a string into left and right substrings separated
- * by the k_sep'th occurrence of "separator".
- * The right substring is bounded by both occurrences of "separator" and of end-of-string.
+ * Routine for reading a row in text table. Each column is separated by "separator".
+ * Effetively reads out the strings in two columns.
  *
- * Input  : str   :
- * Output : left  :
- * Output : right :
+ * Input  : str       : String to parsed/analyzed.
+ * Output : left      : The substring bounded by the (k_sep-1)'th (or string beginning) and k_sep'th     occurrance of "separator".
+ * Output : right     : The substring bounded by the k_sep'th                           and (k_sep+1)'th occurrance of "separator" (or end-of-string).
  * Input  : separator : 
- * Input  : k_sep :
+ * Input  : k_sep     : The occurrence of "separator" that is to be used. k_sep=1 <==> First occurrance.
  * Return value : min(occurs, <nbr of separators in str>)
  */
 int Separate(char *str, char *left, char *right, char separator, int k_sep)
@@ -8593,28 +8651,30 @@ int Separate(char *str, char *left, char *right, char separator, int k_sep)
     char *lpos;
     char *rpos;
     
-    lpos=str; 
-    rpos=str;
+    lpos = str; 
+    rpos = str;
     
-    len=strlen(str);
+    len = strlen(str);
     if(str!=NULL)
     {
-        for(i=0;i<(len-1);i++)
+        for(i=0; i<(len-1); i++)
         {
             if(str[i]==separator)
             {
-                lpos=rpos;
-                rpos=&str[i+1];
+                lpos = rpos;
+                rpos = &str[i+1];
                 i_sep++;         // Increment occurrence of separator.
             }
             
             if(i_sep==k_sep)
             {
+                // Copy substring at lpos to (rpos-1) to "left".
                 for(;lpos<(rpos-1);) {
                     *(left++)=*(lpos++);
                 }
                 *left='\0';
                 
+                // Copy substring at rpos to (before next separator or LF) to "right".
                 for(;(*rpos!=separator && *rpos!='\0');) {
                     *(right++)=*(rpos++);
                 }
