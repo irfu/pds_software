@@ -4124,9 +4124,9 @@ void ExitPDS(int status)
                 // Deallocate m_conv (entire m_type structure)
                 //=============================================
                 if(m_conv.CF!=NULL) free(m_conv.CF);
-                if(m_conv.CD!=NULL && m_conv.n!=0)
+                if(m_conv.CD!=NULL && m_conv.N_calib_meas!=0)
                 {
-                    for(i=0;i<m_conv.n;i++)
+                    for(i=0;i<m_conv.N_calib_meas;i++)
                     {
                         if(m_conv.CD[i].C!=NULL && m_conv.CD[i].rows!=0 && m_conv.CD[i].cols!=0) {
                             free(m_conv.CD[i].C);
@@ -4134,23 +4134,23 @@ void ExitPDS(int status)
                     }
                     free(m_conv.CD);
                 }
-                if(m_conv.calib_info!=NULL && m_conv.n!=0) {
-                    for(i=0;i<m_conv.n;i++)
+                if(m_conv.calib_meas_data!=NULL && m_conv.N_calib_meas!=0) {
+                    for(i=0;i<m_conv.N_calib_meas;i++)
                     {
-                        free(m_conv.calib_info[i].LBL_filename);
+                        free(m_conv.calib_meas_data[i].LBL_filename);
 
-                        calib_interval_type *next_ci = m_conv.calib_info[i].intervals;
+                        calib_meas_interval_type *next_ci = m_conv.calib_meas_data[i].intervals;
                         while (next_ci != NULL) {
-                            calib_interval_type *prev_ci = next_ci;
+                            calib_meas_interval_type *prev_ci = next_ci;
                             next_ci = next_ci->next;
                             free(prev_ci);
                         }
                     }
-                    free(m_conv.calib_info);
+                    free(m_conv.calib_meas_data);
                 }
             }
             
-            if(tcp.netries>0)
+            if(tcp.n_entries > 0)
             {
                 if(tcp.SCET!=NULL)
                     free(tcp.SCET);
@@ -5312,10 +5312,10 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
 //
 // typedef struct tc_type_def
 // {
-//  int netries;        // Number of entries
-//  unsigned int *SCET; // Time correlated OBT from which correlation below is valid
-//  double *offset;     // Offset
-//  double *gradient;   // Gradient
+//  int n_entries;        // Number of entries
+//  unsigned int *SCET;   // Time correlated OBT from which correlation below is valid
+//  double *offset;       // Offset
+//  double *gradient;     // Gradient
 // } tc_type;
 //
 //  pds->tpath          // Path time calib packets
@@ -5419,21 +5419,21 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
     tlen=FileLen(fd);
     // typedef struct tc_type_def
     // {
-    //  int netries;        // Number of entries
-    //  unsigned int *SCET; // Time correlated OBT from which correlation below is valid
-    //  double *offset;     // Offset
-    //  double *gradient;   // Gradient
+    //  int n_entries;        // Number of entries
+    //  unsigned int *SCET;   // Time correlated OBT from which correlation below is valid
+    //  double *offset;       // Offset
+    //  double *gradient;     // Gradient
     // } tc_type;
     //
-    tcp->netries=(tlen/TIME_CORR_PTOT_SIZE); // Total number of time correlation packets
+    tcp->n_entries=(tlen/TIME_CORR_PTOT_SIZE); // Total number of time correlation packets
     
     // Allocate storage
-    tcp->SCET=(double *)CallocArray(tcp->netries,sizeof(double));
-    tcp->offset=(double *)CallocArray(tcp->netries,sizeof(double));
-    tcp->gradient=(double *)CallocArray(tcp->netries,sizeof(double));
+    tcp->SCET     = (double *) CallocArray(tcp->n_entries, sizeof(double));
+    tcp->offset   = (double *) CallocArray(tcp->n_entries, sizeof(double));
+    tcp->gradient = (double *) CallocArray(tcp->n_entries, sizeof(double));
     
     n=0;
-    while(!feof(fd) && n<tcp->netries)
+    while(!feof(fd) && n<tcp->n_entries)
     {
         len=0;
         // Read file loop, most of the time only one read will be done
@@ -5607,7 +5607,7 @@ void RunShellCommand(char *command_str)
 
 
 /*
- * Reads measured offset calibration files and the offset calibration exceptions list.
+ * Reads measured offset calibration (CALIB_MEAS) files and the offset calibration exceptions list (CALIB_MEAS_EXCEPT).
  * The offset calibration exceptions file contains manually selected time intervals which specify
  * calibrations to use for specific time intervals when the default algorithm does not apply.
  * Returns data in data structure "m".
@@ -5616,13 +5616,14 @@ void RunShellCommand(char *command_str)
  *       the data structure used by that algorithm.
  * NOTE: The function rewrites the offset calibration LBL files (CALIB_MEAS, CALIB_MEAS_EXCEPT) with some updated
  *       information. This should ideally maybe be done elsewhere.
+ * NOTE: Reads ADC16 conversion factors from LBL files, but not the ADC20 conversion factors (sets them to NaN)!
  *
  * rpath    : Path to directory where the CALIB_MEAS files are (LBL+TAB).
  * fpath    : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS.LBL filenames must
  *            match the pattern. The rest of the string/path is unused(!).
  * pathocel : Path to offset calibration exceptions (OCE) LBL file.
  * pathocet : Path to offset calibration exceptions (OCE) TAB file.
- * m        : Structure in which the calibration data is stored.
+ * m        : Structure in which the calibration data is to be stored.
  *
  * Variable naming convention: MC = Measurement/measured calibration(?)
  */
@@ -5676,29 +5677,29 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
         YPrintf("No offset or factor calibration label files found\n");
         return -2;
     }
-    
-    //==============================================================================================================
-    // Allocate memory (arrays) for the calibration data structure (one component per offset calibration file pair)
-    //==============================================================================================================
-    m->n=N_calibrations;
-    if((m->CF=(cf_type *)CallocArray(m->n,sizeof(cf_type)))==NULL)
+
+    //=========================================================================================================================
+    // Allocate memory (arrays) for the calibration data structure (one component per offset calibration/CALIB_MEAS file pair)
+    //=========================================================================================================================
+    m->N_calib_meas = N_calibrations;
+    if((m->CF=(cf_type *)CallocArray(m->N_calib_meas,sizeof(cf_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of factor structures\n");        
         return -3;
     }
-    if((m->CD=(c_type *)CallocArray(m->n,sizeof(c_type)))==NULL)
+    if((m->CD=(c_type *)CallocArray(m->N_calib_meas,sizeof(c_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration table structures\n");
         free(m->CF);
         return -4;
     }
-    if((m->calib_info=(calib_info_type *)CallocArray(m->n,sizeof(calib_info_type)))==NULL)
+    if((m->calib_meas_data=(calib_meas_file_type *)CallocArray(m->N_calib_meas,sizeof(calib_meas_file_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration info structures\n");
         free(m->CF);
         return -5;
     }
-    
+
 
 
     //====================================================================================
@@ -5731,7 +5732,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
             // Extract calibration factors from the LBL file
             //===============================================
             // ADC20 calibration factors used to be read from CALIB_MEAS file labels but are no more.
-            // The corresponding C variables are set to NaN.
+            // The corresponding C variables are set to NaN (they are never used).
             FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_16B",       1, DNTCARE);
             sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_20B",       1, DNTCARE);
@@ -5770,9 +5771,9 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
                 return -7;
             }
 
-            m->calib_info[i_calib].LBL_filename          = strdup(dentry->d_name);
-            m->calib_info[i_calib].calibration_file_used = FALSE;
-            m->calib_info[i_calib].intervals             = NULL;
+            m->calib_meas_data[i_calib].LBL_filename          = strdup(dentry->d_name);
+            m->calib_meas_data[i_calib].calibration_file_used = FALSE;
+            m->calib_meas_data[i_calib].intervals             = NULL;
 
             i_calib++;
             FreePrp(&mc_lbl);  // Free linked property/value list for measured data offset
@@ -5881,17 +5882,17 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
         //=============================================================================
         // Find index by searching for matching filename.
         int found_matching_file = FALSE;
-        for (i=0; i<m->n; i++) {
-            if (!strcmp(LBL_filename, m->calib_info[i].LBL_filename)) {
+        for (i=0; i<m->N_calib_meas; i++) {
+            if (!strcmp(LBL_filename, m->calib_meas_data[i].LBL_filename)) {
                 found_matching_file = TRUE;
                 break;
             }
         }
         if (found_matching_file) {
             // Add link first in linked list.
-            calib_interval_type *new_interval = malloc(sizeof *new_interval);
-            new_interval->next = m->calib_info[i].intervals;
-            m->calib_info[i].intervals = new_interval;
+            calib_meas_interval_type *new_interval = malloc(sizeof *new_interval);
+            new_interval->next = m->calib_meas_data[i].intervals;
+            m->calib_meas_data[i].intervals = new_interval;
             new_interval->t_begin = t_begin;
             new_interval->t_end   = t_end;
         } else  {
@@ -6511,16 +6512,16 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
     // Check if t_data is covered by any of pre-defined time intervals in the offset calibration exceptions list.
     // If so, use that result and return/exit.
     //============================================================================================================
-    for (i=0; i<mc->n; i++)   // Iterate over calibrations.
+    for (i=0; i<mc->N_calib_meas; i++)   // Iterate over calibrations.
     {
-        calib_interval_type *interval = mc->calib_info[i].intervals;
+        calib_meas_interval_type *interval = mc->calib_meas_data[i].intervals;
 
         while (interval!=NULL) {
             // NOTE: Covers equals at both interval beginning and interval end.
             if (   (GetSecondsTime(interval->t_begin) <= tp_data                        )
                 && (                          tp_data <= GetSecondsTime(interval->t_end)) )
             {
-                mc->calib_info[i].calibration_file_used = TRUE;
+                mc->calib_meas_data[i].calibration_file_used = TRUE;
                 return i;                                            // RETURN / EXIT FUNCTION
             }
             interval = interval->next;
@@ -6538,7 +6539,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
     double tp_calib1, tp_calib2;   // Times of two subsequent calibrations.
     ConvertUtc2Timet_midday( UTC_data,            &t_data  );   tp_data   = GetSecondsTime(t_data);
     ConvertUtc2Timet(        mc->CD[0].valid_utc, &t_calib );   tp_calib2 = GetSecondsTime(t_calib);   // Initial value to start algorithm.
-    for (i=0; i+1<mc->n; i++)   // Iterate over PAIRS of subsequent calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
+    for (i=0; i+1<mc->N_calib_meas; i++)   // Iterate over PAIRS of subsequent calibrations {i,i+1}. Can also be seen as iterating over (time) middle points between calibrations.
     {
         tp_calib1 = tp_calib2;                 // Set first calibration time.
 
@@ -6554,33 +6555,35 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
         }
     }
 
-    mc->calib_info[i].calibration_file_used = TRUE;
+    mc->calib_meas_data[i].calibration_file_used = TRUE;
     return i;   // NOTE: Returns zero if there is only one calibration (i.e. no iterations in the for loop). The for loop will still initialize i=0.
 }
 
 
 
 /*
- * Deletes offset calibration files (TAB & LBL) which are unused.
+ * Deletes offset calibration files (CALIB_MEAS, TAB & LBL) which are unused.
  *
  * ASSUMES: Assumes that the function can still call the log function YPrintf.
  * (This important information for when to call this function during the shutdown process.)
  *
  * NOTE: This should DELETE ALL offset calibration files for EDITED, but still leave the other calibration files.
  *
- * cpath : Path to calibration directory
- * m : Data structure used for determining files to delete. The criterion is m->calib_info[i].calibration_file_used==false.
+ * pathocel : Path to CALIB_MEAS_EXCEPT LBL file
+ * pathocet : Path to CALIB_MEAS_EXCEPT TAB file
+ * cpath    : Path to calibration directory
+ * m        : Data structure used for determining files to delete. The criterion is m->calib_meas_data[i].calibration_file_used==FALSE.
  */
 int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *pathocet, m_type *m)
 {
     int exit_code = 0;
     int i;
 
-    for (i=0; i<m->n; i++)   // Iterate over calibrations.
+    for (i=0; i<m->N_calib_meas; i++)   // Iterate over calibrations.
     {
         // Set LBL_file_path.
         char LBL_file_path[PATH_MAX];
-        sprintf(LBL_file_path, "%s/%s", cpathd, m->calib_info[i].LBL_filename);
+        sprintf(LBL_file_path, "%s/%s", cpathd, m->calib_meas_data[i].LBL_filename);
 
         // Set TAB_filename, TAB_file_path.
         prp_type lbl_info;
@@ -6596,16 +6599,16 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
         TrimQN(TAB_filename);
         sprintf(TAB_file_path, "%s/%s", cpathd, TAB_filename);
 
-        if (m->calib_info[i].calibration_file_used) {
+        if (m->calib_meas_data[i].calibration_file_used) {
             // NOTE: Extra whitespace in log message so that the log messages line up nicely.
-            YPrintf("Keeping    used calibration files: %s, %s\n", m->calib_info[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
+            YPrintf("Keeping    used calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
         } else {
             //=======================
             // Delete files on disk.
             //=======================
 //             YPrintf("Deleting unused calibration files: %s\n", LBL_file_path);
 //             YPrintf("                                   %s\n", TAB_file_path);
-            YPrintf("Deleting unused calibration files: %s, %s\n", m->calib_info[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
+            YPrintf("Deleting unused calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
             if ((remove(LBL_file_path)!=0) || (remove(TAB_file_path)!=0)) {
                 YPrintf("Error when deleting file\n");
                 exit_code = -1;
@@ -6842,10 +6845,10 @@ int WritePTAB_File(
         // Figure out which calibration data to use for the given time of the data.
         i_calib = SelectCalibrationData(t_first_sample_TM, first_sample_utc_TM, mc);
         if (debug >= 1) {
-            CPrintf("    Calibration file %i: %s\n", i_calib, mc->calib_info[i_calib].LBL_filename);
+            CPrintf("    Calibration file %i: %s\n", i_calib, mc->calib_meas_data[i_calib].LBL_filename);
         }
-        
-       
+
+
 
         //################################################################################################################
         //################################################################################################################
@@ -9696,14 +9699,14 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decima
      * NOTE: The algorithm is built to handle the cases of
      * (1) there being no linear conversion functions.
      * (2) no matching time interval. */
-    for(i=0;i<tcp.netries;i++) 
+    for(i=0; i<tcp.n_entries; i++) 
     {
         // Try converting time (sccd-->correlated) and see if "correlated" ends up outside of range.
         // If it is not outside of range, then use that conversion function.
         correlated = sccd*tcp.gradient[i]+tcp.offset[i]; // Compute UTC time using all gradient offset candidates
         
-        if(i<(tcp.netries-1)) {   // If we are not at the end
-            tmp = tcp.SCET[i+1];    // Use next SCET to test the upper validity limit
+        if(i < (tcp.n_entries-1)) {   // If we are not at the end
+            tmp = tcp.SCET[i+1];      // Use next SCET to test the upper validity limit
         } else {
             tmp = 1e100;   // No next SCET. Last correlation packet valid until ground station produces new ones.
         }

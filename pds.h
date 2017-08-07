@@ -177,7 +177,8 @@
  * NOTE: Since these offsets refer to a systematic difference between two internal analogue signals, they correspond
  * neither to offsets between analogue input signals, nor between output signals.
  * 
- * NOTE: Values have been derived from a one-time in-flight calibration on 2015-05-28.
+ * NOTE: CALIB_ADC20_P1/P2_OFFSET_ADC16TM & ADC_RATIO_P1/P2 have been derived from a one-time in-flight calibration on
+ * 2015-05-28.
  * See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02. It defines A_16, A_20, B_16, B_20.
  * Values have been taken from Table 4.
  *
@@ -229,7 +230,7 @@
 
 
 
-// Time correlation structure
+// Time correlation data structure (for non-SPICE time conversion)
 //
 // 1) UTC_TIME=OBT_TIME*gradient(n)+offset(n) 
 // 2) Valid correction if SCET(n) <= UTC_TIME <= SCET(n+1)
@@ -237,52 +238,57 @@
 //
 typedef struct tc_type_def
 {
-  int netries;        // Number of entries
-  double *SCET;       // Time correlated OBT from which correlation below is valid
-  double *offset;     // Offset
-  double *gradient;   // Gradient
+  int     n_entries;   // Number of entries
+  double  *SCET;       // Time correlated OBT from which correlation below is valid
+  double  *offset;     // Offset
+  double  *gradient;   // Gradient
 } tc_type;
 
 
 
-// Data structure for storing calibration data: bias voltage-dependent current offsets
+// Data structure for storing CALIB_MEAS calibration data: bias voltage-dependent current offsets
 // 
+// NOTE: CALIB_MEAS calibration data should be obsolete.
 // NOTE: This structure is used inside m_type, but is ALSO used outside of and independently
 // of m_type, notably course/fine bias voltages and current bias calibrations.
 typedef struct c_type_def
 {
-  char valid_utc[32];     // Data is taken/valid at this time (UTC string).
-  int rows;               // Rows
-  int cols;               // Columns
-  double **C;             // Conversion matrix
+  char    valid_utc[32];   // Data is taken/valid at this time (UTC string).
+  int     rows;            // Rows
+  int     cols;            // Columns
+  double  **C;             // Conversion matrix
 } c_type;
 
 // Calibration Factors for measured data TM to Physical units
 typedef struct cf_type_def
 {
-  double v_cal_16b;
-  double v_cal_20b;
-  double c_cal_16b_hg1; 
-  double c_cal_20b_hg1;
-  double c_cal_16b_lg; 
-  double c_cal_20b_lg;  
+  double  v_cal_16b;
+  double  v_cal_20b;
+  double  c_cal_16b_hg1; 
+  double  c_cal_20b_hg1;
+  double  c_cal_16b_lg; 
+  double  c_cal_20b_lg;  
 } cf_type;
 
+
+
 // Linked list. Last item has next==NULL.
-typedef struct calib_interval_struct
+typedef struct calib_meas_interval_type_def
 {
-    struct calib_interval_struct *next;
-    time_t  t_begin;
-    time_t  t_end;
-} calib_interval_type;
+  struct calib_meas_interval_type_def  *next;
+  time_t                               t_begin;
+  time_t                               t_end;
+} calib_meas_interval_type;
 
 // Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming variable m_type.CF (it us used in many places).
-typedef struct calibration_info_struct
+// Represents one CALIB_MEAS file pair (TAB+LBL).
+typedef struct calib_meas_file_type_def
 {
-    char                 *LBL_filename;            // Needed for (possibly) deleting unused calibration files and for matching offset calibration exceptions time intervals.
-    int                  calibration_file_used;    // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
-    calib_interval_type  *intervals;               // Array of linked list of time intervals.
-} calib_info_type;
+  char                      *LBL_filename;            // Needed for (possibly) deleting unused calibration files and for matching offset calibration exceptions time intervals.
+  int                       calibration_file_used;    // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
+                                                      // Can be used upon exit to delete files that were never used.
+  calib_meas_interval_type  *intervals;               // Linked list of (probably) time intervals within which the corresponding CALB_MEAS data should be used.
+} calib_meas_file_type;
 
 
 
@@ -290,18 +296,19 @@ typedef struct calibration_info_struct
 // and information on when the information should be used.
 typedef struct m_type_def
 {
-  int              n;            // Length of arrays below
-  cf_type          *CF;          // Array of calibration factor (CF) structures
-  c_type           *CD;          // Array of calibration data (CD) structures
-  calib_info_type  *calib_info;  // Array of calibration info structures
+  int                    N_calib_meas;      // Length of arrays below, i.e. number of CALIB_MEAS files.
+  cf_type                *CF;               // Array of calibration factor (CF) structures
+  c_type                 *CD;               // Array of calibration data   (CD) structures
+  calib_meas_file_type   *calib_meas_data;  // Array of CALIB_MEAS calibration data structures
+//   calib_coeff_data_type  calib_coeff_data;  // CALIB_COEFF data structure.
 } m_type;
 
 
 
 typedef struct tid_type_def
 {
-  int id;
-  char code[3];
+  int   id;
+  char  code[3];
 } tid_type;
 
 typedef struct sweep_type_def
