@@ -827,7 +827,8 @@ int main(int argc, char *argv[])
             }
             // Compute end time. NOTE: Approximate since it does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred
             // in the time interval covered by the data set into account.
-            mp.stop = mp.start + dur*24*3600 + 1;
+            //mp.stop = mp.start + dur*24*3600 + 1;
+            mp.stop = mp.start + dur*24*3600;
         }
         else
         {
