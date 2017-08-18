@@ -215,8 +215,8 @@
 
 
 /*===========================================================================================================================
- * ADC20 data is timestamped some time after the actual measurement. Therefore, the below number is SUBTRACTED
- * from the TM timestamp.
+ * ADC20 data is timestamped by the RPCLAP electronics some time after the actual measurement. Therefore, the below number
+ * is SUBTRACTED from the TM timestamp for CALIB datasets.
  * NOTE: The subtraction takes place in SCCD/spacecraft clock for performance reasons, not e.g. "et" (ephemeris time;
  * proper second counter), and is therefore slightly approximate (effectively: the actually subtracted value varies
  * slightly over time).
@@ -227,6 +227,31 @@
  ==========================================================================================================================*/
 #define ADC20_DELAY_S    0.020
 // #define ADC20_DELAY_S    0.000    // For testing
+
+
+
+
+/* Determine whether to attempt to load CALIB_COEFF files before the actual processing of data.
+ * If pre-loading is on: There has to be CALIB_COEFF files for every single day of the dataset. Otherwise error.
+ *      This is useful to make sure that all presumably needed CALIB_COEFF files can be loaded early in the execution.
+ * CALIB_COEFF files will be loaded on-demand if they have not been pre-loaded.
+ */
+#define PRELOAD_CALIB_COEFF                        TRUE
+// #define PRELOAD_CALIB_COEFF                        FALSE
+/* When pre-loading of CALIB_COEFF files is activated:
+ * The pre-loaded CALIB_COEFF files covers the official dataset time interval plus an extra time margin before and after.
+ * This variable is that time margin. Should sensibly (but most not be) at least zero.
+ * Unit: Seconds (hence "_S" in the name).
+ */
+#define CALIB_COEFF_PRELOAD_DATASET_TIME_MARGIN_S  1000
+/* Approximate begin and end of Rosetta mission.
+ * Indirectly defines the range of time for which pds will assume that there MIGHT be CALIB_COEFF files.
+ * NOTE: Approximately these times will be converted to SCCS, and they can therefore only be set to time for which there are valid SCCS
+ * times.
+ */
+#define MISSION_START_UTC                          "2004-03-03T00:00:00"
+#define MISSION_END_UTC                            "2016-09-30T23:59:59"
+
 
 
 
@@ -284,10 +309,13 @@ typedef struct calib_meas_interval_type_def
 // Represents one CALIB_MEAS file pair (TAB+LBL).
 typedef struct calib_meas_file_type_def
 {
-  char                      *LBL_filename;            // Needed for (possibly) deleting unused calibration files and for matching offset calibration exceptions time intervals.
-  int                       calibration_file_used;    // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
-                                                      // Can be used upon exit to delete files that were never used.
-  calib_meas_interval_type  *intervals;               // Linked list of (probably) time intervals within which the corresponding CALB_MEAS data should be used.
+  // Needed for (possibly) deleting unused calibration files and for matching offset calibration exceptions time intervals.
+  char                      *LBL_filename;
+  // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
+  // Can be used upon exit to delete files that were never used.
+  int                       calibration_file_used;
+  // Linked list of (probably) time intervals within which the corresponding CALB_MEAS data should be used.
+  calib_meas_interval_type  *intervals;
 } calib_meas_file_type;
 
 
@@ -404,7 +432,7 @@ typedef struct pds_type_def
   char lpath[PATH_MAX];        // Log path
   char dpathse[PATH_MAX];      // Data path PDS science edited
   char dpathsc[PATH_MAX];      // Data path PDS science calibrated
-  char cpathd[PATH_MAX];       // Root path to calibration data directory (d), CALIB/.
+  char cpathd[PATH_MAX];       // Root path to calibration (c) data directory (d), CALIB/.
   char cpathf[PATH_MAX];       // Path to fine bias calibration data
   char cpathc[PATH_MAX];       // Path to coarse bias calibration data
   char cpathi[PATH_MAX];       // Path to current bias calibration data
@@ -452,18 +480,6 @@ typedef struct ground_stations
 } gstype;
 
 
-gstype gstations[NGSTATIONS]=
-  {
-    {0x000D,"ESA Villafranca 2              "},
-    {0x0015,"ESA Kourou                     "},
-    {0x0016,"NDIULite (for SVTs)            "},
-    {0x0017,"ESA New Norcia                 "},
-    {0x0022,"NASA Goldstone                 "},
-    {0x0023,"NASA Canberra                  "},
-    {0x0024,"NASA Madrid                    "},
-    {0x007F,"ESA/ESOC Test station          "},
-    {0x0082,"NDIU classic (SVTs)            "},
-  };
 
 // Contains information about the current mission phase.
 // Array lengths are high estimates.
@@ -481,8 +497,8 @@ typedef struct mission_phase_struct
   char target_id[8];             // Used in DATA_SET_ID.
   char target_type[32];
   
-  time_t start;
-  time_t stop;
+  time_t start;                  // Beginning of data set.
+  time_t stop;                   // End of data set.
 } mp_type;
 
 typedef struct hk_lbl_info_struct

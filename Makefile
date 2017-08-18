@@ -60,10 +60,10 @@
 # /Erik P G Johansson 2015-12-07
 #======================================================================
 
-VER = 3.09
-CC	= gcc
+VER  = 3.09
+CC   = gcc
 #OBJ1    = pds_$(VER).o plnk.o cirb.o id.o OASWlib.o 
-OBJ1    = pds_$(VER).o plnk.o cirb.o id.o
+OBJ1 = pds_$(VER).o   plnk.o   cirb.o   id.o   calib_coeff.o
 #EF      = -lefence
 #CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
 CFLAGS  = -Wall -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
@@ -79,8 +79,8 @@ CSPICE_PATH = CSPICE_32bit/
 
 all: pds 
 
-#edit FJ 10/7 2014 , added math lib <math.h>, by using -lm after(!!) objects
-pds : $(OBJ1) pds.h id.h esatm.h nice.h      # SpiceUsr.h
+#Edit FJ 2014-07-10: Added math lib <math.h>, by using -lm after(!!) objects
+pds : $(OBJ1) pds.h id.h esatm.h nice.h calib_coeff.h     # SpiceUsr.h
 	$(CC) $(CFLAGS) $(OBJ1) $(CSPICE_PATH)/lib/cspice.a -lm -o bin/$@ -lpthread -D_GNU_SOURCE -D_XOPEN_SOURCE=500 
 
 #OASWlib.o : OASWlib.f

@@ -135,6 +135,8 @@
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
  *        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
  *     NOTE: Changing this will/might cause backward-compatibility issues with lapdog and write_calib_meas.
+ *     NOTE: Not important to fix. The INDEX is in practice generated separately with "pvv index".
+ *     
  * "BUG": Code requires output directory path in pds.conf to end with slash.
  * BUG: HK label files do not use "fingerprinting" for identifying macros (only DecodeScience does) and can therefor
  *      not recognize all macros.
@@ -145,6 +147,9 @@
  * BUG?: Probably does not handle leap seconds correctly all the time. Has found a ~one second error at leap second in
  *    DATA/EDITED/2015/JUL/D01/RPCLAP150701_001_H.LBL : START_TIME-SPACECRAFT_CLOCK_START_COUNT.
  *    /Erik P G Johansson, 2016-10-17
+ *    Guessing (but not verifying) that this is FIXED with SPICE.
+ *    /Erik P G Johansson, 2017-08-16
+ * 
  * BUG: Rare instances of bad INSTRUMENT_MODE_ID values.
  *      RO-C-RPCLAP-2-ESC3-MTP020-V1.0/DATA/EDITED/2015/SEP/D03/RPCLAP150903_01A_H.LBL
  *          INSTRUMENT_MODE_ID = MCID0Xe2fc
@@ -160,21 +165,26 @@
  *          INSTRUMENT_MODE_ID = MCID0Xe2fc
  *          INSTRUMENT_MODE_DESC = "EE float Cont. 20 bit, Every AQP 16 bit P1 & P2"   // Fits macro 802
  *          NOTE: grep INSTRUMENT_MODE RPCLAP151017_0[34]*_H.LBL ==> Just when switching macro 802-->914
- *      NOTE: Odd INSTRUMENT_MODE_ID value
- *      NOTE: Same INSTRUMENT_MODE_ID, different but _valid_ INSTRUMENT_MODE_DESC.
- *      NOTE: 0xe2fc = 58108
- *      NOTE: Both files HK.
- *      NOTE: Code (for HK) which translates macro ID to INSTRUMENT_MODE_ID and INSTRUMENT_MODE_DESC is close to each other, DecodeHK,
+ *      NOTE: Odd INSTRUMENT_MODE_ID value. Usually MCID0Xe2fc (= 0xe2fc = 58108), but not always.
+ *      NOTE: _Valid_ INSTRUMENT_MODE_DESC that is inherited from previous iteration.
+ *      NOTE: Only HK-LBL files.
+ *      NOTE: Appears that the macro_id value returned by AssembleHKLine is wrong. It in turn comes from the bitstream.
+ *      NOTE: The time interval covered by the dataset influences when the bug shows up, probably because only a subset
+ *      of the macro_id values in the HK bitstream are actually used for the HK-LBL, and which subset depends on the dataset start time.
+ *      HK_NUM_LINES determines the number of HK packets(?) per HK TAB file, and (presumably) only one of these packets
+ *      is used for the INSTRUMENT_MODE_ID in the corresponding HK-LBL file.
  *
+ * 
+ * 
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
  *       This is due to dysfunctional automatic indentation in the Kate editor.
- * NOTE: Contains many 0xCC which one can suspect should really be replaced with S_HEAD.
+ * NOTE: Contains multiple occurrances of "0xCC" which one can suspect should really be replaced with S_HEAD.
  * NOTE: time_t:
  * (1) The code relies on that time_t can be interpreted as seconds since epoch 1970 which is true for POSIX and UNIX but not C in general.
  * (Source: http://stackoverflow.com/questions/471248/what-is-ultimately-a-time-t-typedef-to)
  * Code that uses this includes (incomplete list): function ConvertUtc2Timet_2 (used only once), WritePTAB_File,
  * possibly the use of bias e.g. in LoadBias. Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler),
- * time_t appears to correspond to number of seconds after 1970-01-01 00:00.00.
+ * time_t appears to correspond to number of seconds after 1970-01-01 00:00.00, not counting leap seconds.
  * (2) Code uses standard POSIX C functions that convert time_t <--> ~UTC which appear to NOT take leap seconds into account!
  * 
  * 
@@ -193,6 +203,7 @@
  *    PRO: Useful for automatizing the production of delivery datasets. The calling code does not need to know the output directory (hardcoded; read pds.conf).
  * PROPOSAL: Flag for outputting data set in arbitrary directory.
  *    PRO: Useful for automatizing generation for delivery. (Data sets need further automatic processsing after generation.)
+ * PROPOSAL: Flag --test for triggering test code, instead of preprocessing variable.
  *====================================================================================================================
  */
 
@@ -210,7 +221,7 @@
 #include <sys/time.h>     // Time definitions, nanosleep()
 #include <stdio.h>        // Standard Input/output 
 #include <stdlib.h>       // Standard General utilities
-#include <limits.h>       // Standard limits of integer types
+#include <limits.h>       // Standard limits of integer types, PATH_MAX
 #include <fcntl.h>        // POSIX Standard File Control Operations
 #include <fnmatch.h>      // Filename matching types
 #include <unistd.h>       // POSIX Standard Symbolic Constants
@@ -223,6 +234,9 @@
 #include <libgen.h>       // For basename and dirname
 #include <sched.h>        // For RT version
 #include <stdint.h>       // Standard types
+#include <math.h>         // Floor function
+#include <SpiceUsr.h>     // Required for calling CSPICE (SPICE for C) functions.
+
 #include "id.h"           // LAP Data ID codes
 #include "esatm.h"        // S/C TM Definitions
 #include "pds.h"          // PDS & LAP definitions and structures
@@ -231,9 +245,7 @@
 #include "cirb.h"         // Code for simple power of two circular buffers 
 #include "cirbdec.h"      // cirb declarations
 #include "nice.h"         // Sleep definitions etc
-#include <math.h>         // Floor function
-#include <SpiceUsr.h>     // Required for calling CSPICE (SPICE for C) functions.
-
+#include "calib_coeff.h"  // Functionality for loading, finding, and interpolating CALIB_COEFF coefficients.
 
 
 // We skipped using OASWlib and ESA provided time cal. approach it produced weird results.
@@ -397,10 +409,10 @@ int ConvertSccd2Utc         (double sccd, char *utc_3decimals, char *utc_6decima
 int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decimals);
 int ConvertSccd2Utc_SPICE   (double sccd, char *utc_3decimals, char *utc_6decimals);
 
-int ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd);         // For testing.
+void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd);
 
 int ConvertSccd2Sccs(double sccd, int n_resets, char *sccs, int quote_sccs);    // Convert raw time to an OBT string (On Board Time)
-int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd);              // Convert OBT string to raw time.
+int ConvertSccs2Sccd(char *sccs, int *reset_counter, double *sccd);             // Convert OBT string to raw time.
 
 //int Scet2Date(double raw,char *stime,int lfrac);     // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
@@ -552,6 +564,22 @@ pds_type pds =
     NULL,       // DDS progress file descriptor
 };
 
+// Can not place in pds.h, since pds.h is used in multiple files and this is a variable declaration.
+gstype gstations[NGSTATIONS]=
+  {
+    {0x000D,"ESA Villafranca 2              "},
+    {0x0015,"ESA Kourou                     "},
+    {0x0016,"NDIULite (for SVTs)            "},
+    {0x0017,"ESA New Norcia                 "},
+    {0x0022,"NASA Goldstone                 "},
+    {0x0023,"NASA Canberra                  "},
+    {0x0024,"NASA Madrid                    "},
+    {0x007F,"ESA/ESOC Test station          "},
+    {0x0082,"NDIU classic (SVTs)            "},
+  };
+
+
+
 
 // Circular Buffers
 //--------------------------------------------------------------------------
@@ -623,13 +651,14 @@ int main(int argc, char *argv[])
     if (argc>23 || argc<7) 
     {
         fprintf(stderr, "Called with too few or too many parameters.\n\n");
-        printUserHelpInfo(stderr, argv[0]);    // NOTE: Prints to stderr.
+        printUserHelpInfo(stdout, argv[0]);    // NOTE: Prints to stderr.
         exit(1);
     }
     
     printf("\n");
-    
-    
+
+
+
     // Get options, note that we do no syntactic checks of the input!
     // We assume it is correct, things like: pds -c  or pds -c pds.conf -debug
     // Will not work, since required parameter values -mp xx -vid yy -dsv zz are missing!!
@@ -1227,11 +1256,11 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
     // since deliveries may split up mission phases.
     fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      Mission phase name, e.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\".\n");
-    fprintf(stream, "                                            (The argument itself must contain no qutoes though.)\n");
+    fprintf(stream, "                                            (The argument itself must contain no quotes though.)\n");
     fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
-    fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions.)\n");
-    fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
-    fprintf(stream, "                                            Slightly approximate since does not consider leap seconds.\n");
+    fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions in the string.)\n");
+    fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    // Should be exact number of days (despite leap seconds due to using time_t).
+    //fprintf(stream, "                                            Slightly approximate since does not consider leap seconds.\n");
     fprintf(stream, "\n");
     fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -1343,11 +1372,11 @@ int checkSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout)
     // PROPOSAL: Add flag for printing error messages to stdout.
     if (failed_c()) {
         char SPICE_error_msg[MAX_STR];
-        
+
 //         getmsg_c("SHORT", MAX_STR, SPICE_error_msg);
         getmsg_c("LONG", MAX_STR, SPICE_error_msg);
 //         getmsg_c("EXPLAIN", MAX_STR, SPICE_error_msg);
-        
+
         if (print_to_stdout) {
             printf("%s\n", caller_error_msg);
             printf("   SPICE-generated error message: %s\n", SPICE_error_msg);            
@@ -1720,12 +1749,18 @@ void *DecodeHK(void *arg)
 
         sprintf(tstr1, "MCID0X%04x", macro_id);
         SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
+//         HPrintf("2: tstr1 = %s\n", tstr1);                              // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
+//         HPrintf("3: macro_id = (base 10) %i\n",   macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
+//         HPrintf("4: macro_id = (base 16) %04x\n", macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
+//         HPrintf("5: INSTRUMENT_MODE_ID = %s\n", tstr1);     // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
         
         // Find human description of macro in macro mode descriptions
         sprintf(tstr1, "0x%04x", macro_id);                     // Create search variable to search for in linked list of property name value pairs.
         if(FindP(&mdesc, &property1, tstr1, 1, DNTCARE)>0)
         {
             SetP(&hkl, "INSTRUMENT_MODE_DESC", property1->value, 1);   // Set human description of mode
+//             HPrintf("6: tstr1 = %s\n", tstr1);                             // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
+//             HPrintf("7: INSTRUMENT_MODE_DESC = %s\n", property1->value);   // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
         }
 
         //HPrintf("LINE=%s",line);
@@ -1808,6 +1843,8 @@ void *DecodeHK(void *arg)
                     GetHKPacket(ch,buff,&sccd);
                     
                     AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble a HK TAB file line
+//                     HPrintf("8: macro_id = (base 10) %i\n",   macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
+//                     HPrintf("9: macro_id = (base 16) %04x\n", macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
                     
                     // NOTE: It is necessary to derive/set both "hk_info.utc_time_str" and "hk_info.obt_time_str" here
                     // in case pds exits (and calls ExitPDS) while GetHKPacket is waiting, so that they are
@@ -5031,8 +5068,8 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
     while(fgets(line,255,fd) != NULL)
     {
         if (line[0] == '\n') continue;  // Empty line.
-        if (line[0] == '#')  continue;  // Remove comments.
-        if (line[0] == ' ')  continue;  // Ignore whitespace line.
+        if (line[0] == '#' ) continue;  // Remove comments.
+        if (line[0] == ' ' ) continue;  // Ignore whitespace line.
         excl_cnt++;
     }
     
@@ -5043,9 +5080,9 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
     excl_cnt=0;
     while(fgets(line,255,fd) != NULL)
     {
-        if(line[0] == '\n') continue;  // Empty line.
-        if (line[0] == '#') continue;  // Remove comments.
-        if(line[0] == ' ')  continue;  // Ignore whitespace line.
+        if (line[0] == '\n') continue;  // Empty line.
+        if (line[0] == '#' ) continue;  // Remove comments.
+        if (line[0] == ' ' ) continue;  // Ignore whitespace line.
         sscanf(line,"%x",&macro);
         tmp_e[excl_cnt]=macro;
         excl_cnt++;
@@ -5085,7 +5122,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     char   line[256]; // Line buffer
     int    i = 0;
     int    SCResetCounter1 = 0;
-    int    SCResetCounter2 = 0;
+//     int    SCResetCounter2 = 0;
     double sscd_begin = 0.0;
     double sccd_end   = 0.0;
     char   l_tok[256]; // Left token
@@ -5094,7 +5131,6 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
 
     sprintf(line, "Loading data exclude times file: %s\n", depath);
     YPrintf(line);  // Print to "pds system log".
-    perror(line);
     
     *dataExcludeTimes = (data_exclude_times_type*) NULL;   // Default value to be returned to the caller in case of error.
     
@@ -5140,7 +5176,8 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
             printf( "ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
             return -1;
         }
-        if (ConvertSccs2Sccd(r_tok, &SCResetCounter2, &sccd_end)) {    // NOTE: temp_int2 never used.
+//         if (ConvertSccs2Sccd(r_tok, &SCResetCounter2, &sccd_end)) {    // NOTE: temp_int2 never used.
+        if (ConvertSccs2Sccd(r_tok, NULL, &sccd_end)) {    // NOTE: temp_int2 never used.
             YPrintf("ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             printf( "ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
             return -1;
@@ -5218,7 +5255,7 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
     char *SPACECRAFT_CLOCK_STOP_COUNT  = NULL;
     char *START_TIME = NULL;
     char *STOP_TIME  = NULL;
-    int junk_int, i = -1;
+    int /*junk_int,*/ i = -1;
     int file_SCResetCounter_begin = -1;
     double sccd_file_begin = -1;
     double sccd_file_end   = -1;    
@@ -5248,7 +5285,8 @@ int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_ty
         printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
         return -2;
     }
-    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &sccd_file_end  )) {
+//     if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &sccd_file_end  )) {
+    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  NULL,                  &sccd_file_end  )) {
         YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
         printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
         return -2;
@@ -5834,7 +5872,8 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
         char str_t_begin[256], str_t_end[256], LBL_filename[256];
 
         // NOTE: The format specifier %s will read over comma. Must therefore specify something like
-        // %[^,] or %[^, ], %[^, "] instead (read ALL characters EXCEPT comma, or whitespace, or double quote). Cf regular expressions.
+        // %[^,] or %[^, ], %[^, "] instead (read ALL characters EXCEPT comma, or whitespace, or double quote).
+        // Cf regular expressions.
         // NOTE: It is better trim whitespace after sscanf for time strings so that they can contain whitespace.
         // NOTE: Whitespace represents any sequence of whitespace and tab, incl. none at all.
         if (sscanf(line, " %[^,], %[^,], \"%[^, \"]\" ", str_t_begin, str_t_end, LBL_filename) != 3)
@@ -6522,6 +6561,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
             if (   (GetSecondsTime(interval->t_begin) <= tp_data                        )
                 && (                          tp_data <= GetSecondsTime(interval->t_end)) )
             {
+//                 printf(" mc->calib_meas_data[i].LBL_filename = %s\n", mc->calib_meas_data[i].LBL_filename);    // DEBUG
                 mc->calib_meas_data[i].calibration_file_used = TRUE;
                 return i;                                            // RETURN / EXIT FUNCTION
             }
@@ -6556,6 +6596,7 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
         }
     }
 
+//     printf(" mc->calib_meas_data[i].LBL_filename = %s\n", mc->calib_meas_data[i].LBL_filename);    // DEBUG
     mc->calib_meas_data[i].calibration_file_used = TRUE;
     return i;   // NOTE: Returns zero if there is only one calibration (i.e. no iterations in the for loop). The for loop will still initialize i=0.
 }
@@ -6610,8 +6651,13 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
 //             YPrintf("Deleting unused calibration files: %s\n", LBL_file_path);
 //             YPrintf("                                   %s\n", TAB_file_path);
             YPrintf("Deleting unused calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
-            if ((remove(LBL_file_path)!=0) || (remove(TAB_file_path)!=0)) {
-                YPrintf("Error when deleting file\n");
+            if (remove(TAB_file_path)!=0) {
+                YPrintf("Error when deleting file \"%s\"\n", TAB_file_path);
+                exit_code = -1;
+                // NOTE: Does not return from function yet.
+            }
+            if (remove(LBL_file_path)!=0) {
+                YPrintf("Error when deleting file \"%s\"\n", LBL_file_path);
                 exit_code = -1;
                 // NOTE: Does not return from function yet.
             }
@@ -6623,9 +6669,9 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
 
     if (!calib) {
         // NOTE: Prints entire paths.
-        YPrintf("Deleting unused OCE calibration files: %s, %s\n", pathocel, pathocet);
+        YPrintf("Deleting unused OCE calibration files: \"%s\", \"%s\"\n", pathocel, pathocet);
         if ((remove(pathocel)!=0) || (remove(pathocet)!=0)) {
-            YPrintf("Error when deleting file\n");
+            YPrintf("Error when deleting files \"%s\", \"%s\"\n");
             exit_code = -2;
             // NOTE: Does not return from function yet.
         }
@@ -9203,7 +9249,7 @@ int GetUnacceptedFName(char *name)
         {
             strcpy(lastm,dentry->d_name);            // Get matching file name
             lastm[9]='\0';                           // We only care about number part
-            if(sscanf(&lastm[4],"%d",&tmp))           // Get number of file
+            if(sscanf(&lastm[4], "%d", &tmp))        // Get number of file
             {
                 if(tmp>lastnum)   // Number of file larger than previously largest
                     lastnum=tmp;    // Remember new number
@@ -9270,44 +9316,46 @@ int Match(char *stra, char *strb)
 // HK Functions
 //----------------------------------------------------------------------------------------------------------------------------------
 
-// Construct a string of HK data that can be written as row/line to a HK TAB file.
-//
-// ARGUMENTS
-// line       : must be a pointer to a buffer of at least 165 characters
-// utc_return : UTC that is derived from sccd and that is RETURNED to the caller. The content of the string is thus overwritten.
-//              This value is returned so that the caller does need to derive the value, which can then be used to minimize
-//              the number of calls to SPICE, which speeds up pds.
-// macro_id   : Will be set to macro ID number.
-//
-//
-// HOUSE KEEPING EXAMPLE ROW
-// -------------------------
-// NOTE 1: Longest strings used, thus DISABLED is 8 characters
-//         and ENABLED is 7 so if enabled we put in " ENABLED"
-//         with an initial white space.
-//
-// NOTE 2: We use delimiters to make it easier for other software to
-//         quickly read the file for testing purposes.
-//  
-// NOTE 3: Line is terminated with both carriage return and line feed
-//         as in a DOS system (This is not strictly needed anymore).
-//
-// Examle of a HK line with positions displayed vertically, time is in format description.
-//
-// Beginning of line:
-// ---------------------------------------------------------------------------------------------------
-// 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-// 000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999
-// 123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
-// YYYY-MM-DDThh:mm:ss.ffffff,FFFFFFFFFFFFFFFF,P,E,DISABLED,DISABLED,1,MIXED 0,DISABLED,+-05,+-32,DENS
-//
-// Continuation of line:
-// -------------------------------------------------------------------------------------------------------------------
-// 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111222222222222222
-// 0000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999000000000000000
-// 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345677778888
-// ITY,DENSITY,DENSITY,DENSITY,DENSITY,DENSITY,LAP,DISABLED,RX,DENSITY,FLOAT,RX,DENSITY,FLOAT,255,255,00000,00<CR><LF>
-//
+
+/* Construct a string of HK data that can be written as row/line to a HK TAB file.
+ *
+ * ARGUMENTS
+ * =========
+ * line       : must be a pointer to a buffer of at least 165 characters
+ * utc_return : UTC that is derived from sccd and that is RETURNED to the caller. The content of the string is thus overwritten.
+ *              This value is returned so that the caller does need to derive the value, which can then be used to minimize
+ *              the number of calls to SPICE, which speeds up pds.
+ * OUTPUT: macro_id   : Will be set to macro ID number.
+ *
+ *
+ * HOUSE KEEPING EXAMPLE ROW
+ * -------------------------
+ * NOTE 1: Longest strings used, thus DISABLED is 8 characters
+ *         and ENABLED is 7 so if enabled we put in " ENABLED"
+ *         with an initial white space.
+ *
+ * NOTE 2: We use delimiters to make it easier for other software to
+ *         quickly read the file for testing purposes.
+ *  
+ * NOTE 3: Line is terminated with both carriage return and line feed
+ *         as in a DOS system (This is not strictly needed anymore).
+ *
+ * Examle of a HK line with positions displayed vertically, time is in format description.
+ *
+ * Beginning of line:
+ * ---------------------------------------------------------------------------------------------------
+ * 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ * 000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999
+ * 123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+ * YYYY-MM-DDThh:mm:ss.ffffff,FFFFFFFFFFFFFFFF,P,E,DISABLED,DISABLED,1,MIXED 0,DISABLED,+-05,+-32,DENS 
+ *
+ * Continuation of line:
+ * -------------------------------------------------------------------------------------------------------------------
+ * 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111222222222222222
+ * 0000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999000000000000000
+ * 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345677778888
+ * ITY,DENSITY,DENSITY,DENSITY,DENSITY,DENSITY,LAP,DISABLED,RX,DENSITY,FLOAT,RX,DENSITY,FLOAT,255,255,00000,00<CR><LF>
+ */
 void AssembleHKLine(unsigned char *b, char *line, double sccd, char *utc_3decimals_return, unsigned int *macro_id)
 {
     char ldlmode_str[4][8]={"NONE   ","MIXED 0"," NORMAL","MIXED 1"};
@@ -9476,6 +9524,8 @@ void AssembleHKLine(unsigned char *b, char *line, double sccd, char *utc_3decima
     strcat(line,tstr); // Add string to table line
     
     *macro_id = (b[6]<<8) | b[7];   // Put together high and low bytes.
+//     HPrintf("0: *macro_id = (base 10) %i\n",   *macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
+//     HPrintf("1: *macro_id = (base 16) %04x\n", *macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
     
     if(temp) {
         t  = ((b[8]<<8 | b[9]) ^ 0x8000);   // If temp is off this is just a sample from ADC20 probe 2.
@@ -9735,12 +9785,15 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decima
 
 
 
-/* SPICE-based version of ConvertSccd2Utc_nonSPICE.
+/* SPICE-based implementation of ConvertSccd2Utc_nonSPICE.
+ * Should have identical interface except where explicitly stated to be different.
+ * See ConvertSccd2Utc_nonSPICE for interface details.
  * 
  * Return value :  0 = No error
  *                -1 = Error, in particular illegal SCCD.
  * 
- * NOTE: Reacts on errors (exits pds), rather than returning error code. Most (all?) calls to this function do not check the error code anyway.
+ * NOTE: Reacts on errors by exiting pds, rather than returning error code.
+ *       Most (all?) calls to this function do not check the error code anyway.
  * NOTE: This function is THREAD-SAFE and used the SPICE mutex.
  */ 
 int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
@@ -9789,28 +9842,38 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
 
 
 
-// Inverse function to ConvertSccd2Utc_* (made for testing/comparing ConvertSccd2Utc_*).
-// Not presently used by pds itself. /Erik P G Johansson 2017-07-17
-int ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
+/* Inverse function to ConvertSccd2Utc_* (made for testing/comparing ConvertSccd2Utc_*).
+ * 
+ * ARGUMENTS
+ * =========
+ * OUTPUT : reset_counter : Will be set to the spacecraft clock reset counter. Ignored if NULL.
+ * 
+ * NOTE: Will exit pds on SPICE error.
+ * Initially only meant to be used for testing purposes (therefore no non-SPICE version). Now used.
+ */
+void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
 {
     double et;
     char sccs[MAX_STR];
     
+//     printf("8\n");   // DEBUG
+//     printf("utc = %s\n", utc);   // DEBUG
     utc2et_c(utc, &et);
+//     printf("9\n");   // DEBUG
     checkSpiceError("SPICE failed to convert UTC-->et.", TRUE, TRUE);
+//     printf("10\n");   // DEBUG
     
     sce2s_c(ROSETTA_SPICE_ID, et, MAX_STR, sccs);
+//     printf("11\n");   // DEBUG
     checkSpiceError("SPICE failed to et-->SCCS.", TRUE, TRUE);
     
-    ConvertSccs2Sccd(sccs, reset_counter, sccd);
-    
-    return 0;
+    ConvertSccs2Sccd(sccs, reset_counter, sccd);    // reset_counter : Ignored if NULL.
+//     printf("12\n");   // DEBUG
 }
 
 
 
-
-/**
+/*
  * Convert
  * from (1) spacecraft clock count double (true decimals; Reine Gill: RAW time)
  * to   (2) spacecraft clock count string (false decimals).
@@ -9861,8 +9924,10 @@ int ConvertSccd2Sccs(double sccd, int n_resets, char *sccs, int quote_sccs)
  * from STRING representation of spacecraft clock counter (false decimals; "OBT_Str", "sccs")
  * to   DOUBLE representation of spacecraft clock counter (true decimals; "raw", Reine Gill: "rawTime").
  * 
+ * ARGUMENTS
+ * =========
  * Input  : sccs
- * Output : resetCounter
+ * Output : reset_counter : Assigned to the value of the spacecraft clock reset counter. Ignored if NULL.
  * Output : sccd
  *
  * NOTE: Opposite conversion of ConvertSccd2Sccs (hence the name) with the difference that this function
@@ -9872,9 +9937,9 @@ int ConvertSccd2Sccs(double sccd, int n_resets, char *sccs, int quote_sccs)
  * 
  * Function name until 2017-07-05: OBT_Str2Raw
 --------------------------------------------------------------------------------------------------*/
-int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd)
+int ConvertSccs2Sccd(char *sccs, int *reset_counter, double *sccd)
 {
-    int    resetCounter_temp;
+    int    reset_counter_temp;
     double sec, false_frac;
     char   s[MAX_STR], s_temp[MAX_STR];
     
@@ -9890,7 +9955,7 @@ int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd)
     // the variables can represent large enough integers. (C's "int" is not guaranteed to have many bits.)
     // (2) Use two separate doubles for "seconds" and "fractions" since double can represent all (not too
     //    large) integers exactly, but not all decimal numbers.
-    if (   (3 != sscanf(s,      "%i/%[^.].%lf", &resetCounter_temp, s_temp, &false_frac))
+    if (   (3 != sscanf(s,      "%i/%[^.].%lf", &reset_counter_temp, s_temp, &false_frac))
         || (1 != sscanf(s_temp, "%lf",          &sec)))
     {
         // Error messages are unnecessary if all the calls to this function give error messages instead (which they do).
@@ -9901,8 +9966,10 @@ int ConvertSccs2Sccd(char *sccs, int *resetCounter, double *sccd)
     }
     
     // Assign values to "parameters".
-    *sccd         = sec + false_frac/65536.0;
-    *resetCounter = resetCounter_temp;
+    *sccd          = sec + false_frac/65536.0;
+    if (reset_counter != NULL) {
+        *reset_counter = reset_counter_temp;
+    }
     
     return 0;
 }//*/
@@ -10892,6 +10959,7 @@ void *CallocArray(int n,int s)
     return P;
 }
 
+// Allocates double-typed 2D array of size [rows][cols].
 double **CallocDoubleMatrix(int rows, int cols)
 {
     int i;
@@ -10990,20 +11058,8 @@ int SetPRandSched(pthread_t thread,int priority,int policy)
 
 
 
-//##################################################################################################################
-// Alternative "main" function that can be temporarily used instead of the real one for testing purposes.
-// The real main function can, as its first command, call this function, which will then exit pds.
-// This is useful for having test code that has access to other pds-internal functions.
-//##################################################################################################################
-int main_TEST(int argc, char* argv[]) {
-    printf("###################################################################################\n");
-    printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
-    printf("###################################################################################\n");
-    ProtectPlnkInit();
-    
-    initSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V030___birra.TM");
-//     erract_c("SET", 99999, "DEFAULT");
-
+void TimeConversion_TEST()
+{
     // Example: RO-C-RPCLAP-2-TF5-EDITED-V0.1___BACKUP_2017-07-06_17.35.07___befSPICE/DATA/EDITED/2016/SEP/D19/RPCLAP160919_001S_RDS24NS.LBL
     // START_TIME = 2016-09-19T23:58:44.481
     // STOP_TIME  = 2016-09-19T23:58:45.307
@@ -11042,7 +11098,7 @@ int main_TEST(int argc, char* argv[]) {
      *      ConvertSccd2Utc_nonSPICE, and
      *      ConvertSccd2Utc_SPICE
     =====================================*/
-    if (TRUE) {
+    if (FALSE) {
 //         double sccd_array[MAX_STR];
         const int N_seq = 10000;
         const double sccd_seq_1=1e8, sccd_seq_2=4.025e8;
@@ -11080,13 +11136,13 @@ int main_TEST(int argc, char* argv[]) {
         for (i=0; i<N_timestamps; i++) {
             char utc1[MAX_STR], utc2[MAX_STR];
             double sccd, sccd1, sccd2;
-            int reset_counter;
+//             int reset_counter;
             
-            ConvertSccs2Sccd(sccs_array[i], &reset_counter, &sccd);
+            ConvertSccs2Sccd(sccs_array[i], NULL, &sccd);
             ConvertSccd2Utc_nonSPICE(sccd, NULL, utc1);    // Requires loaded TCORR data structures!
             ConvertSccd2Utc_SPICE   (sccd, NULL, utc2);
-            ConvertUtc2Sccd_SPICE(utc1, &reset_counter, &sccd1);
-            ConvertUtc2Sccd_SPICE(utc2, &reset_counter, &sccd2);
+            ConvertUtc2Sccd_SPICE(utc1, NULL, &sccd1);
+            ConvertUtc2Sccd_SPICE(utc2, NULL, &sccd2);
             double sccd_diff = fabs(sccd1-sccd2);
             printf("%-18s --> %16f --> %s, %s --> %16f, %16f --> %f\n", sccs_array[i], sccd, utc1, utc2, sccd1, sccd2, sccd_diff);
             
@@ -11148,6 +11204,31 @@ int main_TEST(int argc, char* argv[]) {
             printf("%19s ==> %10i, %10i ==> %s\n", utc_array[i], (int) t, (int) t_midday, utc);
         }
     }
+}
 
-    return -1;
+
+
+//##################################################################################################################
+// Alternative "main" function that can be temporarily used instead of the real one for testing purposes.
+// The real main function can, as its first command, call this function, which will then exit pds.
+// This is useful for having test code that has access to other pds-internal functions.
+//##################################################################################################################
+// PROPOPOSAL: Separate out tests into separate functions.
+int main_TEST(int argc, char* argv[]) {
+    printf("###################################################################################\n");
+    printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
+    printf("###################################################################################\n");
+    ProtectPlnkInit();
+    
+    // NOTE: SPICE may or may not have been initialized by the core pds code, depending on from where main_TEST was called.
+    initSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V040___birra.TM");
+//     erract_c("SET", 99999, "DEFAULT");
+    
+//     FindNearestInSortedArray_TEST();
+//     TimeConversion_TEST();
+    CalibCoeff_TEST();
+    
+    ExitPDS(255);
+
+    return 0;
 }
