@@ -151,7 +151,7 @@
  * CONTEXT: The ADC16s have a flaw that makes them jump betweeen negative and non-negative values.
  * Therefore one needs to subtract/add a value to non-negative ADC16 values for at least CALIB.
  * The value should ideally be 2.5.
- * NOTE: According to LAP team agreement, EDITED should not have this jump (i.e. offset=0), but the functionality is kept to make it possible to
+ * NOTE: According to LAP team agreement, EDITED should NOT have this jump (i.e. offset=0), but the functionality is kept to make it possible to
  * emulate the old behaviour. To emulate pds' old behaviour, set both constants to -2.
  * NOTE: The value of ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM affects the generation of sweep offsets (bias-dependent; macro 0x104).
  * write_CALIB_MEAS_files contains a similar constant which must be compatible with the value here.
@@ -308,7 +308,7 @@ typedef struct c_type_def
   double  c_cal_16b_hg1; 
 //   double  c_cal_20b_hg1;
   double  c_cal_16b_lg; 
-//   double  c_cal_20b_lg;  
+//   double  c_cal_20b_lg;
 } cf_type;//*/
 
 
@@ -344,7 +344,6 @@ typedef struct m_type_def
 //   cf_type                *CF;               // Array of calibration factor (CF) structures
   c_type                 *CD;               // Array of calibration data   (CD) structures
   calib_meas_file_type   *calib_meas_data;  // Array of CALIB_MEAS calibration data structures
-//   calib_coeff_data_type  calib_coeff_data;  // CALIB_COEFF data structure.
 } m_type;
 
 

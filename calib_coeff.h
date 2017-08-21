@@ -60,9 +60,9 @@ typedef struct calib_coeff_data_type_def
 // Functions needed outside the module.
 void FindNearestInSortedArray_TEST();
 void CalibCoeff_TEST();
-int InitCalibCoeff(pds_type *pds_data, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data);
-int DestroyCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data);
-int GetCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data, double sccd, double *coeff_array);
+int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data);
+int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data);
+int GetCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data, double sccd, double *coeff_array);
 
 // Not presently used by any other module, but could be useful elsewhere.
 int OpenFileCountDataRows(char *file_path, FILE **file_descr, int *N_rows);

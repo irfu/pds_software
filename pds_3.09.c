@@ -304,7 +304,7 @@ int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depa
 int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData);
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
-int  LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m);             // Get measured data calibration files
+int  InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m);             // Get measured data calibration files
 void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries);
 int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp, pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
 
@@ -320,13 +320,13 @@ void DeriveDSIandDSN(
 int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, char update_PUBLICATION_DATE);
 int WriteUpdatedLabelFile(prp_type *pds, char *name, char update_PUBLICATION_DATE);     // Write label file
 int ReadLabelFile(prp_type *pds,char *name);                                            // Read a label file 
-int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path);                           // Read table file
+int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path, char *msg);                // Read table file
 
 // Miscellaneous functions
 //----------------------------------------------------------------------------------------------------------------------------------
 char GetBiasMode(curr_type *curr, int dop);
 int  SelectCalibrationData(time_t, char*, m_type*);
-int  RemoveUnusedOffsetCalibrationFiles(char*, char *pathocel, char *pathocet, m_type*);
+int  RemoveUnusedCalibMeasFiles(char*, char *pathocel, char *pathocet, m_type*);
 
 // Write data to data product table file.
 int WritePTAB_File(
@@ -503,6 +503,16 @@ prp_type ic_lbl;          // Linked property/value list for Bias Current Calibra
 prp_type fc_lbl;          // Linked property/value list for Fine Bias Voltage Calibration Data Label
 prp_type cat;             // Linked property/value list for Catalog Files 
 
+c_type v_conv;                            // Coarse-voltage-bias-conversion-to-TM data structure (table).
+c_type f_conv;                            // Fine  -voltage-bias-conversion-to-TM data structure (table. (fine=fine sweep)
+c_type i_conv;                            // Current       -bias-conversion-to-TM data structure (table).
+m_type m_conv;                            // CALIB_MEAS data structure.
+calib_coeff_data_type calib_coeff_data;   // CALIB_COEFF data structure
+
+tc_type tcp={0,NULL,NULL,NULL}; // Time correlation packets structure
+
+unsigned int ilogtab[256];      // Inverse logarithmic table for decoding of logarithmic sweeps
+
 
 hk_info_type hk_info;     // Some HK info needed to dump last HK label at exit
 
@@ -510,6 +520,8 @@ hk_info_type hk_info;     // Some HK info needed to dump last HK label at exit
 prp_type macros[MAX_MACRO_BLCKS][MAX_MACROS_INBL]; 
 
 mp_type mp;     // Mission phase data
+
+extern FILE *stdout;            // Keep track of standard output 
 
 
 
@@ -591,22 +603,10 @@ gstype gstations[NGSTATIONS]=
 //--------------------------------------------------------------------------
 // Originally intended to support realtime stream processing.
 // Now they are usefull to spread processing load on multicore machines.
-//
 buffer_struct_type cbtm;        // Circular S/C TM buffer
 buffer_struct_type cbs;         // Circular in Science buffer
 buffer_struct_type cbh;         // Circular in HK buffer
 buffer_struct_type cmb;         // Circular mirror buffer
-
-c_type v_conv;                  // Coarse-voltage-bias-conversion-to-TM data structure (table).
-c_type f_conv;                  // Fine  -voltage-bias-conversion-to-TM data structure (table. (fine=fine sweep)
-c_type i_conv;                  // Current       -bias-conversion-to-TM data structure (table).
-m_type m_conv;                  // Calibration of measured data offset and conversion to volts/ampere
-
-tc_type tcp={0,NULL,NULL,NULL}; // Time correlation packets structure
-
-unsigned int ilogtab[256];      // Inverse logarithmic table for decoding of logarithmic sweeps
-
-extern FILE *stdout;            // Keep track of standard output 
 
 int sc_thread_cancel_threshold_timeout;
     
@@ -1043,21 +1043,21 @@ int main(int argc, char *argv[])
     InitP(&cc_lbl);                                             // Initialize property value pair list
     status=ReadLabelFile(&cc_lbl, pds.cpathc);                  // Read coarse bias voltage calibration label into property value pair list
     if(status>=0) {
-        status+=ReadTableFile(&cc_lbl, &v_conv, pds.cpathd);    // Read coarse bias voltage calibration data into v_conv structure
+        status+=ReadTableFile(&cc_lbl, &v_conv, pds.cpathd, "Reading coarse bias voltage calibration data");    // Read coarse bias voltage calibration data into v_conv structure
     }    
     WriteUpdatedLabelFile(&cc_lbl, pds.cpathc, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&fc_lbl);                                             // Initialize property value pair list
     status+=ReadLabelFile(&fc_lbl, pds.cpathf);                 // Read fine bias voltage calibration label into property value pair list
     if(status>=0) {
-        status+=ReadTableFile(&fc_lbl, &f_conv, pds.cpathd);    // Read fine bias voltage calibration data into f_conv structure
+        status+=ReadTableFile(&fc_lbl, &f_conv, pds.cpathd, "Reading fine bias voltage calibration data");    // Read fine bias voltage calibration data into f_conv structure
     }    
     WriteUpdatedLabelFile(&fc_lbl, pds.cpathf, 1);              // Write back label file with new info
     //==================================================================================================================================
     InitP(&ic_lbl);                                             // Initialize property value pair list
     status+=ReadLabelFile(&ic_lbl, pds.cpathi);                 // Read current bias voltage calibration label into property value pair list
     if(status>=0) {
-        status+=ReadTableFile(&ic_lbl, &i_conv, pds.cpathd);    // Read current bias calibration data into i_conv structure
+        status+=ReadTableFile(&ic_lbl, &i_conv, pds.cpathd, "Reading current bias calibration data");    // Read current bias calibration data into i_conv structure
     }    
     WriteUpdatedLabelFile(&ic_lbl, pds.cpathi, 1);              // Write back label file with new info
     //==================================================================================================================================
@@ -1086,7 +1086,13 @@ int main(int argc, char *argv[])
         ExitPDS(1);
     }
 
-    status = LoadOffsetCalibrationsTMConversion(pds.cpathd, pds.cpathm, pds.cpathocel, pds.cpathocet, &m_conv);        // Get measurement calibration files
+    status = InitCalibMeas(pds.cpathd, pds.cpathm, pds.cpathocel, pds.cpathocet, &m_conv);        // Get measurement calibration files
+    if(status<0)
+    {
+        YPrintf("Can not load offset calibration TM conversion files or the offset calibration exceptions files. Function error code %i. Exiting.\n", status);
+        ExitPDS(1);
+    }
+    status = InitCalibCoeff(pds.cpathd, mp.start, mp.stop, &calib_coeff_data);        // Get measurement calibration files
     if(status<0)
     {
         YPrintf("Can not load offset calibration TM conversion files or the offset calibration exceptions files. Function error code %i. Exiting.\n", status);
@@ -4135,9 +4141,13 @@ void ExitPDS(int status)
     }
 
 
-    int func_status = RemoveUnusedOffsetCalibrationFiles(pds.cpathd, pds.cpathocel, pds.cpathocet, &m_conv);
+    int func_status = RemoveUnusedCalibMeasFiles(pds.cpathd, pds.cpathocel, pds.cpathocet, &m_conv);
     if (func_status < 0) {
-        YPrintf("Error when removing unused calibration files. Function error code %i\n", func_status);
+        YPrintf("Error when deleting unused CALIB_MEAS files. Function error code %i\n", func_status);
+    }
+    func_status = DestroyCalibCoeff(pds.cpathd, &calib_coeff_data);
+    if (func_status != 0) {
+        YPrintf("Error when destroying CALIB_COEFF datastructure, and deleting unused CALIB_COEFF files. Function error code %i\n", func_status);
     }
 
     
@@ -5672,12 +5682,12 @@ void RunShellCommand(char *command_str)
  *
  * Variable naming convention: MC = Measurement/measured calibration(?)
  */
-int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m)
+int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m)
 {
     // FKJN 2014-09-04
     // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
     prp_type mc_lbl;            // Linked property/value list for measured data offset and conversion to volts/ampere.
-    property_type *property;
+//     property_type *property;
 
     char file_path[PATH_MAX];           // Temporary variable for a file path.
     char *filename_pattern;
@@ -5758,7 +5768,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
         {
             // CASE: Filename matches pattern.
 
-            YPrintf("Reading offset and TM conversion file: %s\n", dentry->d_name);  // Matching file name
+//             YPrintf("Reading CALIB_MEAS file: %s\n", dentry->d_name);  // Matching file name
 
             //================================================
             // Read and update (rewrite) calibration LBL file
@@ -5778,35 +5788,25 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
             //===============================================
             // ADC20 calibration factors used to be read from CALIB_MEAS file labels but are no more.
             // The corresponding C variables are set to NaN (they are never used).
-            FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_16B",       1, DNTCARE);
-//             sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
+            //FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_16B",       1, DNTCARE);
+            //sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_20B",       1, DNTCARE);
             //sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_20b);
             
-            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G1",    1, DNTCARE);
-//             sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_hg1);
+            //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G1",    1, DNTCARE);
+            //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_hg1);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G1",    1, DNTCARE);
             //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_hg1);
             
-            FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G0_05", 1, DNTCARE);
-//             sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_lg);
+            //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G0_05", 1, DNTCARE);
+            //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_lg);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G0_05", 1, DNTCARE);
             //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_lg);
-
-/*            if(debug>2)
-            {
-                printf("ROSETTA:LAP_VOLTAGE_CAL_16B       = v_cal_16b     = %e\n", m->CF[i_calib].v_cal_16b);
-//                 printf("ROSETTA:LAP_VOLTAGE_CAL_20B       = %e\n", m->CF[i_calib].v_cal_20b);
-                printf("ROSETTA:LAP_CURRENT_CAL_16B_G1    = c_cal_16b_hg1 = %e\n", m->CF[i_calib].c_cal_16b_hg1);
-//                 printf("ROSETTA:LAP_CURRENT_CAL_20B_G1    = %e\n", m->CF[i_calib].c_cal_20b_hg1);
-                printf("ROSETTA:LAP_CURRENT_CAL_16B_G0_05 = c_cal_16b_lg  = %e\n", m->CF[i_calib].c_cal_16b_lg);
-//                 printf("ROSETTA:LAP_CURRENT_CAL_20B_G0_05 = %e\n", m->CF[i_calib].c_cal_20b_lg);
-            }*/
 
             //=======================================================
             // Read calibration tables into array of data structures
             //=======================================================
-            if(ReadTableFile(&mc_lbl, &m->CD[i_calib], rpath)<0)
+            if(ReadTableFile(&mc_lbl, &m->CD[i_calib], rpath, "Reading CALIB_MEAS file")<0)
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
@@ -5951,7 +5951,7 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
     fclose(fd);
 
     return 0;
-}  // LoadOffsetCalibrationsTMConversion
+}  // InitCalibMeas
 
 
 
@@ -6349,13 +6349,16 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
  * a variable number of columns. Uses START_BYTE=column start (but not BYTES=column width),
  * DATA_TYPE (to distinguish ASCII_INTEGER, ASCII_REAL).
  *
+ * ARGUMENTS
+ * =========
  * lbl_data     : LBL file description from which some data will be taken, incl. TAB filename.
  * cal          : Structure which will contain the data read from file.
  *      cal->C[i][j] = Value at row i (i=0=first row), column j (j=0=first column) in TAB file.
  * dir_path     : Path to parent _directory_ (not path to file!)
+ * msg          : String to be used in log message. Colon and file path is added after the string.
  * Return value : 0=(Seems like) success, Negative=Failure
  */
-int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
+int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path, char *msg)
 {
     int i,j;
     char file_path[PATH_MAX];
@@ -6391,7 +6394,10 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path)
     TrimQN(line);                                           // Trim quotes away.
     sprintf(file_path,"%s%s",dir_path,line);                // Construct file_path = dir_path + filename
 
-    YPrintf("Reading table file: %s\n", line);
+    //YPrintf("Reading table file: %s\n", line);
+//     YPrintf("%s: %s\n", msg, line);          // Only prints the TAB filename (not path), as fetched from lbl_data/the LBL file data.
+    YPrintf("%s: %s\n", msg, file_path);     // Prints the TAB path+filename (filename as fetched from lbl_data/the LBL file data).
+    
     // Open calibration table file
     if((fd=fopen(file_path,"r"))==NULL)
     {
@@ -6607,24 +6613,36 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 
 
 /*
- * Deletes offset calibration files (CALIB_MEAS, TAB & LBL) which are unused.
+ * Deletes unused CALIB_MEAS offset calibration files (TAB & LBL), incl. CALIB_MEAS_EXCEPT.
  *
  * ASSUMES: Assumes that the function can still call the log function YPrintf.
  * (This important information for when to call this function during the shutdown process.)
  *
- * NOTE: This should DELETE ALL offset calibration files for EDITED, but still leave the other calibration files.
+ * NOTE: The algorithm deletes files with calibration_file_used==FALSE, and deletes CALIB_MEAS_EXCEPT when calibration_file_used==FALSE
+ * for all dated CALIB_MEAS files.
+ * The effect should be that
+ * (1) for EDITED, it deletes all CALIB_MEAS files for EDITED (incl. CALIB_MEAS_EXCEPT).
+ * (2) for CALIB it deletes all unused CALIB_MEAS files (incl. CALIB_MEAS_EXCEPT).
+ * NOTE: If CALIB_MEAS functionality is not used (CALIB_COEFF functionality is used instead), then calibration_file_used==FALSE
+ * for all dated CALIB_MEAS files, which means the files are automatically deleted. This function can thus be called also then.
  *
+ * ARGUMENTS
+ * =========
  * pathocel : Path to CALIB_MEAS_EXCEPT LBL file
  * pathocet : Path to CALIB_MEAS_EXCEPT TAB file
  * cpath    : Path to calibration directory
  * m        : Data structure used for determining files to delete. The criterion is m->calib_meas_data[i].calibration_file_used==FALSE.
  */
-int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *pathocet, m_type *m)
+// PROPOSAL: De-allocate CALIB_MEAS data structure in this function.
+//      PRO: Better modularization.
+//      PRO: More analogous with DestroyCalibCoeff.
+int RemoveUnusedCalibMeasFiles(char *cpathd, char *pathocel, char *pathocet, m_type *m)
 {
     int exit_code = 0;
     int i;
+    int removed_all_calib_meas_files = FALSE;
 
-    for (i=0; i<m->N_calib_meas; i++)   // Iterate over calibrations.
+    for (i=0; i<m->N_calib_meas; i++)   // Iterate over CALIB_MEAS files.
     {
         // Set LBL_file_path.
         char LBL_file_path[PATH_MAX];
@@ -6646,7 +6664,8 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
 
         if (m->calib_meas_data[i].calibration_file_used) {
             // NOTE: Extra whitespace in log message so that the log messages line up nicely.
-            YPrintf("Keeping    used calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
+            YPrintf("Keeping  used   calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
+            removed_all_calib_meas_files = FALSE;
         } else {
             //=======================
             // Delete files on disk.
@@ -6670,7 +6689,7 @@ int RemoveUnusedOffsetCalibrationFiles(char *cpathd, char *pathocel, char *patho
 
     }
 
-    if (!calib) {
+    if (!calib || removed_all_calib_meas_files) {
         // NOTE: Prints entire paths.
         YPrintf("Deleting unused OCE calibration files: \"%s\", \"%s\"\n", pathocel, pathocet);
         if ((remove(pathocel)!=0) || (remove(pathocet)!=0)) {

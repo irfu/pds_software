@@ -20,6 +20,8 @@
  * -- CALIB_MEAS_EXCEPT removed automatically.
  */
 
+
+
 #include <limits.h>       // Standard limits of integer types, PATH_MAX
 #include <math.h>         // isnan function
 #include <stdio.h>        // Standard Input/output 
@@ -337,7 +339,7 @@ void FindNearestInSortedArray_TEST()
 
 /* Derives "metadata" for a CALIB_COEFF file given an sccd that should be covered by the file.
  * 
- * This function returns and hence effectively defines
+ * This function returns, and hence effectively defines,
  * (1) the locations of CALIB_COEFF files (TAB+LBL),
  * (2) the filenaming convention,
  * (3) what SCCD ranges the files should cover (how files divide time into periods of time).
@@ -347,6 +349,7 @@ void FindNearestInSortedArray_TEST()
  * 
  * ARGUMENTS AND RETURN VALUE
  * ==========================
+ * INPUT  : cc_dir       : Directory where CALIB_COEFF files reside.
  * INPUT  : sccd         : SCCD that should be covered by the file.
  * OUTPUT : tab_path     : Path to TAB file.
  * OUTPUT : lbl_path     : Path to LBL file. Will be ignored if NULL.
@@ -355,7 +358,7 @@ void FindNearestInSortedArray_TEST()
  * RETURN VALUE :  0 = No error
  *                -1 = Time conversion error.
  */
-int GetCalibCoeffFileMetadata(pds_type *pds_data, double sccd, char *tab_path, char *lbl_path, double *sccd1, double *sccd2)
+int GetCalibCoeffFileMetadata(char *cc_dir, double sccd, char *tab_path, char *lbl_path, double *sccd1, double *sccd2)
 {
     char utc[MAX_STR];
     char file_date_str[MAX_STR];
@@ -382,9 +385,9 @@ int GetCalibCoeffFileMetadata(pds_type *pds_data, double sccd, char *tab_path, c
     ModifyUtc2BeginDay(utc);
     ConvertUtc2Sccd_SPICE(utc, NULL, sccd2);
     
-    sprintf(tab_path, "%s/RPCLAP%s_CALIB_COEFF.TAB", pds_data->cpathd, file_date_str);
+    sprintf(tab_path, "%s/RPCLAP%s_CALIB_COEFF.TAB", cc_dir, file_date_str);
     if (lbl_path != NULL) {
-        sprintf(lbl_path, "%s/RPCLAP%s_CALIB_COEFF.LBL", pds_data->cpathd, file_date_str);
+        sprintf(lbl_path, "%s/RPCLAP%s_CALIB_COEFF.LBL", cc_dir, file_date_str);
     }
     
 //     printf("GetCalibCoeffFileMetadata 2\n");    // DEBUG
@@ -419,7 +422,7 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
 
 //     printf("ReadCalibCoeffFile 1\n");    // DEBUG
 
-    YPrintf("Loading \"%s\"\n", tab_file_path);
+    YPrintf("Reading CALIB_COEFF file: %s\n", tab_file_path);
     int  N_data_rows;
     FILE *file_descr = NULL;
     if (OpenFileCountDataRows(tab_file_path, &file_descr, &N_data_rows) != 0) {
@@ -541,7 +544,7 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
  * IMPLEMENTATION NOTE: Does not re-adjust the allocated array size downwards at the end. ==> Allocates too much, but should work.
  * NOTE: Pre-loading files assumes that there must be CALIB_COEFF files for every day in the dataset, even if there is no LAP data.
  */
-int InitCalibCoeff(pds_type *pds_data, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data)
+int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data)
 {
     calib_coeff_data_type ccd;   // Temporary struct being built up internally before begin assigned to the return argument.
 
@@ -590,7 +593,7 @@ int InitCalibCoeff(pds_type *pds_data, time_t t_dataset_begin, time_t t_dataset_
 //         printf("InitCalibCoeff 2\n");   // DEBUG
         char tab_file_path[PATH_MAX];
         double sccd_file1, sccd_file2;
-        if (GetCalibCoeffFileMetadata(pds_data, sccd, tab_file_path, NULL, &sccd_file1, &sccd_file2)) {
+        if (GetCalibCoeffFileMetadata(cc_dir, sccd, tab_file_path, NULL, &sccd_file1, &sccd_file2)) {
 //             printf("InitCalibCoeff 3\n");   // DEBUG
             YPrintf("Can not derive CALIB_COEFF file metadata.\n");
             return -2;
@@ -661,7 +664,7 @@ int InitCalibCoeff(pds_type *pds_data, time_t t_dataset_begin, time_t t_dataset_
 
 /* To be run when pds is finished using CALIB_COEFF.
  * The function:
- * (1) deletes unused files
+ * (1) deletes unused CALIB_COEFF files
  * (2) deallocates the CALIB_COEFF data structure
  * In other words, the content of cc_data should not be used again after being used as an argument to this function.
  * 
@@ -669,7 +672,7 @@ int InitCalibCoeff(pds_type *pds_data, time_t t_dataset_begin, time_t t_dataset_
  */
 // PROPOSAL: Better name, not "Destroy".
 //      Ex: Destruct, Destructor (cf Constructor), Done
-int DestroyCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data)
+int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
 {
     int i_ccf;
 //     printf("DestroyCalibCoeff 1\n");   // DEBUG
@@ -678,16 +681,16 @@ int DestroyCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data)
         
 //         printf("DestroyCalibCoeff 2\n");   // DEBUG
     
+        double sccd1, sccd2;   // Not used.
+        char tab_path[PATH_MAX], lbl_path[PATH_MAX];        
+        if (GetCalibCoeffFileMetadata(cc_dir, cc_data->ccf_sccd_begin_array[i_ccf], tab_path, lbl_path, &sccd1, &sccd2)) {
+            return -1;
+        }
+            
         //=========================================
         // Deleting files unused CALIB_COEFF files
         //=========================================
         if (!ccf_data->data_used) {
-
-            double sccd1, sccd2;   // Not used.
-            char tab_path[PATH_MAX], lbl_path[PATH_MAX];        
-            if (GetCalibCoeffFileMetadata(pds_data, cc_data->ccf_sccd_begin_array[i_ccf], tab_path, lbl_path, &sccd1, &sccd2)) {
-                return -1;
-            }
 
             // IMPLEMENTATION NOTE: Wise too look for existence of files before deleting. Will otherwise try
             // to delete files for the entire mission's dates.
@@ -705,14 +708,12 @@ int DestroyCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data)
                     // NOTE: Does not return from function yet.
                 }
             }
+        } else {
+            YPrintf("Keeping  used   calibration files: %s\n", tab_path);
+            if (0==access(lbl_path, W_OK)) {
+                YPrintf("                                  %s\n", lbl_path);
+            }
         }
-
-//         { // DEBUG
-//             double sccd1, sccd2;   // Not used.
-//             char tab_path[PATH_MAX], lbl_path[PATH_MAX];        
-//             GetCalibCoeffFileMetadata(pds_data, cc_data->ccf_sccd_begin_array[i_ccf], tab_path, lbl_path, &sccd1, &sccd2);
-//             printf("DestroyCalibCoeff tab_path = %s\n", tab_path);
-//         }
 
         //======================================================
         // Deallocate file data structure/calib_coeff_file_type
@@ -726,6 +727,7 @@ int DestroyCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data)
         }
         // NOTE: Can not free(ccf_data) since it points to an element
         // in an array. It does not represent one allocation.
+        
 //         printf("DestroyCalibCoeff 5\n");   // DEBUG
     }
     
@@ -751,7 +753,7 @@ int DestroyCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data)
  * OUTPUT : ccf_data : Pointer to the original data calib_coeff_file_type.
  */
 int GetCalibCoeffFileData(
-    pds_type *pds_data, calib_coeff_data_type *cc_data,
+    char *cc_dir, calib_coeff_data_type *cc_data,
     int i_ccf, calib_coeff_file_type **ccf_data)
 {
 //     printf("GetCalibCoeffFileData 1\n");    // DEBUG
@@ -780,7 +782,7 @@ int GetCalibCoeffFileData(
         char tab_file_path[PATH_MAX];
         double sccd_file1, sccd_file2;
         
-        if (GetCalibCoeffFileMetadata(pds_data, cc_data->ccf_sccd_begin_array[i_ccf], tab_file_path, NULL,
+        if (GetCalibCoeffFileMetadata(cc_dir, cc_data->ccf_sccd_begin_array[i_ccf], tab_file_path, NULL,
             &sccd_file1, &sccd_file2) != 0) {
             YPrintf("Can not derive CALIB_COEFF file metadata.\n");
             return -2;
@@ -819,7 +821,7 @@ int GetCalibCoeffFileData(
 //      NOTE: Still need to submit cc_data.
 //      PRO: Easier to apply automatic test code.
 int FindNearestCalibCoeffTimes(
-    pds_type *pds_data, calib_coeff_data_type *cc_data, double sccd,
+    char *cc_dir, calib_coeff_data_type *cc_data, double sccd,
     int *i_ccf_1, int *i_ccf_2, int *i_sccd_1, int *i_sccd_2)
 {
     // NOTE: Effectively having two sets of identical variables
@@ -852,7 +854,7 @@ int FindNearestCalibCoeffTimes(
     calib_coeff_file_type *ccf_data;
     // NOTE: Must use i_ccf_1p/nearest-earlier-time since each file
     // includes (covers) the stated starting time, but excludes the stated end time.
-    if (GetCalibCoeffFileData(pds_data, cc_data, i_ccf_1p, &ccf_data) != 0) {   return -3;   }
+    if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_1p, &ccf_data) != 0) {   return -3;   }
     if (FindNearestInSortedArray(
         ccf_data->sccd_array,
         ccf_data->N,
@@ -867,7 +869,7 @@ int FindNearestCalibCoeffTimes(
     if (i_sccd_1p < 0) {
         do {
             i_ccf_1p--;
-            if (GetCalibCoeffFileData(pds_data, cc_data, i_ccf_1p, &ccf_data) != 0) {   return -3;   }
+            if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_1p, &ccf_data) != 0) {   return -3;   }
         } while (ccf_data->N == 0);
         i_sccd_1p = ccf_data->N-1;
     }
@@ -879,7 +881,7 @@ int FindNearestCalibCoeffTimes(
     if (ccf_data->N-1 < i_sccd_2p) {
         do {
             i_ccf_2p++;
-            if (GetCalibCoeffFileData(pds_data, cc_data, i_ccf_2p, &ccf_data) != 0) {   return -3;   }
+            if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_2p, &ccf_data) != 0) {   return -3;   }
         } while (ccf_data->N == 0);
         i_sccd_2p = 0;
     }
@@ -916,7 +918,7 @@ int FindNearestCalibCoeffTimes(
  * IMPLEMENTATION NOTE: The scope of this function is chose to be relatively well suited for manual standalone tests.
  */
 int GetInterpolatedCalibCoeff(
-    pds_type *pds_data, calib_coeff_data_type *cc_data,
+    char *cc_dir, calib_coeff_data_type *cc_data,
     double sccd,
     int i_ccf_1, int i_ccf_2, int i_sccd_1, int i_sccd_2,
     double *coeff_array)
@@ -925,8 +927,8 @@ int GetInterpolatedCalibCoeff(
     // Obtain the relevant file data structures/calib_coeff_file_type.
     //================================================================
     calib_coeff_file_type *ccf_data_1, *ccf_data_2;
-    if (GetCalibCoeffFileData(pds_data, cc_data, i_ccf_1, &ccf_data_1)) {   return -1;   }
-    if (GetCalibCoeffFileData(pds_data, cc_data, i_ccf_2, &ccf_data_2)) {   return -1;   }
+    if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_1, &ccf_data_1)) {   return -1;   }
+    if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_2, &ccf_data_2)) {   return -1;   }
 
 
     { // DEBUG    
@@ -981,14 +983,14 @@ int GetInterpolatedCalibCoeff(
  * 
  * IMPLEMENTATION NOTE: The scope of this function is chose to be relatively well suited for manual standalone tests.
  */
-int GetCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data, double sccd, double *coeff_array)
+int GetCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data, double sccd, double *coeff_array)
 {
     //=================================================================
     // Find the two nearest data points (moments in time), as indices.
     //=================================================================
     int i_ccf_1, i_ccf_2, i_sccd_1, i_sccd_2;
     if (FindNearestCalibCoeffTimes(
-        pds_data, cc_data, sccd,
+        cc_dir, cc_data, sccd,
         &i_ccf_1, &i_ccf_2, &i_sccd_1, &i_sccd_2) != 0)
     {
         YPrintf("Can not obtain the location of CALIB_COEFF coefficients nearest to the specified time sccd=%f.\n", sccd);
@@ -998,7 +1000,9 @@ int GetCalibCoeff(pds_type *pds_data, calib_coeff_data_type *cc_data, double scc
     //==================================
     // Interpolate the two data points.
     //==================================
-    if (GetInterpolatedCalibCoeff(pds_data, cc_data, sccd, i_ccf_1, i_ccf_2, i_sccd_1, i_sccd_2, coeff_array)) {
+    if (GetInterpolatedCalibCoeff(
+        cc_dir, cc_data, sccd,
+        i_ccf_1, i_ccf_2, i_sccd_1, i_sccd_2, coeff_array)) {
         return -2;
     }
 
@@ -1016,14 +1020,14 @@ void CalibCoeff_TEST()
     ConvertUtc2Timet("2016-01-01T00:00:00", &t_dataset_begin);
     ConvertUtc2Timet("2016-01-03T00:00:00", &t_dataset_end);
     
-    pds_type pds_data;
-// //     strcpy(pds_data.cpathd, "/misc/rosetta/LAP_ARCHIVE/test_CALIB_COEFF");   // NOTE: No ending slash.
-    strcpy(pds_data.cpathd, "/home/erjo/pds_new_datasets/RO-C-RPCLAP-3-PRL-CALIB-V0.1/CALIB");   // NOTE: No ending slash.
+    char cc_dir[PATH_MAX];
+// //     strcpy(cc_dir, "/misc/rosetta/LAP_ARCHIVE/test_CALIB_COEFF");   // NOTE: No ending slash.
+    strcpy(cc_dir, "/home/erjo/pds_new_datasets/RO-C-RPCLAP-3-PRL-CALIB-V0.1/CALIB");   // NOTE: No ending slash.
     
     calib_coeff_data_type cc_data;
     
 //     printf("CalibCoeff_TEST 1\n");    // DEBUG
-    if (InitCalibCoeff(&pds_data, t_dataset_begin, t_dataset_end, &cc_data)) {
+    if (InitCalibCoeff(cc_dir, t_dataset_begin, t_dataset_end, &cc_data)) {
         printf("CalibCoeff_TEST InitCalibCoeff ERROR\n");
         return;
     }
@@ -1035,7 +1039,7 @@ void CalibCoeff_TEST()
 //     char *utc = "2016-01-01T12:00:00";
     char *utc = "2016-01-02T00:00:00";
     ConvertUtc2Sccd_SPICE(utc, &junk, &sccd);
-    if (GetCalibCoeff(&pds_data, &cc_data, sccd, coeff_array)) {
+    if (GetCalibCoeff(cc_dir, &cc_data, sccd, coeff_array)) {
         printf("CalibCoeff_TEST GetCalibCoeff ERROR\n");
         return;
     }
@@ -1045,7 +1049,7 @@ void CalibCoeff_TEST()
            coeff_array[0], coeff_array[1], coeff_array[2], coeff_array[3],
            coeff_array[4], coeff_array[5], coeff_array[6], coeff_array[7]);
     
-    if (DestroyCalibCoeff(&pds_data, &cc_data)) {    // NOTE: Should remove files. Important to experiment on COPIES.
+    if (DestroyCalibCoeff(cc_dir, &cc_data)) {    // NOTE: Should remove files. Important to experiment on COPIES.
         printf("CalibCoeff_TEST DestroyCalibCoeff ERROR\n");
         return;
     }
