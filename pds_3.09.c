@@ -7082,424 +7082,418 @@ int WritePTAB_File(
         CPrintf("    Couldn't open PDS TAB data file: %s!!\n", file_path);
         return -1;
     }
-    else
+    
+    if (id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) { // Log compression used
+        LogDeComp(buff,length,ilogtab); // Decompress log data in buff result returned in buff
+    }
+        
+    if(param_type==SWEEP_PARAMS)
     {
-        if (id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) { // Log compression used
-            LogDeComp(buff,length,ilogtab); // Decompress log data in buff result returned in buff
+        if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) {   // Decode the four sweep types
+            curr_step = -sw_info->height;    // Store height of step and set sign to a down sweep 
+        } else {
+            curr_step =  sw_info->height;   // Store height of step and set sign to a up sweep
         }
+        sw_bias_voltage_TM = sw_info->start_bias;         // Get start bias
+    }
+
+    //============
+    // Set biases
+    //============
+    if(writing_P1_data)
+    {
+        vbias  = curr->vbias1;
+        vbias1 = curr->vbias1;
+        ibias  = curr->ibias1;
+        ibias1 = curr->ibias1;
+    }
+
+    if(writing_P2_data)
+    {
+        vbias  = curr->vbias2;
+        vbias2 = curr->vbias2;
+        ibias  = curr->ibias2;
+        ibias2 = curr->ibias2;
+    }
+
+    // BUGFIX: "if" statement needed to interpret data for P3 (E field), macro 700, for 2006-12-19.
+    // /Erik P G Johansson 2016-03-09
+    if(writing_P3_data)
+    {
+        // P3=P1-P2 difference
+        ibias1 = curr->ibias1;
+        ibias2 = curr->ibias2;
+        vbias1 = curr->vbias1;
+        vbias2 = curr->vbias2;
+    }
+
+    utime_old=0;
+
+
+
+    //=================================================================
+    // Iterate over all samples (i.e. over every row in the TAB file).
+    //=================================================================
+    for(k_proper_sweep_sample=0,i_sample=0,j=0; i_sample<samples; i_sample++)   // NOTE: ONLY increments i_sample.
+    {
+        // Convert data from signed 16 bit and signed 20 bit to native signed integer
+        // In case of alternating 20 bit P1 and P2, this will be split into two label
+        // and tab files.
+        switch(data_type)
+        {
+            case D20:
+                // Put together 8+8+4 bits to signed 20 bit number
+                if(dop==2) // Doing probe 2, skip probe 1
+                    j+=2;
+                //==================================================================================================
+                // EDIT FKJN 2015-02-12. Error in LAP flight software implementation of moving average of
+                // non-truncated ADC20 data makes the lowest 4 bits garbage (~random). ==> Set those bits to zero.
+                //==================================================================================================
+                meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
+                SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
+                if(ADC20_moving_average_enabled) {
+                    meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
+                }
+                j+=2;
+                if(dop==1) { // Doing probe 1, skip probe 2
+                    j+=2;
+                }
+                break;
+                
+            case D201:
+            case D202:
+                // Put together 8+8+4 bits to signed 20 bit number.
+                //==================================================================================================
+                // EDIT FKJN 2015-02-12. Error in LAP flight software implementation of moving average of
+                // non-truncated ADC20 data makes the lowest 4 bits garbage (~random). ==> Set those bits to zero.
+                //==================================================================================================
+                meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
+                SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
+                if(ADC20_moving_average_enabled) {
+                    // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless (~random).
+                    meas_value_TM = meas_value_TM & 0xFFFF0;
+                }
+                j+=2;
+                break;
+                
+            case D20T:
+                // Put together 8+8 bits to 16 bit number
+                if(dop==2) {// Doing probe 2, skip probe 1
+                    j+=2;
+                }
+                meas_value_TM=((short int)(buff[j]<<8 | buff[j+1]));
+                j+=2;
+                if(dop==1) {// Doing probe 1, skip probe 2
+                    j+=2;
+                }
+                break;
+                
+            case D16:
+            default:
+                meas_value_TM=((short int)(buff[j]<<8 | buff[j+1])); // Convert 16 bit into native
+                j+=2;
+        }
+
+        //==========================================================
+        // Derive different measures of time for the current sample.
+        //==========================================================
+        t_delta_s = i_sample * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
+        current_sample_sccd_corrected = curr->seq_time_corrected + t_delta_s;              // Calculate SCCD.
+        ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);   // Decode raw time to UTC.
+        
+        //==============================================================================
+        // Check for commanded bias (outside of macro lopp). If found, then set biases.
+        //==============================================================================
+        if(nbias>0 && bias!=NULL)
+        {
+            // Figure out if any extra bias settings have been done outside of macros.
+            utime = (unsigned int)t_first_sample_TM + t_delta_s;   // Current time in raw UTC format
             
-        /*=============================
-         * NOTE: Bad indentation below
-         =============================*/
-
-            if(param_type==SWEEP_PARAMS)
+            extra_bias_setting=0;
+            for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
             {
-                if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) {   // Decode the four sweep types
-                    curr_step = -sw_info->height;    // Store height of step and set sign to a down sweep 
+                if(bias[l][0]<=utime && bias[l][0]>utime_old)   // Find any bias setting before current time.
+                {
+                    extra_bias_setting=1;
+                    
+                    // Check if any mode change happened after the found bias setting, but before the current time.
+                    for(m=0;m<nmode;m++)
+                    {
+                        utime_old=utime;
+                        if(mode[m][0]>bias[l][0] && mode[m][0]<=utime)
+                        {
+                            // CASE: A mode change happened (1) after the found bias setting, and (2) before current data (utime).
+                            extra_bias_setting=0;
+                            break;
+                        }
+                    }
+                    break;   // Do NOT continue iterating over other bias settings.
+                }
+            }
+            
+            /*=================================================================================================================
+            * FKJN 2014-09-25: Extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
+            * We need to find the macro, compare to a list of macros and decide if we should let it pass or not.
+            * If a bias command is issued on forbidden macros, the bias will change for maximum one Macro Loop (see Meds),
+            * but pds will not know when it changes back.
+            * 
+            * FKJN 2014-10-31 added macro 515 & 807
+            *===============================================================================================================*/
+            if(extra_bias_setting)
+            {
+                FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	  // tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
+                
+                /* BUG FIX: Old code interpreted macro ID number in string as a decimal number when it should have
+                * been interpreted as a hexadecimal number. Old code should not have been a problem as long as
+                * (1) one does not need to check for macro numbers containing letters, and
+                * (2) if the code failed in a good way for non-decimal numbers which it seemed to do.
+                * /Erik P G Johansson 2015-12-07
+                */            
+                char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
+                sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
+                free(tempstr);
+                
+                if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
+                {
+                    extra_bias_setting = 0;
+                    YPrintf("Forbidden bias setting found at %s (not corrected for delay). Macro %x\n", first_sample_utc_TM, macro_id);
+                    // Add some way of detecting that this is the first macro loop with extra_bias_settings?
+                }
+            }
+            
+            if(extra_bias_setting)
+            {
+                vbias1 = ((bias[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1.
+                vbias2 =  (bias[l][1] & 0xff);        // Override macro present voltage bias p2.
+                ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
+                ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2.
+                /* The above lines were corrected by aie@irfu.se 2012-08-22 as the current bias is permuted 
+                * in the bias command. Original code:
+                *      curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
+                *      curr->ibias2=(bias[l][2] & 0xff);         // Override macro present current bias p2 
+                */
+                
+                CPrintf("    Extra bias setting applied at: %s \n", current_sample_utc_corrected);
+                CPrintf("      Density P1: 0x%02x P2: 0x%02x\n",vbias1,vbias2);
+                CPrintf("      E_Field P1: 0x%02x P2: 0x%02x\n",ibias1,ibias2);
+                
+                // Override biases
+                if(writing_P1_data)
+                {
+                    vbias=vbias1;
+                    ibias=ibias1;
+                }
+                
+                // Override biases
+                if(writing_P2_data)
+                {
+                    vbias=vbias2;
+                    ibias=ibias2;
+                }
+                
+                extra_bias_setting=0;
+            }
+        }   // if(nbias>0 && bias!=NULL)
+        
+        /*========================================================================================================
+        * Offset to be subtracted from every CALIB sample (not EDITED). Analogous to global_calib_offset_ADC16TM
+        * except that it (potentially) varies for every sample, hence the prefix "local_".
+        * Should contain the offsets in global_calib_offset_ADC16TM.
+        =======================================================================================================*/
+        double local_calib_offset_ADC16TM = global_calib_offset_ADC16TM;
+        
+        /* Subtract offset for ADC16 non-negative values.
+        * See comments on ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM / ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM. */
+        if(data_type==D16) {
+            if(meas_value_TM>=0) {
+                if (!calib) {
+                    meas_value_TM = meas_value_TM - ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM;    // NOTE: Subtraction from actual measured value.
                 } else {
-                    curr_step =  sw_info->height;   // Store height of step and set sign to a up sweep
+                    // Subtract ADC16 nonnegative values offset using local_calib_offset_ADC16TM instead of meas_value_TM,
+                    // since the latter is an integer variable that can not handle decimal values.
+                    // NOTE: Addition to offset which will later be subtracted from actual measured value.
+                    local_calib_offset_ADC16TM = local_calib_offset_ADC16TM + ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM;    
                 }
-                sw_bias_voltage_TM = sw_info->start_bias;         // Get start bias
             }
-
-            //============
-            // Set biases
-            //============
-            if(writing_P1_data)
-            {
-                vbias  = curr->vbias1;
-                vbias1 = curr->vbias1;
-                ibias  = curr->ibias1;
-                ibias1 = curr->ibias1;
-            }
-
-            if(writing_P2_data)
-            {
-                vbias  = curr->vbias2;
-                vbias2 = curr->vbias2;
-                ibias  = curr->ibias2;
-                ibias2 = curr->ibias2;
-            }
-
-            // BUGFIX: "if" statement needed to interpret data for P3 (E field), macro 700, for 2006-12-19.
-            // /Erik P G Johansson 2016-03-09
-            if(writing_P3_data)
-            {
-                // P3=P1-P2 difference
-                ibias1 = curr->ibias1;
-                ibias2 = curr->ibias2;
-                vbias1 = curr->vbias1;
-                vbias2 = curr->vbias2;
-            }
-
-            utime_old=0;
-
-
-
-            //=================================================================
-            // Iterate over all samples (i.e. over every row in the TAB file).
-            //=================================================================
-            for(k_proper_sweep_sample=0,i_sample=0,j=0; i_sample<samples; i_sample++)   // NOTE: ONLY increments i_sample.
-            {
-                // Convert data from signed 16 bit and signed 20 bit to native signed integer
-                // In case of alternating 20 bit P1 and P2, this will be split into two label
-                // and tab files.
-                switch(data_type)
-                {
-                    case D20:
-                        // Put together 8+8+4 bits to signed 20 bit number
-                        if(dop==2) // Doing probe 2, skip probe 1
-                            j+=2;
-                        //==================================================================================================
-                        // EDIT FKJN 2015-02-12. Error in LAP flight software implementation of moving average of
-                        // non-truncated ADC20 data makes the lowest 4 bits garbage (~random). ==> Set those bits to zero.
-                        //==================================================================================================
-                        meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
-                        SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
-                        if(ADC20_moving_average_enabled) {
-                            meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
-                        }
-                        j+=2;
-                        if(dop==1) { // Doing probe 1, skip probe 2
-                            j+=2;
-                        }
-                        break;
-                        
-                    case D201:
-                    case D202:
-                        // Put together 8+8+4 bits to signed 20 bit number.
-                        //==================================================================================================
-                        // EDIT FKJN 2015-02-12. Error in LAP flight software implementation of moving average of
-                        // non-truncated ADC20 data makes the lowest 4 bits garbage (~random). ==> Set those bits to zero.
-                        //==================================================================================================
-                        meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
-                        SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
-                        if(ADC20_moving_average_enabled) {
-                            // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless (~random).
-                            meas_value_TM = meas_value_TM & 0xFFFF0;
-                        }
-                        j+=2;
-                        break;
-                        
-                    case D20T:
-                        // Put together 8+8 bits to 16 bit number
-                        if(dop==2) {// Doing probe 2, skip probe 1
-                            j+=2;
-                        }
-                        meas_value_TM=((short int)(buff[j]<<8 | buff[j+1]));
-                        j+=2;
-                        if(dop==1) {// Doing probe 1, skip probe 2
-                            j+=2;
-                        }
-                        break;
-                        
-                    case D16:
-                    default:
-                        meas_value_TM=((short int)(buff[j]<<8 | buff[j+1])); // Convert 16 bit into native
-                        j+=2;
-                }
-
-                //==========================================================
-                // Derive different measures of time for the current sample.
-                //==========================================================
-                t_delta_s = i_sample * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
-                current_sample_sccd_corrected = curr->seq_time_corrected + t_delta_s;              // Calculate SCCD.
-                ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);   // Decode raw time to UTC.
-                
-                //==============================================================================
-                // Check for commanded bias (outside of macro lopp). If found, then set biases.
-                //==============================================================================
-                if(nbias>0 && bias!=NULL)
-                {
-                    // Figure out if any extra bias settings have been done outside of macros.
-                    utime = (unsigned int)t_first_sample_TM + t_delta_s;   // Current time in raw UTC format
-                    
-                    extra_bias_setting=0;
-                    for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
-                    {
-                        if(bias[l][0]<=utime && bias[l][0]>utime_old)   // Find any bias setting before current time.
-                        {
-                            extra_bias_setting=1;
-                            
-                            // Check if any mode change happened after the found bias setting, but before the current time.
-                            for(m=0;m<nmode;m++)
-                            {
-                                utime_old=utime;
-                                if(mode[m][0]>bias[l][0] && mode[m][0]<=utime)
-                                {
-                                    // CASE: A mode change happened (1) after the found bias setting, and (2) before current data (utime).
-                                    extra_bias_setting=0;
-                                    break;
-                                }
-                            }
-                            break;   // Do NOT continue iterating over other bias settings.
-                        }
-                    }
-                    
-                    /*=================================================================================================================
-                    * FKJN 2014-09-25: Extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
-                    * We need to find the macro, compare to a list of macros and decide if we should let it pass or not.
-                    * If a bias command is issued on forbidden macros, the bias will change for maximum one Macro Loop (see Meds),
-                    * but pds will not know when it changes back.
-                    * 
-                    * FKJN 2014-10-31 added macro 515 & 807
-                    *===============================================================================================================*/
-                    if(extra_bias_setting)
-                    {
-                        FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	  // tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
-                        
-                        /* BUG FIX: Old code interpreted macro ID number in string as a decimal number when it should have
-                        * been interpreted as a hexadecimal number. Old code should not have been a problem as long as
-                        * (1) one does not need to check for macro numbers containing letters, and
-                        * (2) if the code failed in a good way for non-decimal numbers which it seemed to do.
-                        * /Erik P G Johansson 2015-12-07
-                        */            
-                        char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
-                        sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
-                        free(tempstr);
-                        
-                        if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
-                        {
-                            extra_bias_setting = 0;
-                            YPrintf("Forbidden bias setting found at %s (not corrected for delay). Macro %x\n", first_sample_utc_TM, macro_id);
-                            // Add some way of detecting that this is the first macro loop with extra_bias_settings?
-                        }
-                    }
-                    
-                    if(extra_bias_setting)
-                    {
-                        vbias1 = ((bias[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1.
-                        vbias2 =  (bias[l][1] & 0xff);        // Override macro present voltage bias p2.
-                        ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
-                        ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2.
-                        /* The above lines were corrected by aie@irfu.se 2012-08-22 as the current bias is permuted 
-                        * in the bias command. Original code:
-                        *      curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
-                        *      curr->ibias2=(bias[l][2] & 0xff);         // Override macro present current bias p2 
-                        */
-                        
-                        CPrintf("    Extra bias setting applied at: %s \n", current_sample_utc_corrected);
-                        CPrintf("      Density P1: 0x%02x P2: 0x%02x\n",vbias1,vbias2);
-                        CPrintf("      E_Field P1: 0x%02x P2: 0x%02x\n",ibias1,ibias2);
-                        
-                        // Override biases
-                        if(writing_P1_data)
-                        {
-                            vbias=vbias1;
-                            ibias=ibias1;
-                        }
-                        
-                        // Override biases
-                        if(writing_P2_data)
-                        {
-                            vbias=vbias2;
-                            ibias=ibias2;
-                        }
-                        
-                        extra_bias_setting=0;
-                    }
-                }   // if(nbias>0 && bias!=NULL)
-                
-                /*========================================================================================================
-                * Offset to be subtracted from every CALIB sample (not EDITED). Analogous to global_calib_offset_ADC16TM
-                * except that it (potentially) varies for every sample, hence the prefix "local_".
-                * Should contain the offsets in global_calib_offset_ADC16TM.
-                =======================================================================================================*/
-                double local_calib_offset_ADC16TM = global_calib_offset_ADC16TM;
-                
-                /* Subtract offset for ADC16 non-negative values.
-                * See comments on ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM / ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM. */
-                if(data_type==D16) {
-                    if(meas_value_TM>=0) {
-                        if (!calib) {
-                            meas_value_TM = meas_value_TM - ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM;    // NOTE: Subtraction from actual measured value.
-                        } else {
-                            // Subtract ADC16 nonnegative values offset using local_calib_offset_ADC16TM instead of meas_value_TM,
-                            // since the latter is an integer variable that can not handle decimal values.
-                            // NOTE: Addition to offset which will later be subtracted from actual measured value.
-                            local_calib_offset_ADC16TM = local_calib_offset_ADC16TM + ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM;    
-                        }
-                    }
-                }
-                
-                /*============================================================================================================
-                * Set variables "current_TM" and "voltage_TM" to bias and measured values
-                * -----------------------------------------------------------------
-                * NOTE: This is the only place where "current_TM" and "voltage_TM" are set.
-                * Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
-                * Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
-                ===========================================================================================================*/
-                if(bias_mode==DENSITY)
-                {
-                    //====================
-                    // CASE: DENSITY MODE
-                    //====================
-                    current_TM = meas_value_TM; // Set sampled current value in TM units
-                    if(param_type==SWEEP_PARAMS)
-                    {   
-                        // CASE: Sweep
-                        // Handle sweep stepping, and changing sweep direction.
-                        if (i_sample<ini_samples) {
-                            // CASE: Current sample is not part of an actual, formal, "official" sweep step.
-                            voltage_TM = vbias;   // Set initial voltage bias before sweep starts. Not defined for P3.
-                        }
-                        else
-                        { 
-                            voltage_TM = sw_bias_voltage_TM;   // Set value used before changing the bias, prevents start bias value to be modified before used.
-                            k_proper_sweep_sample++;
-                            if (!(k_proper_sweep_sample%samp_plateau)) {   // Every new step set a new bias voltage
-                                sw_bias_voltage_TM += curr_step;     // Change bias
-                            }
-                            if (sw_info->formatv & 0x1)   // If up-down or down-up sweep, check if direction shall change
-                            {
-                                if(k_proper_sweep_sample==(sw_info->steps*samp_plateau/2)) {   // Time to change direction ? 
-                                    curr_step = -curr_step;         // Change direction
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        // CASE: Not sweep
-                        voltage_TM = vbias; // Set FIX Density bias in TM unit. Not defined for P3.
-                    }
+        }
+        
+        /*============================================================================================================
+        * Set variables "current_TM" and "voltage_TM" to bias and measured values
+        * -----------------------------------------------------------------
+        * NOTE: This is the only place where "current_TM" and "voltage_TM" are set.
+        * Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
+        * Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
+        ===========================================================================================================*/
+        if(bias_mode==DENSITY)
+        {
+            //====================
+            // CASE: DENSITY MODE
+            //====================
+            current_TM = meas_value_TM; // Set sampled current value in TM units
+            if(param_type==SWEEP_PARAMS)
+            {   
+                // CASE: Sweep
+                // Handle sweep stepping, and changing sweep direction.
+                if (i_sample<ini_samples) {
+                    // CASE: Current sample is not part of an actual, formal, "official" sweep step.
+                    voltage_TM = vbias;   // Set initial voltage bias before sweep starts. Not defined for P3.
                 }
                 else
-                {
-                    //====================
-                    // CASE: E-FIELD MODE
-                    //====================
-                    current_TM = ibias;           // Set FIX Current bias in TM units. Not defined for P3.
-                    voltage_TM = meas_value_TM;   // Set sampled voltage value in TM units.
+                { 
+                    voltage_TM = sw_bias_voltage_TM;   // Set value used before changing the bias, prevents start bias value to be modified before used.
+                    k_proper_sweep_sample++;
+                    if (!(k_proper_sweep_sample%samp_plateau)) {   // Every new step set a new bias voltage
+                        sw_bias_voltage_TM += curr_step;     // Change bias
+                    }
+                    if (sw_info->formatv & 0x1)   // If up-down or down-up sweep, check if direction shall change
+                    {
+                        if(k_proper_sweep_sample==(sw_info->steps*samp_plateau/2)) {   // Time to change direction ? 
+                            curr_step = -curr_step;         // Change direction
+                        }
+                    }
                 }
+            }
+            else {
+                // CASE: Not sweep
+                voltage_TM = vbias; // Set FIX Density bias in TM unit. Not defined for P3.
+            }
+        }
+        else
+        {
+            //====================
+            // CASE: E-FIELD MODE
+            //====================
+            current_TM = ibias;           // Set FIX Current bias in TM units. Not defined for P3.
+            voltage_TM = meas_value_TM;   // Set sampled voltage value in TM units.
+        }
 
-                pthread_testcancel();
+        pthread_testcancel();
 
 
 
-                //###############
-                //###############
-                // WRITE TO DISK
-                //###############
-                //###############
-                if(calib)
+        //###############
+        //###############
+        // WRITE TO DISK
+        //###############
+        //###############
+        if(calib)
+        {
+            //##################
+            // CASE: CALIB data
+            //##################
+            if(bias_mode==DENSITY)
+            {
+                //====================
+                // CASE: DENSITY MODE
+                //====================
+                double ccurrent;
+                ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
+                ccurrent -= ccalf_ADC16 * local_calib_offset_ADC16TM;
+                    
+                if(param_type==SWEEP_PARAMS)
                 {
-                    //##################
-                    // CASE: CALIB data
-                    //##################
-                    if(bias_mode==DENSITY)
+                    //=====================
+                    // CASE: SWEEP (ADC16)
+                    //=====================
+                    
+                    // NOTE: No occurrence of SENS_P1P2 in the probe data conditions (unknown why).
+                    if(strcmp(sw_info->resolution,"FINE"))
                     {
-                        //====================
-                        // CASE: DENSITY MODE
-                        //====================
-                        double ccurrent;
-                        ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
-                        ccurrent -= ccalf_ADC16 * local_calib_offset_ADC16TM;
-                            
-                        if(param_type==SWEEP_PARAMS)
-                        {
-                            //=====================
-                            // CASE: SWEEP (ADC16)
-                            //=====================
-                            
-                            // NOTE: No occurrence of SENS_P1P2 in the probe data conditions (unknown why).
-                            if(strcmp(sw_info->resolution,"FINE"))
-                            {
-                                //=========================
-                                // CASE: NOT(!) FINE SWEEP
-                                //=========================
-                                double cvoltage;
-                                if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][1];   cvoltage  = v_conv.C[voltage_TM][1];   }
-                                else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][2];   cvoltage  = v_conv.C[voltage_TM][2];   }
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
-                            }
-                            else
-                            {
-                                //==================
-                                // CASE: FINE SWEEP
-                                //==================                                
-                                // Offset and factor calibration, voltage is not entirely correct here!!
-                                // We should perhaps have a calibration mode for fine sweeps in space
-                                // but it would be rather many 4096.
-                                // Edit FKJN 2014-09-02: Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
-                                // to a number from 0-255 if we want to use the same offset calibration file.
-                                double cvoltage;
-                                // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
-                                if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
-                                else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
-                            }
-                        }   // if(param_type==SWEEP_PARAMS)
-                        else
-                        {
-                            //===============================
-                            // CASE: NOT SWEEP (ADC16/ADC20)
-                            //===============================
-                            if (writing_P1_data || writing_P2_data) {
-                                double cvoltage;
-                                if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias1][1];   cvoltage  = v_conv.C[vbias1][1];   }
-                                else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias2][2];   cvoltage  = v_conv.C[vbias2][2];   }
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
-                            }
-                            else if(writing_P3_data)
-                            {
-                                ccurrent -= ccalf_ADC16 * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
-                                // Write ONE CURRENT (difference), TWO VOLTAGES (one per probe).
-                                fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                                    ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
-                            }
-
-                        }   // if(param_type==SWEEP_PARAMS) ... else ...
-
-                    }   // if(bias_mode==DENSITY)
-                    else // Assume bias mode is E_FIELD no other possible
-                    {
-                        //====================
-                        // CASE: E-FIELD MODE
-                        //====================
+                        //=========================
+                        // CASE: NOT(!) FINE SWEEP
+                        //=========================
                         double cvoltage;
-                        cvoltage  = vcalf * ((double) voltage_TM);
-                        cvoltage -= vcalf_ADC16 * local_calib_offset_ADC16TM;
-                        if(writing_P3_data) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                                    i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
-                        }
-                        else
-                        {
-                            double ccurrent;
-                            if      (writing_P1_data) {   ccurrent = i_conv.C[ibias1][1];   }
-                            else if (writing_P2_data) {   ccurrent = i_conv.C[ibias2][2];   }
-                            fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
-                        }
-                    }   // if(bias_mode==DENSITY) ... else ...
-                }   // if(calib)
-                else
-                {
-                    //###################
-                    // CASE: EDITED data
-                    //###################
-                    if(writing_P3_data)
-                    {
-                        // For difference data P1-P2 we need to add two bias vectors. They can be different!
-                        if(bias_mode==DENSITY) {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                                    current_TM,   vbias1,   vbias2);    // Write TWO VOLTAGE bias vectors.
-                        } else {
-                            fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                                    ibias1,   ibias2,   voltage_TM);    // Write TWO CURRENT bias vectors.
-                        }
+                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][1];   cvoltage  = v_conv.C[voltage_TM][1];   }
+                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][2];   cvoltage  = v_conv.C[voltage_TM][2];   }
+                        fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else
                     {
-                        // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
-                        fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                                current_TM,   voltage_TM); // Write time, current and voltage
+                        //==================
+                        // CASE: FINE SWEEP
+                        //==================                                
+                        // Offset and factor calibration, voltage is not entirely correct here!!
+                        // We should perhaps have a calibration mode for fine sweeps in space
+                        // but it would be rather many 4096.
+                        // Edit FKJN 2014-09-02: Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
+                        // to a number from 0-255 if we want to use the same offset calibration file.
+                        double cvoltage;
+                        // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
+                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
+                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
+                        fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
-                }   // if(calib) ... else ...
-            }   // for(k_proper_sweep_sample=0,i_sample=0,j=0;i_sample<samples;i_sample++)    // Iterate over all samples
-            
-            fclose(pds.stable_fd);
-            pthread_testcancel();
-    }   // if((pds.stable_fd=fopen(tstr2,"w"))==NULL) ... else ...
+                }   // if(param_type==SWEEP_PARAMS)
+                else
+                {
+                    //===============================
+                    // CASE: NOT SWEEP (ADC16/ADC20)
+                    //===============================
+                    if (writing_P1_data || writing_P2_data) {
+                        double cvoltage;
+                        if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias1][1];   cvoltage  = v_conv.C[vbias1][1];   }
+                        else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias2][2];   cvoltage  = v_conv.C[vbias2][2];   }
+                        fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
+                    }
+                    else if(writing_P3_data)
+                    {
+                        ccurrent -= ccalf_ADC16 * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
+                        // Write ONE CURRENT (difference), TWO VOLTAGES (one per probe).
+                        fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
+                            ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
+                    }
+
+                }   // if(param_type==SWEEP_PARAMS) ... else ...
+
+            }   // if(bias_mode==DENSITY)
+            else // Assume bias mode is E_FIELD no other possible
+            {
+                //====================
+                // CASE: E-FIELD MODE
+                //====================
+                double cvoltage;
+                cvoltage  = vcalf * ((double) voltage_TM);
+                cvoltage -= vcalf_ADC16 * local_calib_offset_ADC16TM;
+                if(writing_P3_data) {
+                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
+                            i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
+                }
+                else
+                {
+                    double ccurrent;
+                    if      (writing_P1_data) {   ccurrent = i_conv.C[ibias1][1];   }
+                    else if (writing_P2_data) {   ccurrent = i_conv.C[ibias2][2];   }
+                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
+                }
+            }   // if(bias_mode==DENSITY) ... else ...
+        }   // if(calib)
+        else
+        {
+            //###################
+            // CASE: EDITED data
+            //###################
+            if(writing_P3_data)
+            {
+                // For difference data P1-P2 we need to add two bias vectors. They can be different!
+                if(bias_mode==DENSITY) {
+                    fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
+                            current_TM,   vbias1,   vbias2);    // Write TWO VOLTAGE bias vectors.
+                } else {
+                    fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
+                            ibias1,   ibias2,   voltage_TM);    // Write TWO CURRENT bias vectors.
+                }
+            }
+            else
+            {
+                // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
+                fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
+                        current_TM,   voltage_TM); // Write time, current and voltage
+            }
+        }   // if(calib) ... else ...
+    }   // for(k_proper_sweep_sample=0,i_sample=0,j=0;i_sample<samples;i_sample++)    // Iterate over all samples
+    
+    fclose(pds.stable_fd);
+    pthread_testcancel();
 
 
 
