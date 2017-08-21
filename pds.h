@@ -172,7 +172,8 @@
  * Values are expressed in ADC16 TM units (NOT ADC20) and should thus be multiplied with appropriate ADC16
  * conversion factor (never ADC20 factor) depending on density/E-field and high/low-gain.
  * 
- * ADC_RATIO_Px = Ratio between the slope constants A_16/A_20 for probe x=1 or 2.
+ * ADC_RATIO_Px = Ratio between the slope constants A_16/A_20 (!) for probe x=1 or 2 (linear fit slope constants),
+ *                i.e. calibration/conversion factors relate as C_ADC20 = C_ADC16 * ADC_RATIO_Px * constant(!).
  * 
  * NOTE: Since these offsets refer to a systematic difference between two internal analogue signals, they correspond
  * neither to offsets between analogue input signals, nor between output signals.
@@ -181,13 +182,28 @@
  * 2015-05-28.
  * See Chapter 4, "LAP Offset Determination and Calibration", Anders Eriksson 2015-06-02. It defines A_16, A_20, B_16, B_20.
  * Values have been taken from Table 4.
+ * ADC_RATIO_P1/P2 have been adjusted for the moving-average bug which was not know at the time of the calibration
+ * measurement, and which is not considered in the report (v2015-06-02).
  *
  * /Erik P G Johansson 2015-06-11, 2016-09-27, 2017-04-24
  ========================================================================================================================*/
 #define CALIB_ADC20_P1_OFFSET_ADC16TM   77.9601
 #define CALIB_ADC20_P2_OFFSET_ADC16TM   84.8991
-#define ADC_RATIO_P1                     1.0030   // Adjusted for the moving-average bug that was not know at the time of the calibration measurement.
-#define ADC_RATIO_P2                     1.0046   // Adjusted for the moving-average bug that was not know at the time of the calibration measurement.
+#define ADC_RATIO_P1                     1.0030
+#define ADC_RATIO_P2                     1.0046
+
+
+
+/*=================================================================================================
+ * ADC16 calibration constants
+ * ---------------------------
+ * Corresponds to old, mission-specific PDS keywords which are no longer read from LBL files.
+ * Converts TM units --> volt, and
+ * Converts TM units --> ampere respectively.
+ =================================================================================================*/
+#define CALIB_ADC16_FACTOR_VOLTAGE        1.22072175E-3   // ROSETTA:LAP_VOLTAGE_CAL_16B = "1.22072175E-3"
+#define CALIB_ADC16_FACTOR_CURRENT_G1     3.05180438E-10  // ROSETTA:LAP_CURRENT_CAL_16B_G1 = "3.05180438E-10"    High-gain
+#define CALIB_ADC16_FACTOR_CURRENT_G0_05  6.10360876E-9   // ROSETTA:LAP_CURRENT_CAL_16B_G0_05 = "6.10360876E-9"  Low-gain
 
 
 
@@ -227,7 +243,6 @@
  ==========================================================================================================================*/
 #define ADC20_DELAY_S    0.020
 // #define ADC20_DELAY_S    0.000    // For testing
-
 
 
 
@@ -285,15 +300,16 @@ typedef struct c_type_def
 } c_type;
 
 // Calibration Factors for measured data TM to Physical units
-typedef struct cf_type_def
+// ADC20 values not used since new functionality requires different values for P1 and P2.
+/*typedef struct cf_type_def
 {
   double  v_cal_16b;
-  double  v_cal_20b;
+//   double  v_cal_20b;
   double  c_cal_16b_hg1; 
-  double  c_cal_20b_hg1;
+//   double  c_cal_20b_hg1;
   double  c_cal_16b_lg; 
-  double  c_cal_20b_lg;  
-} cf_type;
+//   double  c_cal_20b_lg;  
+} cf_type;//*/
 
 
 
@@ -305,7 +321,7 @@ typedef struct calib_meas_interval_type_def
   time_t                               t_end;
 } calib_meas_interval_type;
 
-// Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming variable m_type.CF (it us used in many places).
+// Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming variable m_type->CF (it us used in many places).
 // Represents one CALIB_MEAS file pair (TAB+LBL).
 typedef struct calib_meas_file_type_def
 {
@@ -325,7 +341,7 @@ typedef struct calib_meas_file_type_def
 typedef struct m_type_def
 {
   int                    N_calib_meas;      // Length of arrays below, i.e. number of CALIB_MEAS files.
-  cf_type                *CF;               // Array of calibration factor (CF) structures
+//   cf_type                *CF;               // Array of calibration factor (CF) structures
   c_type                 *CD;               // Array of calibration data   (CD) structures
   calib_meas_file_type   *calib_meas_data;  // Array of CALIB_MEAS calibration data structures
 //   calib_coeff_data_type  calib_coeff_data;  // CALIB_COEFF data structure.

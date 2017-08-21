@@ -122,13 +122,19 @@
  *      /Erik P G Johansson 2017-06-07
  * * Experimentally using C_ADC20 := C_ADC16 / 16.0, where C=calibration factor, due to the ground calibration being faulty.
  *      /Erik P G Johansson 2017-06-09
+ * * No longer reads C_ADC20 from CALIB_MEAS files PDS keywords. Derives them from C_ADC16 values and hardcoded probe-specific
+ *   C_ADC20/C_ADC16 ratios instead.
+ *      /Erik P G Johansson 2017-0x-xx
  * * Configures SPICE but does not use it.
  *   Loads SPICE metakernel (extra row in pds.conf specifies the path). Configures SPICE error behaviour. Does not use SPICE
  *   except for in test code.
  *      /Erik P G Johansson 2017-07-06
  * * Uses SPICE for ConvertSccd2Utc and implicitly for LBL (PDS keywords) and TAB files (columns). (Other conversions UTC<-->time_ still do not use SPICE.)
  *      /Erik P G Johansson 2017-07-10
- * * Will not write files for makro 710 P2 HF, and makro 910 P1 HF. /Erik P G Johansson 2017-07-14
+ * * Will not write files for makro 710 P2 HF, and makro 910 P1 HF.
+ *      /Erik P G Johansson 2017-07-14
+ * * No longer read ADC16 calibration factors from PDS keywords in CALIB_MEAS files. Uses hardcoded values instead.
+ *      /Erik P G Johansson 2017-08-21
  * 
  *
  *
@@ -4161,7 +4167,7 @@ void ExitPDS(int status)
                 //=============================================
                 // Deallocate m_conv (entire m_type structure)
                 //=============================================
-                if(m_conv.CF!=NULL) free(m_conv.CF);
+//                 if(m_conv.CF!=NULL) { free(m_conv.CF); }
                 if(m_conv.CD!=NULL && m_conv.N_calib_meas!=0)
                 {
                     for(i=0;i<m_conv.N_calib_meas;i++)
@@ -5721,21 +5727,21 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
     // Allocate memory (arrays) for the calibration data structure (one component per offset calibration/CALIB_MEAS file pair)
     //=========================================================================================================================
     m->N_calib_meas = N_calibrations;
-    if((m->CF=(cf_type *)CallocArray(m->N_calib_meas,sizeof(cf_type)))==NULL)
-    {
-        YPrintf("Error allocating memory for array of factor structures\n");        
-        return -3;
-    }
+//     if((m->CF=(cf_type *)CallocArray(m->N_calib_meas,sizeof(cf_type)))==NULL)
+//     {
+//         YPrintf("Error allocating memory for array of factor structures\n");        
+//         return -3;
+//     }
     if((m->CD=(c_type *)CallocArray(m->N_calib_meas,sizeof(c_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration table structures\n");
-        free(m->CF);
+//         free(m->CF);
         return -4;
     }
     if((m->calib_meas_data=(calib_meas_file_type *)CallocArray(m->N_calib_meas,sizeof(calib_meas_file_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration info structures\n");
-        free(m->CF);
+//         free(m->CF);
         return -5;
     }
 
@@ -5773,32 +5779,29 @@ int LoadOffsetCalibrationsTMConversion(char *rpath, char *fpath, char *pathocel,
             // ADC20 calibration factors used to be read from CALIB_MEAS file labels but are no more.
             // The corresponding C variables are set to NaN (they are never used).
             FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_16B",       1, DNTCARE);
-            sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
+//             sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_16b);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_VOLTAGE_CAL_20B",       1, DNTCARE);
             //sscanf(property->value, "\"%le\"", &m->CF[i_calib].v_cal_20b);
-            m->CF[i_calib].v_cal_20b = NAN;
             
             FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G1",    1, DNTCARE);
-            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_hg1);
+//             sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_hg1);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G1",    1, DNTCARE);
             //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_hg1);
-            m->CF[i_calib].c_cal_20b_hg1 = NAN;
             
             FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_16B_G0_05", 1, DNTCARE);
-            sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_lg);
+//             sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_16b_lg);
             //FindP(&mc_lbl, &property, "ROSETTA:LAP_CURRENT_CAL_20B_G0_05", 1, DNTCARE);
             //sscanf(property->value, "\"%le\"", &m->CF[i_calib].c_cal_20b_lg);
-            m->CF[i_calib].c_cal_20b_lg = NAN;
 
-            if(debug>2)
+/*            if(debug>2)
             {
-                printf("ROSETTA:LAP_VOLTAGE_CAL_16B       = %e\n", m->CF[i_calib].v_cal_16b);
-                printf("ROSETTA:LAP_VOLTAGE_CAL_20B       = %e\n", m->CF[i_calib].v_cal_20b);
-                printf("ROSETTA:LAP_CURRENT_CAL_16B_G1    = %e\n", m->CF[i_calib].c_cal_16b_hg1);
-                printf("ROSETTA:LAP_CURRENT_CAL_20B_G1    = %e\n", m->CF[i_calib].c_cal_20b_hg1);
-                printf("ROSETTA:LAP_CURRENT_CAL_16B_G0_05 = %e\n", m->CF[i_calib].c_cal_16b_lg);
-                printf("ROSETTA:LAP_CURRENT_CAL_20B_G0_05 = %e\n", m->CF[i_calib].c_cal_20b_lg);
-            }
+                printf("ROSETTA:LAP_VOLTAGE_CAL_16B       = v_cal_16b     = %e\n", m->CF[i_calib].v_cal_16b);
+//                 printf("ROSETTA:LAP_VOLTAGE_CAL_20B       = %e\n", m->CF[i_calib].v_cal_20b);
+                printf("ROSETTA:LAP_CURRENT_CAL_16B_G1    = c_cal_16b_hg1 = %e\n", m->CF[i_calib].c_cal_16b_hg1);
+//                 printf("ROSETTA:LAP_CURRENT_CAL_20B_G1    = %e\n", m->CF[i_calib].c_cal_20b_hg1);
+                printf("ROSETTA:LAP_CURRENT_CAL_16B_G0_05 = c_cal_16b_lg  = %e\n", m->CF[i_calib].c_cal_16b_lg);
+//                 printf("ROSETTA:LAP_CURRENT_CAL_20B_G0_05 = %e\n", m->CF[i_calib].c_cal_20b_lg);
+            }*/
 
             //=======================================================
             // Read calibration tables into array of data structures
@@ -6798,8 +6801,8 @@ int WritePTAB_File(
     //double ccalf_ADC16_old = 0.0/0.0;
 
     // Current/voltage calibration factors, but always for ADC16. Useful for converting offsets TM-->physical units.
-    double vcalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
-    double ccalf_ADC16 = 0.0/0.0;    // Voltage calibration factor for ADC16.
+    double vcalf_ADC16 = 0.0/0.0;    // Voltage calibration factor for ADC16.
+    double ccalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
     
     double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
     time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
@@ -6957,8 +6960,10 @@ int WritePTAB_File(
                     //============
                     //  CASE: P1
                     //============
-                    if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
-                    else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
+//                     if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
+//                     else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
+                    if (is_high_gain_P1) {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G1;      }
+                    else                 {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G0_05;   }
                 }
                 
                 if(writing_P2_data)
@@ -6966,8 +6971,10 @@ int WritePTAB_File(
                     //============
                     //  CASE: P2
                     //============
-                    if (is_high_gain_P2) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
-                    else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
+//                     if (is_high_gain_P2) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
+//                     else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
+                    if (is_high_gain_P2) {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G1;   }
+                    else                 {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G0_05;    }
                 }
                 
                 if(writing_P3_data)
@@ -6976,8 +6983,10 @@ int WritePTAB_File(
                     //  CASE: P3
                     //============
                     // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
-                    if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
-                    else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
+//                     if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
+//                     else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
+                    if (is_high_gain_P1) {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G1;      }
+                    else                 {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G0_05;   }
                 }
                 
                 ccalf_ADC16 = ccalf;
@@ -7001,15 +7010,21 @@ int WritePTAB_File(
                     if (is_high_gain_P1) {
                         //ccalf       = mc->CF[i_calib].c_cal_20b_hg1;
                         //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0;
-                        ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P1;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P1;
+                        ccalf       = CALIB_ADC16_FACTOR_CURRENT_G1 / 16.0 * ADC_RATIO_P1;
+                        
                         //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
+                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
+                        ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G1;
                     } else {
                         //ccalf       = mc->CF[i_calib].c_cal_20b_lg;
                         //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0;
-                        ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P1;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P1;
+                        ccalf       = CALIB_ADC16_FACTOR_CURRENT_G0_05 / 16.0 * ADC_RATIO_P1;
+                        
                         //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_lg / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
+                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
+                        ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G0_05;
                     }
 
                     if(data_type==D20T || data_type==D201T) { // If using P1 ADC20 truncated data, compensate calibration factors for this.
@@ -7026,15 +7041,21 @@ int WritePTAB_File(
                     if (is_high_gain_P2) {
                         //ccalf       = mc->CF[i_calib].c_cal_20b_hg1;
                         //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0;
-                        ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P2;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P2;
+                        ccalf       = CALIB_ADC16_FACTOR_CURRENT_G1 / 16.0 * ADC_RATIO_P2;
+                        
                         //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_hg1 / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
+                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
+                        ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G1;
                     } else {
                         //ccalf       = mc->CF[i_calib].c_cal_20b_lg;
                         //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0;
-                        ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P2;
+                        //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P2;
+                        ccalf       = CALIB_ADC16_FACTOR_CURRENT_G0_05 / 16.0 * ADC_RATIO_P2;
+                        
                         //ccalf_ADC16_old = mc->CF[i_calib].c_cal_16b_lg / 16;   // Should always be ADC16 value.
-                        ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
+                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
+                        ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G0_05;
                     }
 
                     if(data_type==D20T || data_type==D202T) { // If using P2 ADC20 truncated data, compensate calibration factors for this.
@@ -7054,13 +7075,15 @@ int WritePTAB_File(
             // CASE: E-FIELD MODE
             //====================
             
-            vcalf_ADC16 = mc->CF[i_calib].v_cal_16b;
+            //vcalf_ADC16 = mc->CF[i_calib].v_cal_16b;
+            vcalf_ADC16 = CALIB_ADC16_FACTOR_VOLTAGE;
             
             if(data_type==D16) {
                 //=================
                 //   CASE: ADC16
                 //=================
-                vcalf = mc->CF[i_calib].v_cal_16b;
+                //vcalf = mc->CF[i_calib].v_cal_16b;
+                vcalf = CALIB_ADC16_FACTOR_VOLTAGE;
                 //vcalf_ADC16_old = vcalf;
             }
             else
@@ -7070,10 +7093,14 @@ int WritePTAB_File(
                 //=================
                 //vcalf       = mc->CF[i_calib].v_cal_20b;
                 //vcalf       = mc->CF[i_calib].v_cal_16b / 16.0;                
-                if      (writing_P1_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P1;   }
-                else if (writing_P2_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P2;   }
+                //if      (writing_P1_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P1;   }
+                //else if (writing_P2_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P2;   }
+                if      (writing_P1_data) {   vcalf = CALIB_ADC16_FACTOR_VOLTAGE / 16.0 * ADC_RATIO_P1;   }
+                else if (writing_P2_data) {   vcalf = CALIB_ADC16_FACTOR_VOLTAGE / 16.0 * ADC_RATIO_P2;   }
+
+                // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16_old). Should always be derived from ADC16 factor.
+                //vcalf_ADC16_old = mc->CF[i_calib].v_cal_16b / 16;
                 
-                //vcalf_ADC16_old = mc->CF[i_calib].v_cal_16b / 16;   // "Equivalent ADC20 calibration factor derived from ADC16 calibration factor" (vcalf ~ vcalf_ADC16_old). Should always be derived from ADC16 factor.
                 if (data_type==D20T || data_type==D201T || data_type==D202T) {   // If using ADC20 truncated data, compensate calibration factors for this. NOTE: Odd condition with "||"?
                     vcalf *= 16;   // Increase cal factor by 16 for truncated ADC20 data.
                     //vcalf_ADC16_old *= 16;
