@@ -663,24 +663,23 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
 
 
 /* To be run when pds is finished using CALIB_COEFF.
+ * 
  * The function:
  * (1) deletes unused CALIB_COEFF files
  * (2) deallocates the CALIB_COEFF data structure
  * In other words, the content of cc_data should not be used again after being used as an argument to this function.
  * 
- * IMPLEMENTATION NOTE: Does not return if failing to delete file(s). Still want to try deleting other files.
+ * ASSUMES: Assumes that the function can still call the log function YPrintf.
+ * (This is important information for when to call this function during the shutdown process.)
  */
 // PROPOSAL: Better name, not "Destroy".
 //      Ex: Destruct, Destructor (cf Constructor), Done
 int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
 {
     int i_ccf;
-//     printf("DestroyCalibCoeff 1\n");   // DEBUG
     for (i_ccf=0; i_ccf<cc_data->N; i_ccf++) {
         calib_coeff_file_type *ccf_data = &(cc_data->ccf_data_array[i_ccf]);
         
-//         printf("DestroyCalibCoeff 2\n");   // DEBUG
-    
         double sccd1, sccd2;   // Not used.
         char tab_path[PATH_MAX], lbl_path[PATH_MAX];        
         if (GetCalibCoeffFileMetadata(cc_dir, cc_data->ccf_sccd_begin_array[i_ccf], tab_path, lbl_path, &sccd1, &sccd2)) {
@@ -698,14 +697,14 @@ int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
                 YPrintf("Deleting unused calibration file: %s\n", tab_path);
                 if (remove(tab_path)) {
                     YPrintf("Error when deleting file \"%s\"\n", tab_path);
-                    // NOTE: Does not return from function yet.
+                    return -1;
                 }
             }
             if (0==access(lbl_path, W_OK)) {
                 YPrintf("Deleting unused calibration file: %s\n", lbl_path);
                 if (remove(lbl_path)) {
                     YPrintf("Error when deleting file \"%s\"\n", lbl_path);
-                    // NOTE: Does not return from function yet.
+                    return -2;
                 }
             }
         } else {
@@ -718,17 +717,13 @@ int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
         //======================================================
         // Deallocate file data structure/calib_coeff_file_type
         //======================================================
-//         printf("DestroyCalibCoeff 3\n");   // DEBUG
         free(ccf_data->sccd_array);
-//         printf("DestroyCalibCoeff 4\n");   // DEBUG
         if (ccf_data->coeffs != NULL) {  
             // NOTE: Must test for NULL since FreeDoubleMatrix does not handle that special case (unless rows=0).
             FreeDoubleMatrix(ccf_data->coeffs, 2*N_CALIB_COEFFS, ccf_data->N);
         }
         // NOTE: Can not free(ccf_data) since it points to an element
         // in an array. It does not represent one allocation.
-        
-//         printf("DestroyCalibCoeff 5\n");   // DEBUG
     }
     
     //==================================
@@ -739,7 +734,6 @@ int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
     cc_data->ccf_sccd_begin_array = NULL;    // For "safety", in case the caller uses the struct.
     cc_data->ccf_data_array       = NULL;    // For "safety", in case the caller uses the struct.
     
-//     printf("DestroyCalibCoeff 1\n");   // DEBUG
     return 0;
 }//*/
 

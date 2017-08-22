@@ -286,11 +286,12 @@ typedef struct tc_type_def
 
 
 
-// Data structure for storing CALIB_MEAS calibration data: bias voltage-dependent current offsets
-// 
-// NOTE: CALIB_MEAS calibration data should be obsolete.
-// NOTE: This structure is used inside m_type, but is ALSO used outside of and independently
+// Data structure for storing "generic" table data.
+//
+// NOTE: ReadTableFile reads file and puts the data in this data structure.
+// NOTE: This structure is used inside m_type (CALIB_MEAS data), but is ALSO used outside of and independently
 // of m_type, notably course/fine bias voltages and current bias calibrations.
+//      NOTE: CALIB_MEAS calibration data should be obsolete.
 typedef struct c_type_def
 {
   char    valid_utc[32];   // Data is taken/valid at this time (UTC string).
@@ -321,11 +322,11 @@ typedef struct calib_meas_interval_type_def
   time_t                               t_end;
 } calib_meas_interval_type;
 
+// Represents one CALIB_MEAS file pair (TAB+LBL) plus relevant time intervals found CALIB_MEAS_EXCEPT file, but not calibration factors in LBL files (should be abolished).
 // Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming variable m_type->CF (it us used in many places).
-// Represents one CALIB_MEAS file pair (TAB+LBL).
 typedef struct calib_meas_file_type_def
 {
-  // Needed for (possibly) deleting unused calibration files and for matching offset calibration exceptions time intervals.
+  // Needed for (1) deleting unused calibration files and (2) matching CALIB_MEAS_EXCEPT exceptions time intervals (requires filename, not path).
   char                      *LBL_filename;
   // (Boolean flag.) Determine whether the corresponding calibrations (files) were actually used (true=used).
   // Can be used upon exit to delete files that were never used.
@@ -336,14 +337,15 @@ typedef struct calib_meas_file_type_def
 
 
 
-// Structure containing data read from the offset calibration files (CALIB_MEAS LBL+TAB files).
-// and information on when the information should be used.
+// Structure containing :
+// (1) Data read from the offset calibration files (CALIB_MEAS LBL+TAB files) and information on when the information should be used
+// (2) Calibration factors (CF) -- REMOVED
 typedef struct m_type_def
 {
   int                    N_calib_meas;      // Length of arrays below, i.e. number of CALIB_MEAS files.
-//   cf_type                *CF;               // Array of calibration factor (CF) structures
-  c_type                 *CD;               // Array of calibration data   (CD) structures
-  calib_meas_file_type   *calib_meas_data;  // Array of CALIB_MEAS calibration data structures
+//   cf_type                *CF;               // Array of calibration factor (CF) structures. Length N_calib_meas.
+  c_type                 *CD;               // Array of calibration data   (CD) structures. Length N_calib_meas.
+  calib_meas_file_type   *calib_meas_data;  // Array of CALIB_MEAS calibration data structures. Length N_calib_meas.
 } m_type;
 
 

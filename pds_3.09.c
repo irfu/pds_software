@@ -320,13 +320,13 @@ void DeriveDSIandDSN(
 int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, char update_PUBLICATION_DATE);
 int WriteUpdatedLabelFile(prp_type *pds, char *name, char update_PUBLICATION_DATE);     // Write label file
 int ReadLabelFile(prp_type *pds,char *name);                                            // Read a label file 
-int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path, char *msg);                // Read table file
+int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path, char *msg);                // Read "generic" table file
 
 // Miscellaneous functions
 //----------------------------------------------------------------------------------------------------------------------------------
 char GetBiasMode(curr_type *curr, int dop);
 int  SelectCalibrationData(time_t, char*, m_type*);
-int  RemoveUnusedCalibMeasFiles(char*, char *pathocel, char *pathocet, m_type*);
+int  DestroyCalibMeas(char*, char *pathocel, char *pathocet, m_type*);
 
 // Write data to data product table file.
 int WritePTAB_File(
@@ -4026,7 +4026,7 @@ void ExitPDS(int status)
     
     FILE *pipe_fp;
     int len;
-    int i;
+//     int i;
     
     struct timespec dose={0,DOSE_TIME};  
     
@@ -4141,19 +4141,23 @@ void ExitPDS(int status)
     }
 
 
-    int func_status = RemoveUnusedCalibMeasFiles(pds.cpathd, pds.cpathocel, pds.cpathocet, &m_conv);
+    int func_status = DestroyCalibMeas(pds.cpathd, pds.cpathocel, pds.cpathocet, &m_conv);
     if (func_status < 0) {
-        YPrintf("Error when deleting unused CALIB_MEAS files. Function error code %i\n", func_status);
+        YPrintf("Error when deleting unused CALIB_MEAS files or destroying CALIB_MEAS data structure. Function error code %i\n", func_status);
     }
     func_status = DestroyCalibCoeff(pds.cpathd, &calib_coeff_data);
     if (func_status != 0) {
-        YPrintf("Error when destroying CALIB_COEFF datastructure, and deleting unused CALIB_COEFF files. Function error code %i\n", func_status);
+        YPrintf("Error when deleting unused CALIB_COEFF files or destroying CALIB_COEFF data structure. Function error code %i\n", func_status);
     }
 
     
     if(comm.no_prop!=0 && comm.properties!=NULL) // Something in comm structure?
         FreePrp(&comm);                           // Then free comm memory
         
+        /*=============================
+         * NOTE: Bad indentation below
+         ============================*/
+            
         if(dict.no_prop!=0 && dict.properties!=NULL) // Something in dict structure?
         {
             //printf("%d %p\n",dict.no_prop,dict.properties);
@@ -4164,44 +4168,18 @@ void ExitPDS(int status)
         if(anom.no_prop!=0 && anom.properties!=NULL) {  // Something in anom structure?
             FreePrp(&anom);                             // Then free anom memory
         }
+        
+            /*=============================
+             * NOTE: Bad indentation below
+             ============================*/
             
             FreeBuffs(&cbtm,&cbs,&cmb,&cbh); // Free circular buffers
-            
             
             if(calib)
             {
                 if(v_conv.C!=NULL) FreeDoubleMatrix(v_conv.C,v_conv.rows,v_conv.cols);
                 if(i_conv.C!=NULL) FreeDoubleMatrix(i_conv.C,v_conv.rows,i_conv.cols);
                 if(f_conv.C!=NULL) FreeDoubleMatrix(f_conv.C,f_conv.rows,f_conv.cols);
-                
-                //=============================================
-                // Deallocate m_conv (entire m_type structure)
-                //=============================================
-//                 if(m_conv.CF!=NULL) { free(m_conv.CF); }
-                if(m_conv.CD!=NULL && m_conv.N_calib_meas!=0)
-                {
-                    for(i=0;i<m_conv.N_calib_meas;i++)
-                    {
-                        if(m_conv.CD[i].C!=NULL && m_conv.CD[i].rows!=0 && m_conv.CD[i].cols!=0) {
-                            free(m_conv.CD[i].C);
-                        }
-                    }
-                    free(m_conv.CD);
-                }
-                if(m_conv.calib_meas_data!=NULL && m_conv.N_calib_meas!=0) {
-                    for(i=0;i<m_conv.N_calib_meas;i++)
-                    {
-                        free(m_conv.calib_meas_data[i].LBL_filename);
-
-                        calib_meas_interval_type *next_ci = m_conv.calib_meas_data[i].intervals;
-                        while (next_ci != NULL) {
-                            calib_meas_interval_type *prev_ci = next_ci;
-                            next_ci = next_ci->next;
-                            free(prev_ci);
-                        }
-                    }
-                    free(m_conv.calib_meas_data);
-                }
             }
             
             if(tcp.n_entries > 0)
@@ -5671,7 +5649,8 @@ void RunShellCommand(char *command_str)
  *       the data structure used by that algorithm.
  * NOTE: The function rewrites the offset calibration LBL files (CALIB_MEAS, CALIB_MEAS_EXCEPT) with some updated
  *       information. This should ideally maybe be done elsewhere.
- * NOTE: Reads ADC16 conversion factors from LBL files, but not the ADC20 conversion factors (sets them to NaN)!
+ * NOTE: Used to read ADC16/ADC20 conversion factors from LBL files. -- REMOVED (no longer reads any calibration factors).
+ * NOTE: The function does not care about whether EDITED/CALIB (does not use the global "calib" variable).
  *
  * rpath    : Path to directory where the CALIB_MEAS files are (LBL+TAB).
  * fpath    : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS.LBL filenames must
@@ -6341,7 +6320,8 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
 
 
 /*
- * Read calibration TABLE file described in "lbl_data".
+ * Read "generic" calibration TABLE file described in "lbl_data" and consisting of arbitrary number of numeric columns
+ * (PDS types ASCII_INTEGER, ASCII_REAL).
  * The table file's name is taken from ^TABLE in lbl_data, and the directory is taken from the function argument.
  *
  * I try to use the description in the label file as much as possible
@@ -6458,8 +6438,9 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path, char *msg)
                 tmp2=(float)tmp1;
             }
             
-            if(format[j]==1) // CASE: Read float
+            if(format[j]==1) { // CASE: Read float
                 sscanf(&line[startpos],"%le",&tmp2);
+            }
             
             cal->C[i][j]=tmp2; // Store data in matrix
         }
@@ -6478,6 +6459,7 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path, char *msg)
             printf("\n");
         }
     }
+    
     fclose(fd);
     return 0; // Ok
 }
@@ -6612,19 +6594,24 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 
 
 
-/*
- * Deletes unused CALIB_MEAS offset calibration files (TAB & LBL), incl. CALIB_MEAS_EXCEPT.
- *
+/* To be run when pds is finished using CALIB_MEAS.
+ * 
+ * The function:
+ * (1) deletes unused CALIB_MEAS files, incl. CALIB_MEAS_EXCEPT files
+ * (2) deallocates the CALIB_MEAS data structure
+ * In other words, the content of "m" should not be used again after being used as an argument to this function.
+ * 
  * ASSUMES: Assumes that the function can still call the log function YPrintf.
- * (This important information for when to call this function during the shutdown process.)
+ * (This is important information for when to call this function during the shutdown process.)
  *
  * NOTE: The algorithm deletes files with calibration_file_used==FALSE, and deletes CALIB_MEAS_EXCEPT when calibration_file_used==FALSE
- * for all dated CALIB_MEAS files.
- * The effect should be that
+ * for __all__ dated CALIB_MEAS files. The effect should be that:
  * (1) for EDITED, it deletes all CALIB_MEAS files for EDITED (incl. CALIB_MEAS_EXCEPT).
  * (2) for CALIB it deletes all unused CALIB_MEAS files (incl. CALIB_MEAS_EXCEPT).
  * NOTE: If CALIB_MEAS functionality is not used (CALIB_COEFF functionality is used instead), then calibration_file_used==FALSE
  * for all dated CALIB_MEAS files, which means the files are automatically deleted. This function can thus be called also then.
+ * NOTE: Returns on error to delete file. Will not continue to try to delete other files.
+ *
  *
  * ARGUMENTS
  * =========
@@ -6633,10 +6620,9 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
  * cpath    : Path to calibration directory
  * m        : Data structure used for determining files to delete. The criterion is m->calib_meas_data[i].calibration_file_used==FALSE.
  */
-// PROPOSAL: De-allocate CALIB_MEAS data structure in this function.
-//      PRO: Better modularization.
-//      PRO: More analogous with DestroyCalibCoeff.
-int RemoveUnusedCalibMeasFiles(char *cpathd, char *pathocel, char *pathocet, m_type *m)
+// PROPOSAL: Better name, not "Destroy".
+//      Ex: Destruct, Destructor (cf Constructor), Done
+int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
 {
     int exit_code = 0;
     int i;
@@ -6670,8 +6656,6 @@ int RemoveUnusedCalibMeasFiles(char *cpathd, char *pathocel, char *pathocet, m_t
             //=======================
             // Delete files on disk.
             //=======================
-//             YPrintf("Deleting unused calibration files: %s\n", LBL_file_path);
-//             YPrintf("                                   %s\n", TAB_file_path);
             YPrintf("Deleting unused calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
             if (remove(TAB_file_path)!=0) {
                 YPrintf("Error when deleting file \"%s\"\n", TAB_file_path);
@@ -6686,9 +6670,13 @@ int RemoveUnusedCalibMeasFiles(char *cpathd, char *pathocel, char *pathocet, m_t
 
             FreePrp(&lbl_info); // Free linked property/value list
         }
-
     }
 
+    
+    
+    //==============================
+    // Delete CALIB_MEAS_EXCEPT file
+    //==============================
     if (!calib || removed_all_calib_meas_files) {
         // NOTE: Prints entire paths.
         YPrintf("Deleting unused OCE calibration files: \"%s\", \"%s\"\n", pathocel, pathocet);
@@ -6697,6 +6685,38 @@ int RemoveUnusedCalibMeasFiles(char *cpathd, char *pathocel, char *pathocet, m_t
             exit_code = -2;
             // NOTE: Does not return from function yet.
         }
+    }
+
+
+
+    //==========================================
+    // Deallocate "m" (entire m_type structure)
+    //==========================================
+    // Deallocate m->CD
+    if (m->CD!=NULL && m->N_calib_meas!=0)
+    {
+        // Deallocate array of arrays.
+        for (i=0; i<m->N_calib_meas; i++) {
+            FreeDoubleMatrix(m->CD[i].C, m->CD[i].rows, m->CD[i].cols);
+        }
+        free(m->CD);
+    }
+    // Deallocate m->calib_meas_data
+    if (m->calib_meas_data!=NULL && m->N_calib_meas!=0)
+    {
+        for (i=0; i<m->N_calib_meas; i++)
+        {
+            free(m->calib_meas_data[i].LBL_filename);
+            
+            // Deallocate linked list of time intervals.
+            calib_meas_interval_type *next_ci = m->calib_meas_data[i].intervals;
+            while (next_ci != NULL) {
+                calib_meas_interval_type *prev_ci = next_ci;
+                next_ci = next_ci->next;
+                free(prev_ci);
+            }
+        }
+        free(m->calib_meas_data);
     }
 
     return exit_code;
