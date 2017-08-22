@@ -1,8 +1,19 @@
 /* Module for functionality relating to CALIB_COEFF files and extracting interpolated coefficients for a specified time.
  * 
  * The basic concept is that the main program (pds_3.09.c) uses the functions here to create, access, indirectly update,
- * and deallocate a data struct of type calib_coeff_data_type. No other code should need to work with the actual insides of
+ * and deallocate a "CALIB_COEFF data struct" of type calib_coeff_data_type. No other code should need to work with the actual insides of
  * that struct type.
+ * 
+ * IMPLEMENTATION NOTE: Uses specified (hard-coded) mission beginning and end to guess which CALIB_COEFF files that might exist
+ * and then creates a data stucture with one "slot" (index value in arrays) per such hypothetical file. The advantage with this
+ * is that the code can then (and does) construct an array of (sorted) time boundaries between files and can (and does) quickly
+ * look up indices with a "clever" search algorithm (FindNearestInSortedArray) without having to search through it one-by-one.
+ * 
+ * IMPLEMENTATION NOTE: Organizes the loaded coefficients as a 1D array (instead of a struct; instead of a 2D array
+ * 2 probes*N values/probe) so that it is easy to:
+ * (1) iterate over values (e.g. for interpolating),
+ * (2) change the number of CALIB_COEFF coefficients (per probe),
+ * (3) add extra non-probe-specific coefficients (which could be unrelated to bias-dependent offsets).
  * 
  * NOTE: The module does include some generic functions which were needed for the implementation.
  * These generic functions could be moved to some other module.
@@ -13,11 +24,7 @@
 /* Things to test
  * ==============
  * -- Legitimately empty CALIB_COEFF files.
- * -- CALIB_COEFF files with NaN
- * -- CALIB_COEFF files with time out of order
  * -- CALIB_COEFF at end of mission.
- * -- CALIB_MEAS files are (still) removed automatically when not used.
- * -- CALIB_MEAS_EXCEPT removed automatically.
  */
 
 
@@ -29,7 +36,6 @@
 #include <string.h>       // String handling
 #include <time.h>         // Standard date and time
 #include <unistd.h>       // Required for "access" function
-
 
 #include "pds.h"          // PDS & LAP definitions and structures
 #include "calib_coeff.h"
@@ -337,6 +343,23 @@ void FindNearestInSortedArray_TEST()
 
 
 
+// Print subset of the contents of a calib_coeff_data_type data structure.
+// Only for debugging.
+void PrintCalibCoeff(calib_coeff_data_type *cc_data)
+{
+    printf("cc_data->N = %i\n", cc_data->N);
+    printf("cc_data->ccf_sccd_begin_array = %p\n",                cc_data->ccf_sccd_begin_array);
+    printf("cc_data->ccf_sccd_begin_array[%i] = %f\n", 0,            cc_data->ccf_sccd_begin_array[0]);
+    printf("cc_data->ccf_sccd_begin_array[%i] = %f\n", cc_data->N-1, cc_data->ccf_sccd_begin_array[cc_data->N-1]);
+    
+    printf("cc_data->ccf_data_array[%i].N = %i\n", 0,            cc_data->ccf_data_array[0].N);
+    printf("cc_data->ccf_data_array[%i].N = %i\n", cc_data->N-1, cc_data->ccf_data_array[cc_data->N-1].N);
+//     printf("\n");
+//     printf("\n");
+}
+
+
+
 /* Derives "metadata" for a CALIB_COEFF file given an sccd that should be covered by the file.
  * 
  * This function returns, and hence effectively defines,
@@ -547,6 +570,8 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
 int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data)
 {
     calib_coeff_data_type ccd;   // Temporary struct being built up internally before begin assigned to the return argument.
+    
+//     YPrintf("Initializing CALIB_COEFF data structure. Using directory: %s\n", cc_dir);
 
     //===============================================================
     // Derive sccd_dataset1, sccd_dataset2
@@ -570,7 +595,7 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
     // Initial allocation of arrays
     //==============================
     ccd.N       = 0;
-    int N_alloc = ccd.N+1 +10;   // Initial array length to allocate. NOTE: Requires N+1 elements.
+    int N_alloc = ccd.N+1 +10;   // Initial array length to allocate. NOTE: Requires at least ccd.N+1 elements.
     if ((ccd.ccf_sccd_begin_array = calloc(N_alloc, sizeof *ccd.ccf_sccd_begin_array))==NULL) {
         perror("InitCalibCoeff: Can not allocate memory.");   return -1;
     }
@@ -614,7 +639,7 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
         //-------------------------------------------------------------------------------------------
         // OPTIONAL: Pre-load CALIB_COEFF file into ccf_data.
         // NOTE: Assumes that there are files for every day in the time interval. Must be no missing files.
-        if (PRELOAD_CALIB_COEFF) {
+        if (CALIB_COEFF_PRELOAD) {
             if ((sccd_dataset1 <= sccd_file2) && (sccd_file1 < sccd_dataset2)) {
 //                 printf("InitCalibCoeff 9\n");   // DEBUG
                 // CASE: The current CALIB_COEFF file overlaps with the current dataset (incl. margin).
@@ -622,7 +647,6 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
                     return -3;
                 }
                 ccf_data.loaded_with_data = TRUE;   // Unnecessary since set by ReadCalibCoeffFile. Just there to be explicit.
-//                 printf("InitCalibCoeff 10\n");   // DEBUG
             }
         }
         //-------------------------------------------------------------------------------------------
@@ -632,17 +656,15 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
         // Replace the array allocations with larger allocations if necessary.
         //=====================================================================
         if (ccd.N+1 > N_alloc) {
-            N_alloc = N_alloc*2;
+            N_alloc = 2 * N_alloc;
 //             printf("ccd.N   = %i\n", ccd.N);      // DEBUG
 //             printf("N_alloc = %i\n", N_alloc);    // DEBUG
 //             printf("InitCalibCoeff 6\n");   // DEBUG
 //             printf("N_alloc*sizeof *ccd.ccf_sccd_begin_array = %i\n", N_alloc*sizeof *ccd.ccf_sccd_begin_array);   // DEBUG
             ccd.ccf_sccd_begin_array = realloc(                ccd.ccf_sccd_begin_array,
                                                N_alloc*sizeof *ccd.ccf_sccd_begin_array);   // Ignoring error.
-//             printf("InitCalibCoeff 7\n");   // DEBUG
             ccd.ccf_data_array       = realloc(                ccd.ccf_data_array,
                                                N_alloc*sizeof *ccd.ccf_data_array       );   // Ignoring error.
-//             printf("InitCalibCoeff 8\n");   // DEBUG            
         }
         
         // Add ccf_data to ccd.
@@ -708,7 +730,7 @@ int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
                 }
             }
         } else {
-            YPrintf("Keeping  used   calibration files: %s\n", tab_path);
+            YPrintf("Keeping  used   calibration file: %s\n", tab_path);
             if (0==access(lbl_path, W_OK)) {
                 YPrintf("                                  %s\n", lbl_path);
             }
@@ -756,7 +778,7 @@ int GetCalibCoeffFileData(
     //===============================
     // ASSERTION;
     if ((i_ccf < 0) || (cc_data->N-1 < i_ccf)) {
-        YPrintf("Can not find CALIB_COEFF data struct for index i_ccf=%i (N=%i). Out of range.\n", i_ccf, cc_data->N);
+        YPrintf("GetCalibCoeffFileData: Can not find CALIB_COEFF data struct for index i_ccf=%i (cc_data->N=%i). Out of range.\n", i_ccf, cc_data->N);
         return -1;
     }
 
@@ -778,16 +800,14 @@ int GetCalibCoeffFileData(
         
         if (GetCalibCoeffFileMetadata(cc_dir, cc_data->ccf_sccd_begin_array[i_ccf], tab_file_path, NULL,
             &sccd_file1, &sccd_file2) != 0) {
-            YPrintf("Can not derive CALIB_COEFF file metadata.\n");
+            YPrintf("GetCalibCoeffFileData: Can not derive CALIB_COEFF file metadata.\n");
             return -2;
         }
         if (ReadCalibCoeffFile(tab_file_path, sccd_file1, sccd_file2, ccf_data_ptr)) {
-            YPrintf("Can not load CALIB_COEFF file.");
+            YPrintf("GetCalibCoeffFileData: Can not load CALIB_COEFF file.");
             return -3;
         }
     }
-    
-    
     
     *ccf_data = ccf_data_ptr;
     return 0;
@@ -799,8 +819,8 @@ int GetCalibCoeffFileData(
  * 
  * ARGUMENTS
  * =========
- * OUTPUT : i_ccf_1,  i_ccf_2  : Indices to the nearest earlier and later file data structures.
- * OUTPUT : i_sccd_1, i_sccd_2 : Indices to the nearest earlier and later coefficients in
+ * OUTPUT : i_ccf_1,  i_ccf_2  : Indices to the nearest EARLIER and LATER file data structures.
+ * OUTPUT : i_sccd_1, i_sccd_2 : Indices to the nearest EARLIER and LATER coefficients in
  *                               the file data structures referred to by i_ccf_1/2.
  * 
  * RETURN VALUE :  0 = No error.
@@ -832,27 +852,36 @@ int FindNearestCalibCoeffTimes(
     // Find file struct which covers "sccd".
     // <=> Set preliminary values for (i_ccf_1p, i_ccf_2p) that should be valid for the vast majority of calls.
     //========================================================================================================
+//     printf("FindNearestCalibCoeffTimes 1\n");    // DEBUG
     int i_ccf_1p, i_ccf_2p;    // Indices into ccf_sccd_begin_array and ccf_data_array.
     if (FindNearestInSortedArray(cc_data->ccf_sccd_begin_array, cc_data->N, sccd, &i_ccf_1p, &i_ccf_2p)) {
-        YPrintf("Can not identify which CALIB_COEFF file data to use for time sccd=%f.\n", sccd);
+        YPrintf("FindNearestCalibCoeffTimes: Can not identify which CALIB_COEFF file data to use for time sccd=%f.\n", sccd);
         return -1;
     }
     // i_ccf_1p/2 hereafter refer to the file data structures which (presumably) CONTAINS the nearest earlier
     // and nearest later time coefficients. If not, then they will be updated to do this below.
-    i_ccf_2p = i_ccf_1p;   
+//     printf("FindNearestCalibCoeffTimes i_ccf_1p=%i, i_ccf_2p=%i\n", i_ccf_1p, i_ccf_2p);   // DEBUG
+    i_ccf_2p = i_ccf_1p;
     
     //===============================================
     // Search file struct which should cover "sccd".
     //===============================================
+//     printf("FindNearestCalibCoeffTimes 2\n");    // DEBUG
     int i_sccd_1p, i_sccd_2p;    // Indices into sccd_array.
     calib_coeff_file_type *ccf_data;
     // NOTE: Must use i_ccf_1p/nearest-earlier-time since each file
     // includes (covers) the stated starting time, but excludes the stated end time.
-    if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_1p, &ccf_data) != 0) {   return -3;   }
+    if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_1p, &ccf_data) != 0) {
+        YPrintf("FindNearestCalibCoeffTimes: Can not obtain already CALIB_COEFF file table to use for time sccd=%f.\n", sccd);
+        return -3;
+    }
+//     printf("FindNearestCalibCoeffTimes 2.5\n");    // DEBUG
     if (FindNearestInSortedArray(
         ccf_data->sccd_array,
         ccf_data->N,
-        sccd, &i_sccd_1p, &i_sccd_2p)) {
+        sccd, &i_sccd_1p, &i_sccd_2p))
+    {
+        YPrintf("FindNearestCalibCoeffTimes: Can not identify which time (inside CALIB_COEFF file table) to use for time sccd=%f.\n", sccd);
         return -4;    // Should be very unlikely error.
     }
 
@@ -860,6 +889,7 @@ int FindNearestCalibCoeffTimes(
     // If found no nearest earlier value in the initial file,
     // search through earlier-time files and modify (i_ccf_1p, i_sccd_1p).
     //=====================================================================
+//     printf("FindNearestCalibCoeffTimes 3\n");    // DEBUG
     if (i_sccd_1p < 0) {
         do {
             i_ccf_1p--;
@@ -872,6 +902,7 @@ int FindNearestCalibCoeffTimes(
     // If found no nearest later value in the initial file,
     // search through later-time files and modify (i_ccf_2p, i_sccd_2p).
     //===================================================================
+//     printf("FindNearestCalibCoeffTimes 4\n");    // DEBUG
     if (ccf_data->N-1 < i_sccd_2p) {
         do {
             i_ccf_2p++;
@@ -894,9 +925,10 @@ int FindNearestCalibCoeffTimes(
  * 
  * ARGUMENTS
  * =========
- * INPUT : i_ccf_1,  i_ccf_2  : Indices to earlier and later file data structures.
- * INPUT : i_sccd_1, i_sccd_2 : Indices to earlier and later coefficients in
- *                              the file data structures referred to by i_ccf_1/2.
+ * INPUT  : i_ccf_1,  i_ccf_2  : Indices to earlier and later file data structures.
+ * INPUT  : i_sccd_1, i_sccd_2 : Indices to earlier and later coefficients in
+ *                               the file data structures referred to by i_ccf_1/2.
+ * OUTPUT : coeff_array        : Array of length 2*N_CALIB_COEFFS.
  * RETURN VALUE : 0 = No error; -1 = Can not obtain file data.
  * 
  * NOTE: Sets the calib_coeff_file_type.data_used=TRUE.
@@ -925,19 +957,19 @@ int GetInterpolatedCalibCoeff(
     if (GetCalibCoeffFileData(cc_dir, cc_data, i_ccf_2, &ccf_data_2)) {   return -1;   }
 
 
-    { // DEBUG    
-        int i;
-        printf("GetCalibCoeffFileData coeff_array=");
-        for (i=0; i<2*N_CALIB_COEFFS; i++) {
-            printf("%.7g, ", ccf_data_1->coeffs[i][i_sccd_1]);
-        }
-        printf("\n");
-        printf("GetCalibCoeffFileData coeff_array=");
-        for (i=0; i<2*N_CALIB_COEFFS; i++) {
-            printf("%.7g, ", ccf_data_2->coeffs[i][i_sccd_2]);
-        }
-        printf("\n");
-    }
+//     { // DEBUG    
+//         int i;
+//         printf("GetCalibCoeffFileData coeff_array=");
+//         for (i=0; i<2*N_CALIB_COEFFS; i++) {
+//             printf("%.7g, ", ccf_data_1->coeffs[i][i_sccd_1]);
+//         }
+//         printf("\n");
+//         printf("GetCalibCoeffFileData coeff_array=");
+//         for (i=0; i<2*N_CALIB_COEFFS; i++) {
+//             printf("%.7g, ", ccf_data_2->coeffs[i][i_sccd_2]);
+//         }
+//         printf("\n");
+//     }
 
     //=====================================
     // Calculate interpolated coefficients
@@ -973,12 +1005,17 @@ int GetInterpolatedCalibCoeff(
 
 /* Get the CALIB_COEFF coefficients that apply for a given time.
  * 
+ * ARGUMENTS AND RETURN VALUE
+ * ==========================
+ * OUTPUT : coeff_array : Array of length 2*N_CALIB_COEFFS.
  * RETURN VALUE : 0=No error; -1,-2=Error
  * 
  * IMPLEMENTATION NOTE: The scope of this function is chose to be relatively well suited for manual standalone tests.
  */
 int GetCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data, double sccd, double *coeff_array)
 {
+//     PrintCalibCoeff(cc_data);    // DEBUG
+    
     //=================================================================
     // Find the two nearest data points (moments in time), as indices.
     //=================================================================
@@ -987,7 +1024,7 @@ int GetCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data, double sccd, dou
         cc_dir, cc_data, sccd,
         &i_ccf_1, &i_ccf_2, &i_sccd_1, &i_sccd_2) != 0)
     {
-        YPrintf("Can not obtain the location of CALIB_COEFF coefficients nearest to the specified time sccd=%f.\n", sccd);
+        YPrintf("GetCalibCoeff: Can not obtain the location of CALIB_COEFF coefficients nearest to the specified time sccd=%f.\n", sccd);
         return -1;
     }
     

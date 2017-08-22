@@ -480,7 +480,7 @@ static volatile sig_atomic_t exit_gracefully=0; // Used to cleanly exit then Ctr
 
 
 unsigned int sec_epoch;    // Seconds from 1970 epoch to epoch "epoch"
-int debug=0;               // Turn on/off debugging
+int debug=0;               // Debug message level. 0=Off; higher number=increasing verbosity
 
 int macro_priority=0;      // Priority of macros (Trust more or less than info in data). 0=Trust data, 1=Trust macro info
 
@@ -6728,8 +6728,11 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
  * Write TAB file, EDITED or CALIB.
  * Convert from TM units to physical units (i.e. calibrate) for CALIB.
  *
- *  sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
- *  adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
+ * ARGUMENTS
+ * =========
+ * sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
+ * adc20_type   a20_info;          // ADC 20 info structure resampling, moving average, length, ...
+ * m_type *mc                      // CALIB_MEAS
  *
  * We use the mode information from command logs here since it also contain off information.
  *
@@ -6765,6 +6768,8 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
  *          curr.sensor=SENS_P1, SENS_P1P2 : P1
  *       dop=2
  *          curr.sensor=SENS_P2, SENS_P1P2 : P2
+ * 
+ * NOTE: Uses global variable "pds" and maybe others.
  ===============================================================================================================================*/
 int WritePTAB_File(
     unsigned char *buff,
@@ -6794,8 +6799,8 @@ int WritePTAB_File(
     
     char file_path[PATH_MAX];        // Temporary string
     
-    char current_sample_utc_corrected[256];
-    char first_sample_utc_TM[256];
+    char current_sample_utc_corrected[MAX_STR];
+    char first_sample_utc_TM[MAX_STR];
 
     int curr_step = 3;               // Current sweep step, default value just there to get rid of compilation warning.
     
@@ -6820,9 +6825,9 @@ int WritePTAB_File(
     int vbias1;                      // Temporary voltage variable
     int ibias2;                      // Temporary current variable
     int vbias2;                      // Temporary voltage variable
-    
+
     char bias_mode = GetBiasMode(curr, dop);      // Name and type analogous to curr_type_def#bias_mode1/2.
-    
+
     // double ADC_offset =0.0;	// due to ADC errors around 0 (for 16bit data, possibly 20bit data also), we need to correct small offset
     
     double vcalf = NAN;             // vcalf=Voltage Calibration Factor. Basic conversion TM-to-physical units. Includes ADC20 truncation factor.

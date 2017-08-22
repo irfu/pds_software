@@ -125,21 +125,32 @@
 
 #define FINITE_YIELDS         5
 
-#define ROSETTA_SPICE_ID   -226    // ID number used to represent the Rosetta spacecraft in SPICE functions. Set by NASA NAIF.
+#define ROSETTA_SPICE_ID   -226    // ID number used to represent the Rosetta spacecraft in SPICE functions. Defined by NASA NAIF.
 
-// TRUE=Use SPICE-based time conversion function(s); FALSE=Use older, non-SPICE-based time conversion function(s).
-// This functionality is implemented as TRUE/FALSE which can be read by C code, rather than #ifdef-#else to deactivate code.
-// This way, test code can have access to both SPICE and non-SPICE code simultaneously so that it can compare them in the same run.
+
+
+/*========================================================================================================
+ * TRUE=Use SPICE-based time conversion function(s)
+ * FALSE=Use older, non-SPICE-based time conversion function(s).
+ * This functionality is implemented as TRUE/FALSE which can be read by C code, rather than #ifdef-#else
+ * to deactivate code. This way, test code can have access to both SPICE and non-SPICE code simultaneously
+ * so that it can compare them in the same run.
+ ========================================================================================================*/
 #define USE_SPICE          TRUE
 // #define USE_SPICE          FALSE
 
-// Rosetta spacecraft clock reset counter (used in SCCS). Used for those parts of the code where
-// it is not/can not be properly obtained from a proper source. The reset counter was 1 for the entire
-// mission (at least after launch) so it should not matter that it is set from a constant sometimes.
+/*========================================================================================================
+ * Rosetta spacecraft clock reset counter (used in SCCS). Used for those parts of the code where
+ * it is not/can not be properly obtained from a proper source. The reset counter was 1 for the entire
+ * mission (at least after launch) so it should not matter that it is set from a constant sometimes.
+ ========================================================================================================*/
 #define ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER   1
 
-// TRUE=Run informal "test code", which normally deactivates the normal functioning of pds.
-// Should always be set to FALSE, except during development.
+/*========================================================================================================
+ * TRUE=Run informal "test code", which normally deactivates the normal functioning of pds.
+ * FALSE=Run pds the way it is supposed to run.
+ * Should always be set to FALSE, except during development.
+ ========================================================================================================*/
 #define RUN_TEST_CODE      FALSE
 // #define RUN_TEST_CODE      TRUE
 
@@ -151,10 +162,12 @@
  * CONTEXT: The ADC16s have a flaw that makes them jump betweeen negative and non-negative values.
  * Therefore one needs to subtract/add a value to non-negative ADC16 values for at least CALIB.
  * The value should ideally be 2.5.
- * NOTE: According to LAP team agreement, EDITED should NOT have this jump (i.e. offset=0), but the functionality is kept to make it possible to
- * emulate the old behaviour. To emulate pds' old behaviour, set both constants to -2.
- * NOTE: The value of ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM affects the generation of sweep offsets (bias-dependent; macro 0x104).
- * write_CALIB_MEAS_files contains a similar constant which must be compatible with the value here.
+ * NOTE: According to LAP team agreement, EDITED should NOT have this jump (i.e. offset=0), but
+ * the functionality is kept to make it possible to emulate the old behaviour. To emulate pds'
+ * old behaviour, set both constants to -2.
+ * NOTE: The value of ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM affects the generation of sweep
+ * offsets (bias-dependent; macro 0x104). write_CALIB_MEAS_files contains a similar constant
+ * which must be compatible with the value here.
  ==============================================================================================*/
 #define ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM    -0      // [ADC16 TM units]. Must be an integer.
 #define ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM     -2.5    // [ADC16 TM units]. Does not have to an integer.
@@ -246,27 +259,36 @@
 
 
 
-/* Determine whether to attempt to load CALIB_COEFF files before the actual processing of data.
- * If pre-loading is on: There has to be CALIB_COEFF files for every single day of the dataset. Otherwise error.
- *      This is useful to make sure that all presumably needed CALIB_COEFF files can be loaded early in the execution.
+/*========================================================================================================
+ * Determine whether to attempt to load CALIB_COEFF files before the actual processing of data.
+ * 
+ * If pre-loading is on, then there has to be CALIB_COEFF files for every single day of the dataset. Otherwise error.
+ * This is useful to make sure that all presumably needed CALIB_COEFF files can be loaded early in the execution.
  * CALIB_COEFF files will be loaded on-demand if they have not been pre-loaded.
- */
-#define PRELOAD_CALIB_COEFF                        TRUE
-// #define PRELOAD_CALIB_COEFF                        FALSE
-/* When pre-loading of CALIB_COEFF files is activated:
- * The pre-loaded CALIB_COEFF files covers the official dataset time interval plus an extra time margin before and after.
- * This variable is that time margin. Should sensibly (but most not be) at least zero.
+ ========================================================================================================*/
+#define CALIB_COEFF_PRELOAD                        TRUE
+// #define CALIB_COEFF_PRELOAD                        FALSE
+
+/*========================================================================================================
+ * The pre-loaded CALIB_COEFF files covers the official dataset time interval plus an extra time margin
+ * before and after. This variable is that time margin. Should sensibly (but most not be) at least zero.
  * Unit: Seconds (hence "_S" in the name).
- */
+ * 
+ * NOTE: Only relevant when pre-loading of CALIB_COEFF files is activated.
+ ========================================================================================================*/
 #define CALIB_COEFF_PRELOAD_DATASET_TIME_MARGIN_S  1000
-/* Approximate begin and end of Rosetta mission.
- * Indirectly defines the range of time for which pds will assume that there MIGHT be CALIB_COEFF files.
- * NOTE: Approximately these times will be converted to SCCS, and they can therefore only be set to time for which there are valid SCCS
- * times.
- */
+
+/*=======================================================================================================
+ * Approximate begin and end of Rosetta mission.
+ * Indirectly defines the range of time for which pds will assume that there MIGHT be CALIB_COEFF files
+ * which it needs to have to create a data structure with "slots"/array indices for every potential
+ * CALIB_COEFF file.
+ * 
+ * NOTE: Approximately these times will be converted to SCCS, and they can therefore only be set to
+ * times for which there are valid SCCS times.
+ =======================================================================================================*/
 #define MISSION_START_UTC                          "2004-03-03T00:00:00"
 #define MISSION_END_UTC                            "2016-09-30T23:59:59"
-
 
 
 
@@ -322,8 +344,10 @@ typedef struct calib_meas_interval_type_def
   time_t                               t_end;
 } calib_meas_interval_type;
 
-// Represents one CALIB_MEAS file pair (TAB+LBL) plus relevant time intervals found CALIB_MEAS_EXCEPT file, but not calibration factors in LBL files (should be abolished).
-// Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming variable m_type->CF (it us used in many places).
+// Represents one CALIB_MEAS file pair (TAB+LBL) plus relevant time intervals found CALIB_MEAS_EXCEPT file,
+// but not calibration factors in LBL files (should be abolished).
+// Could probably be merged with cf_type but then the name (cf_type) is bad and I want to avoid renaming
+// variable m_type->CF (it us used in many places).
 typedef struct calib_meas_file_type_def
 {
   // Needed for (1) deleting unused calibration files and (2) matching CALIB_MEAS_EXCEPT exceptions time intervals (requires filename, not path).
@@ -338,7 +362,8 @@ typedef struct calib_meas_file_type_def
 
 
 // Structure containing :
-// (1) Data read from the offset calibration files (CALIB_MEAS LBL+TAB files) and information on when the information should be used
+// (1) Data read from the offset calibration files (CALIB_MEAS LBL+TAB files)
+//     and information on when the information should be used
 // (2) Calibration factors (CF) -- REMOVED
 typedef struct m_type_def
 {
