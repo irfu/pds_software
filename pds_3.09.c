@@ -6626,7 +6626,7 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
 {
     int exit_code = 0;
     int i;
-    int removed_all_calib_meas_files = FALSE;
+    int removed_all_calib_meas_files = TRUE;   // Initial value until proven false.
 
     for (i=0; i<m->N_calib_meas; i++)   // Iterate over CALIB_MEAS files.
     {
