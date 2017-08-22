@@ -260,6 +260,14 @@
 
 
 /*========================================================================================================
+ * Flag for whether to use CALIB_COEFF or not.
+ * TRUE  = Use CALIB_COEFF
+ * FALSE = Use CALIB_MEAS
+ ========================================================================================================*/
+#define CALIB_COEFF_ENABLED   TRUE
+// #define CALIB_COEFF_ENABLED   FALSE
+
+/*========================================================================================================
  * Determine whether to attempt to load CALIB_COEFF files before the actual processing of data.
  * 
  * If pre-loading is on, then there has to be CALIB_COEFF files for every single day of the dataset. Otherwise error.

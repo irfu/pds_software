@@ -135,6 +135,8 @@
  *      /Erik P G Johansson 2017-07-14
  * * No longer read ADC16 calibration factors from PDS keywords in CALIB_MEAS files. Uses hardcoded values instead.
  *      /Erik P G Johansson 2017-08-21
+ * * Can now use CALIB_COEFF (or CALIB_MEAS) for bias-dependent current offsets.
+ *      /Erik P G Johansson 2017-08-22
  * 
  *
  *
@@ -6836,13 +6838,20 @@ int WritePTAB_File(
     // Current/voltage calibration factors, but always for ADC16. Useful for converting offsets TM-->physical units.
     double vcalf_ADC16 = 0.0/0.0;    // Voltage calibration factor for ADC16.
     double ccalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
-    
+
     double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
     time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
     time_t t_first_sample_TM;       // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
-    
+
     int i_calib=0;                  // Valid index into structure with calibration data.
-    
+
+    // BDCO = Bias-Dependent Current Offsets (stemming from CALIB_MEAS or CALIB_COEFF).
+    // Indices: [i][j], i=probe (0=P1, 1=P2), j=bias voltage TM value (0-255).
+    // PROPOSAL: Better name
+    //      PROPOSAL: bdc_offsets
+    //      PROPOSAL: bd_current_offsets
+    double bdco[2][256];
+
     property_type *property1;       // Temporary property1
     
     int ADC20_moving_average_enabled;                  // ADC20 Moving average boolean. Used for correcting for flight s/w bug.
@@ -6925,11 +6934,40 @@ int WritePTAB_File(
         //=============
 
         // Figure out which calibration data to use for the given time of the data.
-        i_calib = SelectCalibrationData(t_first_sample_TM, first_sample_utc_TM, mc);
-        if (debug >= 1) {
-            CPrintf("    Calibration file %i: %s\n", i_calib, mc->calib_meas_data[i_calib].LBL_filename);
+        if (CALIB_COEFF_ENABLED)
+        {
+            double cc_coeff_array[2*N_CALIB_COEFFS];
+            if (GetCalibCoeff(pds.cpathd, &calib_coeff_data, curr->seq_time_TM, cc_coeff_array)) {
+                YPrintf("WritePTAB_File: Can not obtain CALIB_COEFF coefficients for time SCCD=curr->seq_time_TM=%f, first_sample_utc_TM=%s\n", curr->seq_time_TM, first_sample_utc_TM);
+                return -1;
+            }
+            
+            const double p1 = cc_coeff_array[CALIB_COEFF_P_P1];
+            const double q1 = cc_coeff_array[CALIB_COEFF_Q_P1];
+            const double r1 = cc_coeff_array[CALIB_COEFF_R_P1];
+            const double s1 = cc_coeff_array[CALIB_COEFF_S_P1];
+            
+            const double p2 = cc_coeff_array[CALIB_COEFF_P_P2];
+            const double q2 = cc_coeff_array[CALIB_COEFF_Q_P2];
+            const double r2 = cc_coeff_array[CALIB_COEFF_R_P2];
+            const double s2 = cc_coeff_array[CALIB_COEFF_S_P2];
+            
+            for (j=0; j<256; j++) {
+                bdco[0][j] = p1*pow(j-s1, 3) + q1*(j-s1) + r1;
+                bdco[1][j] = p2*pow(j-s2, 3) + q2*(j-s2) + r2;
+            }
         }
-
+        else
+        {
+            i_calib = SelectCalibrationData(t_first_sample_TM, first_sample_utc_TM, mc);
+            if (debug >= 1) {
+                CPrintf("    Using calibration file %i: %s\n", i_calib, mc->calib_meas_data[i_calib].LBL_filename);
+            }
+            for (j=0; j<256; j++) {
+                bdco[0][j] = mc->CD[i_calib].C[j][1];
+                bdco[1][j] = mc->CD[i_calib].C[j][2];
+            }
+        }
 
 
         //################################################################################################################
@@ -7447,8 +7485,10 @@ int WritePTAB_File(
                         // CASE: NOT(!) FINE SWEEP
                         //=========================
                         double cvoltage;
-                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][1];   cvoltage  = v_conv.C[voltage_TM][1];   }
-                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][2];   cvoltage  = v_conv.C[voltage_TM][2];   }
+//                         if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][1];   cvoltage  = v_conv.C[voltage_TM][1];   }
+//                         else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][2];   cvoltage  = v_conv.C[voltage_TM][2];   }
+                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage  = v_conv.C[voltage_TM][1];   }
+                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage  = v_conv.C[voltage_TM][2];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else
@@ -7463,8 +7503,10 @@ int WritePTAB_File(
                         // to a number from 0-255 if we want to use the same offset calibration file.
                         double cvoltage;
                         // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
-                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
-                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
+//                         if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
+//                         else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
+                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
+                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                 }   // if(param_type==SWEEP_PARAMS)
@@ -7475,13 +7517,16 @@ int WritePTAB_File(
                     //===============================
                     if (writing_P1_data || writing_P2_data) {
                         double cvoltage;
-                        if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias1][1];   cvoltage  = v_conv.C[vbias1][1];   }
-                        else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias2][2];   cvoltage  = v_conv.C[vbias2][2];   }
+//                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias1][1];   cvoltage  = v_conv.C[vbias1][1];   }
+//                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias2][2];   cvoltage  = v_conv.C[vbias2][2];   }
+                        if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][vbias1];   cvoltage  = v_conv.C[vbias1][1];   }
+                        else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][vbias2];   cvoltage  = v_conv.C[vbias2][2];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else if(writing_P3_data)
                     {
-                        ccurrent -= ccalf_ADC16 * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
+//                         ccurrent -= ccalf_ADC16 * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
+                        ccurrent -= ccalf_ADC16 * (bdco[0][vbias1] - bdco[1][vbias2]);
                         // Write ONE CURRENT (difference), TWO VOLTAGES (one per probe).
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                             ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
