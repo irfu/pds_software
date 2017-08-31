@@ -567,6 +567,8 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
  * RETURN VALUE : 0 = No error; -1 = Could not allocate memory; -2 = Can not obtain file metadata; -3 = Error reading file.
  * 
  * ASSUMPTION: Relies on time_t being interpreted as number of seconds (without leap seconds).
+ * NOTE: Does not update the CALIB_COEFF LBL keywords.
+ * 
  * IMPLEMENTATION NOTE: Does not re-adjust the allocated array size downwards at the end. ==> Allocates too much, but should work.
  * NOTE: Pre-loading files assumes that there must be CALIB_COEFF files for every day in the dataset, even if there is no LAP data.
  */
@@ -696,6 +698,8 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
  * 
  * ASSUMES: Assumes that the function can still call the log function YPrintf.
  * (This is important information for when to call this function during the shutdown process.)
+ * 
+ * NOTE: Does not update the CALIB_COEFF LBL keywords.
  */
 // PROPOSAL: Better name, not "Destroy".
 //      Ex: Destruct, Destructor (cf Constructor), Done
