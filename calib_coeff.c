@@ -505,7 +505,9 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
         // ASSERTIONS
         //============
         if ((sccd < sccd1) || (sccd2 <= sccd)) {
-            YPrintf("%s: Corresponding SCCD values are outside of the expected range.\n", tab_file_path);   return -3;
+            YPrintf("%s: SCCS value (%s) converts to a SCCD value (%f) is outside of the expected range (SCCD %f -- %f).\n",
+                    tab_file_path, sccs, sccd, sccd1, sccd2);
+            return -3;
         }
         if ((sccd_prev != -1) && !(sccd_prev < sccd)) {
             YPrintf("%s: Corresponding SCCD values are not strictly monotonically increasing.\n", tab_file_path);   return -4;
@@ -514,7 +516,7 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
         int i_coeff;
         for (i_coeff=0; i_coeff<2*N_CALIB_COEFFS; i_coeff++) {
             if (isnan(row_coeffs[i_coeff])) {
-                YPrintf("%s: Either (1) found NaN, or (2) something could not be interpreted.\n", tab_file_path);
+                YPrintf("%s: Either (1) found NaN, or (2) some coefficient could not be interpreted.\n", tab_file_path);
                 YPrintf("    row_str = \"%s\".\n", row_str);
                 return -2;
             }
@@ -805,7 +807,7 @@ int GetCalibCoeffFileData(
             return -2;
         }
         if (ReadCalibCoeffFile(tab_file_path, sccd_file1, sccd_file2, ccf_data_ptr)) {
-            YPrintf("GetCalibCoeffFileData: Can not load CALIB_COEFF file.");
+            YPrintf("GetCalibCoeffFileData: Can not load CALIB_COEFF file.\n");
             return -3;
         }
     }

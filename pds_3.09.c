@@ -1273,6 +1273,8 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "            [-stctt <seconds>]              Science thread cancel threeshold timeout (STCTT), i.e. the time the program\n");
     fprintf(stream, "                                            waits for the science thread to empty the science buffer to below a certain\n");
     fprintf(stream, "                                            threshold before exiting.\n");
+    fprintf(stream, "                                            Default value: %i s.\n", SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
+    
     fprintf(stream, "\n");
     fprintf(stream, "   Alter default values and values in the mission calendar.\n");
     fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID and DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
@@ -5658,13 +5660,9 @@ void RunShellCommand(char *command_str)
  * calibrations to use for specific time intervals when the default algorithm does not apply.
  * Returns data in data structure "m".
  *
- * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills
- *       the data structure used by that algorithm.
- * NOTE: The function rewrites the offset calibration LBL files (CALIB_MEAS, CALIB_MEAS_EXCEPT) with some updated
- *       information. This should ideally maybe be done elsewhere.
- * NOTE: Used to read ADC16/ADC20 conversion factors from LBL files. -- REMOVED (no longer reads any calibration factors).
- * NOTE: The function does not care about whether EDITED/CALIB (does not use the global "calib" variable).
- *
+ * 
+ * ARGUMENTS
+ * =========
  * rpath    : Path to directory where the CALIB_MEAS files are (LBL+TAB).
  * fpath    : The part after the last "/" is used as a filename pattern (for LBL files!). All CALIB_MEAS.LBL filenames must
  *            match the pattern. The rest of the string/path is unused(!).
@@ -5807,7 +5805,7 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
             //=======================================================
             // Read calibration tables into array of data structures
             //=======================================================
-            if(ReadTableFile(&mc_lbl, &m->CD[i_calib], rpath, "Reading CALIB_MEAS file")<0)
+            if(ReadTableFile(&mc_lbl, &m->CD[i_calib], rpath, "Reading CALIB_MEAS TAB file")<0)
             {
                 // ExitPDS() will free m->CF and m->CD memory at exit.
                 FreePrp(&mc_lbl); // Free linked property/value list for measured data offset
@@ -6173,27 +6171,29 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
 
 /* Write updated label file
  *
- * "updated" refers to certain keyword values being set by the function IF THEY ARE ALREADY PRESENT.
- * The function is in practise used for updating LBL/CAT files copied from the template.
+ * The function sets certain label keyword values IF THEY ARE ALREADY PRESENT, 
+ * since not all ODL files neither do, nor should, contain all of these keywords.
+ * The function is in practice used for updating ODL files copied from the template directory.
+ * 
+ * NOTE: PUBLICATION_DATE should not be set to the same value everywhere. Therefore optional.
+ * NOTE: Does not set VOLUME_ID, VOLUME_NAME which need  extra code to be derived and only apply   to VOLDESC.CAT (?).
+ * NOTE: Does not set DATA_SET_RELEASE_DATE  which needs extra code to be derived and only applies to DATASET.CAT (?).
+ * 
  *
+ * ARGUMENTS
+ * =========
  * update_PUBLICATION_DATE : true iff keyword PUBLICATION_DATE should be updated.
  */
 int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION_DATE)
 {
-    // Added by Erik P G Johansson 2015-05-04
-    // Sets/updates certain keywords BUT ONLY IF THEY ARE ALREADY PRESENT in the file's original list of keywords.
-    // Not all TXT/LBL/CAT files neither do, nor should, contain all of these keywords.
-    // 
-    // NOTE: Uncertain whether PUBLICATION_DATE should really be set to the same value everywhere.
-    // 
-    // NOTE: Does not set VOLUME_ID, VOLUME_NAME which need extra code to be derived and only apply   to VOLDESC.CAT (?).
-    // NOTE: Does not set DATA_SET_RELEASE_DATE which needs extra code to be derived and only applies to DATASET.CAT (?).
-    SetP(lb_data, "DATA_SET_ID",        mp.data_set_id,           1);
-    SetP(lb_data, "DATA_SET_NAME",      mp.data_set_name,         1);  
-    SetP(lb_data, "PRODUCER_ID",        "EJ",                     1);  
-    SetP(lb_data, "PRODUCER_FULL_NAME", "\"ERIK P G JOHANSSON\"", 1);
-    SetP(lb_data, "MISSION_PHASE_NAME", mp.phase_name,            1);  
-    SetP(lb_data, "TARGET_NAME",        mp.target_name_did,       1);   // Needed for DATASET.CAT.
+    // PROPOSAL: Separate (1) updating variables and (2) writing file into separate functions.
+    
+    SetP(lb_data, "DATA_SET_ID",        mp.data_set_id,         1);
+    SetP(lb_data, "DATA_SET_NAME",      mp.data_set_name,       1);  
+    SetP(lb_data, "PRODUCER_ID",        PDS_PRODUCER_ID,        1);  
+    SetP(lb_data, "PRODUCER_FULL_NAME", PDS_PRODUCER_FULL_NAME, 1);
+    SetP(lb_data, "MISSION_PHASE_NAME", mp.phase_name,          1);  
+    SetP(lb_data, "TARGET_NAME",        mp.target_name_did,     1);   // Needed for DATASET.CAT.
     if (update_PUBLICATION_DATE) {
         SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of data set
     }
@@ -6716,7 +6716,8 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
     //==============================
     if (!calib || removed_all_calib_meas_files) {
         // NOTE: Prints entire paths.
-        YPrintf("Deleting unused OCE calibration files: \"%s\", \"%s\"\n", pathocel, pathocet);
+        YPrintf("Deleting unused OCE calibration files: \"%s\"\n", pathocet);
+        YPrintf("                                       \"%s\"\n", pathocel);
         if ((remove(pathocel)!=0) || (remove(pathocet)!=0)) {
             YPrintf("Error when deleting files \"%s\", \"%s\"\n");
             exit_code = -2;
@@ -9878,17 +9879,19 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
 {
     double et;
     char sccs[MAX_STR];
+    char tstr[MAX_STR];
     
 //     printf("ConvertUtc2Sccd_SPICE - BEGIN\n");   // DEBUG
 //     printf("utc = %s\n", utc);   // DEBUG
     utc2et_c(utc, &et);
 //     printf("9\n");   // DEBUG
-    checkSpiceError("SPICE failed to convert UTC-->et.", TRUE, TRUE);
-//     printf("10\n");   // DEBUG
+    sprintf(tstr, "SPICE failed to convert UTC (\"%s\")-->et.", utc);
+    checkSpiceError(tstr, TRUE, TRUE);
+    //checkSpiceError("SPICE failed to convert UTC-->et.", TRUE, TRUE);
     
     sce2s_c(ROSETTA_SPICE_ID, et, MAX_STR, sccs);
 //     printf("11\n");   // DEBUG
-    checkSpiceError("SPICE failed to et-->SCCS.", TRUE, TRUE);
+    checkSpiceError("SPICE failed to convert et-->SCCS.", TRUE, TRUE);
     
     ConvertSccs2Sccd(sccs, reset_counter, sccd);    // reset_counter : Ignored if NULL.
 //     printf("ConvertUtc2Sccd_SPICE - END\n");   // DEBUG

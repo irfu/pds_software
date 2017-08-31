@@ -125,6 +125,15 @@
 
 #define FINITE_YIELDS         5
 
+
+
+// Values that are used for the corresponding PDS keywords.
+// NOTE: The string value of PRODUCER_FULL_NAME must be quoted. In addition to that, C requires quotes around the string.
+#define PDS_PRODUCER_ID          "EJ"
+#define PDS_PRODUCER_FULL_NAME   "\"ERIK P G JOHANSSON\""
+
+
+
 #define ROSETTA_SPICE_ID   -226    // ID number used to represent the Rosetta spacecraft in SPICE functions. Defined by NASA NAIF.
 
 
