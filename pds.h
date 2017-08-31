@@ -263,6 +263,9 @@
  * Flag for whether to use CALIB_COEFF or not.
  * TRUE  = Use CALIB_COEFF
  * FALSE = Use CALIB_MEAS
+ * 
+ * NOTE: Must call InitCalibMeas and DestroyCalibMeas to remove copied, but unused CALIB_MEAS files even
+ * if the data is not used.
  ========================================================================================================*/
 #define CALIB_COEFF_ENABLED   TRUE
 // #define CALIB_COEFF_ENABLED   FALSE
@@ -500,7 +503,7 @@ typedef struct pds_type_def
   char lpath[PATH_MAX];        // Log path
   char dpathse[PATH_MAX];      // Data path PDS science edited
   char dpathsc[PATH_MAX];      // Data path PDS science calibrated
-  char cpathd[PATH_MAX];       // Root path to calibration (c) data directory (d), CALIB/.
+  char cpathd[PATH_MAX];       // Root path to calibration (c) data directory (d), i.e. CALIB/.
   char cpathf[PATH_MAX];       // Path to fine bias calibration data
   char cpathc[PATH_MAX];       // Path to coarse bias calibration data
   char cpathi[PATH_MAX];       // Path to current bias calibration data

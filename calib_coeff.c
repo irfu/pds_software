@@ -29,15 +29,15 @@
 
 
 
-#include <limits.h>       // Standard limits of integer types, PATH_MAX
-#include <math.h>         // isnan function
-#include <stdio.h>        // Standard Input/output 
-#include <stdlib.h>       // Standard General utilities
-#include <string.h>       // String handling
-#include <time.h>         // Standard date and time
-#include <unistd.h>       // Required for "access" function
+#include <limits.h>        // Standard limits of integer types, PATH_MAX
+#include <math.h>          // isnan function
+#include <stdio.h>         // Standard Input/output 
+#include <stdlib.h>        // Standard General utilities
+#include <string.h>        // String handling
+#include <time.h>          // Standard date and time
+#include <unistd.h>        // Required for "access" function
 
-#include "pds.h"          // PDS & LAP definitions and structures
+#include "pds.h"           // PDS & LAP definitions and structures
 #include "calib_coeff.h"
 
 
@@ -47,7 +47,7 @@
  * TEMPORARY SOLUTION
  * 
  * NOTE: These are manual copies of these headers for these functions!
- * NOTE: Doubtful that if this is the correct way to handle the situation.
+ * NOTE: Doubtful if this is the recommended way to handle the situation, but it works.
  * Maybe some functions in pds_3.09.c should be moved out it into its own module which could be imported from here.
  * 
  * PROPOSAL: Move these (and related functions) to a separate module.
@@ -70,6 +70,7 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);            // D
 
 double **CallocDoubleMatrix (int rows, int cols);                           // Dynamically allocate two dimensional array of doubles
 void FreeDoubleMatrix(double ** C, int rows, int cols);                     // Free two dim. array of doubles
+
 
 
 
@@ -714,7 +715,7 @@ int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
         if (!ccf_data->data_used) {
 
             // IMPLEMENTATION NOTE: Wise too look for existence of files before deleting. Will otherwise try
-            // to delete files for the entire mission's dates.
+            // to delete files for the entire mission's dates (since there are likely not CALIB_COEFF files for all those dates).
             if (0==access(tab_path, W_OK)) {
                 YPrintf("Deleting unused calibration file: %s\n", tab_path);
                 if (remove(tab_path)) {

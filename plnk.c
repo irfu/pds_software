@@ -83,8 +83,7 @@ void ProtectPlnkInit()
     
 }
 
-
-// NOTE: Does not allocate any dynamic memory.
+// NOTE: Does NOT allocate any dynamic memory.
 int InitP(prp_type *p)
 {
     pthread_mutex_lock(&protect_plnk);

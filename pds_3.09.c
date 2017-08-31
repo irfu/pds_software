@@ -1088,12 +1088,21 @@ int main(int argc, char *argv[])
         ExitPDS(1);
     }
 
+    
+
+    //=======================================
+    // Initialize CALIB_MEAS data structures
+    //=======================================
     status = InitCalibMeas(pds.cpathd, pds.cpathm, pds.cpathocel, pds.cpathocet, &m_conv);        // Get measurement calibration files
     if(status<0)
     {
         YPrintf("Can not load offset calibration TM conversion files or the offset calibration exceptions files. Function error code %i. Exiting.\n", status);
         ExitPDS(1);
     }
+    
+    //========================================
+    // Initialize CALIB_COEFF data structures
+    //========================================
     status = InitCalibCoeff(pds.cpathd, mp.start, mp.stop, &calib_coeff_data);        // Get measurement calibration files
     if(status<0)
     {
@@ -1101,6 +1110,8 @@ int main(int argc, char *argv[])
         ExitPDS(1);
     }
 
+    
+    
     //Open INDEX table
     sprintf(tstr1,"%sINDEX.TAB",pds.ipath); 
     if((pds.itable_fd=fopen(tstr1,"a+"))==NULL) // Open index table for appending and reading
@@ -5661,12 +5672,21 @@ void RunShellCommand(char *command_str)
  * pathocet : Path to offset calibration exceptions (OCE) TAB file.
  * m        : Structure in which the calibration data is to be stored.
  *
- * Variable naming convention: MC = Measurement/measured calibration(?)
+ * 
+ * NOTE: Variable naming convention: MC = Measurement/measured calibration(?)
+ * NOTE: Does not update the CALIB_MEAS LBL keywords.
+ * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills
+ *       the data structure used by that algorithm.
+ * NOTE: The function REWRITES the CALIB_MEAS LBL files (CALIB_MEAS, CALIB_MEAS_EXCEPT) with some updated
+ *       information. This should ideally maybe be done elsewhere.
+ * NOTE: The function _used_to_ read ADC16/ADC20 conversion factors from LBL files. -- REMOVED (no longer reads any calibration factors).
+ * NOTE: The function does not care about whether EDITED/CALIB (does not use the global "calib" variable).
  */
 int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m)
 {
     // FKJN 2014-09-04
     // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
+    
     prp_type mc_lbl;            // Linked property/value list for measured data offset and conversion to volts/ampere.
 //     property_type *property;
 
@@ -6061,17 +6081,20 @@ void TestDumpMacs()
 
 
 
-/* Update certain fields LBL/CAT files in a given directory, recursively.
- * Ths is in practise meant to be used for updating LBL/CAT (maybe TXT) files copied from templates.
+/* Update certain fields in LBL/CAT files in a given directory, recursively.
+ * This is in practice meant to be used for updating LBL/CAT (maybe TXT) files copied from templates.
  *
- * dir_path : Path to directory.
+ * ARGUMENT
+ * ========
+ * dir_path         : Path to directory.
  * filename_pattern : Search pattern that selects the filenames of those files which will be updated. E.g. "*.LBL".
  *
- * NOTE: Does not follow symlinks.
+ * NOTE: Does NOT follow symlinks.
  * NOTE: This does not work for *.TXT files where the first part is ODL keywords & values, and the last part is pure text,
  *       since ReadLabelFile & WriteUpdatedLabelFile can not handle that file format.
  * NOTE: ReadLabelFile can not handle comments, as in some *.CAT files, and can therefore not handle CATALOG/.
- * Even if it could, it would still alter PSA supplied .CAT files (with comments) which should not(?) be altered. Could maybe alter only RPCLAP_*.CAT?
+ * Even if it could, it would still alter PSA supplied .CAT files (with comments) which should not(?) be altered.
+ * Could maybe alter only RPCLAP_*.CAT?
  */
 int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, char update_PUBLICATION_DATE)
 {
@@ -6102,6 +6125,8 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
         // DT_REG : Regular file (not directory)
         if ((dir_entry->d_type==DT_REG) && !fnmatch(filename_pattern, dir_entry->d_name, 0))
         {
+            // CASE: Object is a matching file (not directory).
+            
             char file_path[PATH_MAX];
             sprintf(file_path, "%s/%s", dir_path, dir_entry->d_name); // Construct full path
 
@@ -6121,6 +6146,8 @@ int UpdateDirectoryODLFiles(const char *dir_path, const char *filename_pattern, 
         }
         else if ((dir_entry->d_type==DT_DIR) && strcmp(dir_entry->d_name, ".") && strcmp(dir_entry->d_name, ".."))  // DT_DIR : Directory
         {
+            // CASE: Object is a directory (but not "." or "..").
+            
             char subdir_path[PATH_MAX];
             sprintf(subdir_path, "%s/%s", dir_path, dir_entry->d_name);
             int status = UpdateDirectoryODLFiles(subdir_path, filename_pattern, update_PUBLICATION_DATE);    // NOTE: RECURSIVE CALL
@@ -6190,17 +6217,24 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, char update_PUBLICATION
 
 /* Read label file
  *
+ * 
+ * ARGUMENTS
+ * =========
+ * OUTPUT: lb_data : Does not need to be initialized by caller.
+ * 
+ * 
  * NOTE: The function is implicitly used for modifying LBL/CAT files from the template directory
  * by first reading a file into linked list, then modifying the linked property values list,
  * then writing the linked list as LBL file.
  * NOTE: I _think_ this code can handle LBL and CAT files
  * with multiple line values. This is important for being able to modify *.CAT files
  * with long texts in the form of "values".   /Erik P G Johansson 2015-04-27.
- * NOTE: Can not(?) handle PDS comments.
+ * NOTE: Can not handle PDS comments.
+ * NOTE: Will ignore file contents after "END".
  *
- * Return value : 0=(seems like) success, -1=failure
+ * RETURN VALUE : 0=success, -1=failure
  */
-int ReadLabelFile(prp_type *lb_data,char *file_path)
+int ReadLabelFile(prp_type *lb_data, char *file_path)
 {
     FILE *fd;
     char line[MAX_STR];   // Line buffer
@@ -6312,7 +6346,7 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
     
     if(debug>3)
     {
-        DumpPrp(lb_data); // Debug
+        DumpPrp(lb_data);
     }
     
     fclose(fd);
@@ -6331,11 +6365,12 @@ int ReadLabelFile(prp_type *lb_data,char *file_path)
  * a variable number of columns. Uses START_BYTE=column start (but not BYTES=column width),
  * DATA_TYPE (to distinguish ASCII_INTEGER, ASCII_REAL).
  *
+ * 
  * ARGUMENTS
  * =========
  * lbl_data     : LBL file description from which some data will be taken, incl. TAB filename.
  * cal          : Structure which will contain the data read from file.
- *      cal->C[i][j] = Value at row i (i=0=first row), column j (j=0=first column) in TAB file.
+ *                cal->C[i][j] = Value at row i (i=0=first row), column j (j=0=first column) in TAB file.
  * dir_path     : Path to parent _directory_ (not path to file!)
  * msg          : String to be used in log message. Colon and file path is added after the string.
  * Return value : 0=(Seems like) success, Negative=Failure
@@ -6802,7 +6837,7 @@ int WritePTAB_File(
     char file_path[PATH_MAX];        // Temporary string
     
     char current_sample_utc_corrected[MAX_STR];
-    char first_sample_utc_TM[MAX_STR];
+    char first_sample_utc_TM[MAX_STR];   // TM=Time according to TM (no group delay).
 
     int curr_step = 3;               // Current sweep step, default value just there to get rid of compilation warning.
     
@@ -6841,7 +6876,8 @@ int WritePTAB_File(
 
     double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
     time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
-    time_t t_first_sample_TM;       // Time of current data. Used for selecting calibration and commanded bias, not the samples. (NOTE: No subseconds since time_t.)
+    // Time of current data. Used for selecting calibration and commanded bias, not the samples. TM=Time according to TM (no group delay) NOTE: No subseconds since time_t.
+    time_t t_first_sample_TM;       
 
     int i_calib=0;                  // Valid index into structure with calibration data.
 
@@ -7012,7 +7048,7 @@ int WritePTAB_File(
             global_calib_offset_ADC16TM = calib_ADC16_8kHz_offset_ADC16TM + calib_ADC20_offset_ADC16TM;
         }
         
-            
+
         
         if(bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
@@ -9785,6 +9821,8 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     SpiceChar sccs[MAX_STR];
     SpiceChar utc_temp[MAX_STR];
     SpiceDouble et;
+    
+//     printf("ConvertSccd2Utc_SPICE - BEGIN\n");   // DEBUG
 
     ConvertSccd2Sccs(sccd, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs, FALSE);         // Convert SCCD-->SCCS
 
@@ -9821,6 +9859,7 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     
     pthread_mutex_unlock(&protect_spice);
 
+//     printf("ConvertSccd2Utc_SPICE - END\n");   // DEBUG
     return 0;
 }
 
@@ -9840,7 +9879,7 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
     double et;
     char sccs[MAX_STR];
     
-//     printf("8\n");   // DEBUG
+//     printf("ConvertUtc2Sccd_SPICE - BEGIN\n");   // DEBUG
 //     printf("utc = %s\n", utc);   // DEBUG
     utc2et_c(utc, &et);
 //     printf("9\n");   // DEBUG
@@ -9852,7 +9891,7 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
     checkSpiceError("SPICE failed to et-->SCCS.", TRUE, TRUE);
     
     ConvertSccs2Sccd(sccs, reset_counter, sccd);    // reset_counter : Ignored if NULL.
-//     printf("12\n");   // DEBUG
+//     printf("ConvertUtc2Sccd_SPICE - END\n");   // DEBUG
 }
 
 
