@@ -270,12 +270,30 @@
 /*========================================================================================================
  * Determine whether to attempt to load CALIB_COEFF files before the actual processing of data.
  * 
- * If pre-loading is on, then there has to be CALIB_COEFF files for every single day of the dataset. Otherwise error.
- * This is useful to make sure that all presumably needed CALIB_COEFF files can be loaded early in the execution.
- * CALIB_COEFF files will be loaded on-demand if they have not been pre-loaded.
- ========================================================================================================*/
-#define CALIB_COEFF_PRELOAD                        TRUE
-// #define CALIB_COEFF_PRELOAD                        FALSE
+ * If pre-loading is on
+ * ====================
+ * pds will preemptively load all CALIB_COEFF files for the dataset time period
+ * (plus some margin, see CALIB_COEFF_PRELOAD_DATASET_TIME_MARGIN_S).
+ * NOTE: ADVANTAGE: This is useful for immediately making sure that all presumably needed CALIB_COEFF
+ * files can be loaded early in the execution of pds (files exist and are non-corrupt; loading code
+ * works). This is meant to avoid that pds crashes late in the processing of large datasets
+ * just because something is wrong with the CALIB_COEFF files, or the code that loads them.
+ * NOTE: DISADVANTAGE: This means that there has to be CALIB_COEFF files for every single day of
+ * the dataset, including for days without CALIB_COEFF data and for which CALIB_COEFF data is not needed (because of
+ * LAP data gaps). One can create empty CALIB_COEFF files for this case.
+ * NOTE: If pds needs more CALIB_COEFF files (because of interpolation over empty files at beginning
+ * or end of dataset; should ideally never happen), then pds will load files on demand.
+ * 
+ * If pre-loading is off
+ * =====================
+ * pds will only load CALIB_COEFF files on-demand. If there is truly CALIB_COEFF data for all times for
+ * which there is RPCLAP data (plus some minor time margins), then no extra (empty) CALIB_COEFF files
+ * should be needed.
+ * 
+ * NOTE: FALSE is recommended, unless debugging CALIB_COEFF (data files or code).
+ *========================================================================================================*/
+// #define CALIB_COEFF_PRELOAD                        TRUE
+#define CALIB_COEFF_PRELOAD                        FALSE
 
 /*========================================================================================================
  * The pre-loaded CALIB_COEFF files covers the official dataset time interval plus an extra time margin
