@@ -139,6 +139,8 @@
  *      /Erik P G Johansson 2017-08-22
  * * CALIB_COEFF LBL files are updated.
  *      /Erik P G Johansson 2017-08-31
+ * * Bugfix: Use SPICE mutex for ConvertUtc2Sccd_SPICE. Seems to prevent random crashes for CALIB+CALIB_COEFF_PRELOAD=FALSE.
+ *      /Erik P G Johansson 2017-09-01
  * 
  *
  *
@@ -9890,6 +9892,8 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
     char sccs[MAX_STR];
     char tstr[MAX_STR];
     
+    pthread_mutex_lock(&protect_spice);
+
 //     printf("ConvertUtc2Sccd_SPICE - BEGIN\n");   // DEBUG
 //     printf("utc = %s\n", utc);   // DEBUG
     utc2et_c(utc, &et);
@@ -9901,6 +9905,8 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
     
     ConvertSccs2Sccd(sccs, reset_counter, sccd);    // reset_counter : Ignored if NULL.
 //     printf("ConvertUtc2Sccd_SPICE - END\n");   // DEBUG
+    
+    pthread_mutex_unlock(&protect_spice);
 }
 
 
