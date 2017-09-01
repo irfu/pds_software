@@ -265,9 +265,9 @@
 //extern void dj2000_(double *DAY,int *I,int *J,int *K,int *JHR,int *MI,double *SEC);
 
 
-void printUserHelpInfo(FILE *stream, char *executable_name);    // Print user help info.
-void initSpice(char *metakernel_path);
-int checkSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout);
+void PrintUserHelpInfo(FILE *stream, char *executable_name);    // Print user help info.
+void InitSpice(char *metakernel_path);
+int CheckSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout);
 
 // Thread functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -618,7 +618,8 @@ int sc_thread_cancel_threshold_timeout;
 
 // Mutexes for protecting code which is not thread-safe.
 static pthread_mutex_t protect_log   = PTHREAD_MUTEX_INITIALIZER;   // Added mutex protector for logging functions
-// Mutex for SPICE functions. SPICE functions are not thread-safe. Can not handle recursive locking(?) (mutex-protected blocks within mute-xprotexted blocks).
+// Mutex for SPICE functions. SPICE functions are not thread-safe.
+// NOTE: Can not handle recursive locking(?) (mutex-protected blocks within mutex-protected blocks).
 static pthread_mutex_t protect_spice = PTHREAD_MUTEX_INITIALIZER;   
 
 
@@ -654,7 +655,7 @@ int main(int argc, char *argv[])
     
     if(GetOption("-h",argc,argv,NULL))
     {
-        printUserHelpInfo(stdout, argv[0]);
+        PrintUserHelpInfo(stdout, argv[0]);
         exit(0);
     }
     
@@ -662,7 +663,7 @@ int main(int argc, char *argv[])
     if (argc>23 || argc<7) 
     {
         fprintf(stderr, "Called with too few or too many parameters.\n\n");
-        printUserHelpInfo(stdout, argv[0]);    // NOTE: Prints to stderr.
+        PrintUserHelpInfo(stdout, argv[0]);    // NOTE: Prints to stderr.
         exit(1);
     }
     
@@ -970,7 +971,6 @@ int main(int argc, char *argv[])
     {
         // Extra newline since preceeding log messages (not stderr) make it difficult to visually spot the error message.
         fprintf(stderr, "\nCould not interpret all command-line options, or some command-line options occurred multiple times.\n\n");
-        //printUserHelpInfo(stderr, argv[0]);    // NOTE: Prints to stderr.
         exit(1);
     }
 
@@ -1022,7 +1022,7 @@ int main(int argc, char *argv[])
     //===================================================
     // Configure SPICE, including loading the METAKERNEL
     //===================================================
-    initSpice(pds.pathmk);
+    InitSpice(pds.pathmk);
 
 
 
@@ -1244,7 +1244,7 @@ int main(int argc, char *argv[])
 
 
 // executable_name : <String to be displayed as command name>.
-void printUserHelpInfo(FILE *stream, char *executable_name) {
+void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "Usage: %s  [-h] [-debug <Level>]\n", executable_name);
     fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
     fprintf(stream, "            [-calib]\n");
@@ -1285,7 +1285,7 @@ void printUserHelpInfo(FILE *stream, char *executable_name) {
  * NOTE: Handles errors itself.
  * NOTE: This function is THREAD-SAFE and must NOT be called using the SPICE mutex.
  */
-void initSpice(char *metakernel_path) {
+void InitSpice(char *metakernel_path) {
     char tstr1[MAX_STR];    // Temporary string
     char tstr2[MAX_STR];    // Temporary string
     char initial_working_dir[MAX_STR];
@@ -1304,7 +1304,7 @@ void initSpice(char *metakernel_path) {
     erract_c("SET", MAX_STR, "REPORT");
     
     // Configure SPICE to not print any error messages by itself.
-    // (pds uses failed_c, getmsg_c via checkSpiceError instead.)
+    // (pds uses failed_c, getmsg_c via CheckSpiceError instead.)
     errprt_c("SET", -1, "NONE");
     
     // Disable "tracing" inside SPICE functions.
@@ -1342,7 +1342,7 @@ void initSpice(char *metakernel_path) {
     YPrintf("Loading SPICE metakernel: %s\n", metakernel_path);
     strcpy(tstr1, metakernel_path);
     furnsh_c(basename(tstr1));        // NOTE: Function "basename" might modify the argument, therefore submit a copy of the string.
-    checkSpiceError("Could not load SPICE metakernel.", TRUE, TRUE);
+    CheckSpiceError("Could not load SPICE metakernel.", TRUE, TRUE);
     
     
     // Change back to original working directory.
@@ -1372,10 +1372,11 @@ void initSpice(char *metakernel_path) {
  * Return value     :  0=No SPICE error.
  *                    -1=SPICE error (and implicitly, the function does not exit PDS by itself).
  * 
- * NOTE: This function by itself is NOT TREAD-SAFE (uses no mutex despite calling not-threadsafe SPICE functions).
- * The caller is responsible for using the SPICE mutex.
+ * IMPLEMENTATION NOTE: This function by itself is NOT TREAD-SAFE (uses no mutex despite calling not-threadsafe SPICE functions).
+ * The caller is responsible for using the SPICE mutex, since it is meant to be called by functions which use SPICE functions
+ * and therefore the SPICE mutex anyway. (And the SPICE mutex is not recursive.)
  */
-int checkSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout)
+int CheckSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout)
 {
     // PROPOSAL: "Inline" the function.
     // PROPOSAL: Add flag for printing error messages to stdout.
@@ -9838,7 +9839,7 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     pthread_mutex_lock(&protect_spice);
 
     scs2e_c(ROSETTA_SPICE_ID, sccs, &et);    // Convert SCCS-->et    
-    if (checkSpiceError("SPICE failed to convert SCCS (spacecraft clock count string)-->et, probably because of out-of-range SCCS.", FALSE, FALSE)) {
+    if (CheckSpiceError("SPICE failed to convert SCCS (spacecraft clock count string)-->et, probably because of out-of-range SCCS.", FALSE, FALSE)) {
         // NOTE: Will not exit PDS for this error. This error may occur "legitimately" because of errors in the data,
         // or the (calling) state machine not being synched to the byte stream (it makes the wrong assumption of where to
         // find what data in the byte stream), which leads to strange SSCDs being used. Failure here is used
@@ -9857,12 +9858,12 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     // "utc_3decimals" and "utc_6decimals" are buffers of unknown length.
     if (utc_3decimals != NULL) {
         et2utc_c(et, "ISOC", 3, MAX_STR, utc_temp);
-        checkSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
+        CheckSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
         strcpy(utc_3decimals, utc_temp);
     }
     if (utc_6decimals != NULL) {
         et2utc_c(et, "ISOC", 6, MAX_STR, utc_temp);
-        checkSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
+        CheckSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
         strcpy(utc_6decimals, utc_temp);
     }
     
@@ -9892,14 +9893,11 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
 //     printf("ConvertUtc2Sccd_SPICE - BEGIN\n");   // DEBUG
 //     printf("utc = %s\n", utc);   // DEBUG
     utc2et_c(utc, &et);
-//     printf("9\n");   // DEBUG
     sprintf(tstr, "SPICE failed to convert UTC (\"%s\")-->et.", utc);
-    checkSpiceError(tstr, TRUE, TRUE);
-    //checkSpiceError("SPICE failed to convert UTC-->et.", TRUE, TRUE);
-    
+    CheckSpiceError(tstr, TRUE, TRUE);
+
     sce2s_c(ROSETTA_SPICE_ID, et, MAX_STR, sccs);
-//     printf("11\n");   // DEBUG
-    checkSpiceError("SPICE failed to convert et-->SCCS.", TRUE, TRUE);
+    CheckSpiceError("SPICE failed to convert et-->SCCS.", TRUE, TRUE);
     
     ConvertSccs2Sccd(sccs, reset_counter, sccd);    // reset_counter : Ignored if NULL.
 //     printf("ConvertUtc2Sccd_SPICE - END\n");   // DEBUG
@@ -11255,7 +11253,7 @@ int main_TEST(int argc, char* argv[]) {
     ProtectPlnkInit();
     
     // NOTE: SPICE may or may not have been initialized by the core pds code, depending on from where main_TEST was called.
-    initSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V040___birra.TM");
+    InitSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V040___birra.TM");
 //     erract_c("SET", 99999, "DEFAULT");
     
 //     FindNearestInSortedArray_TEST();
@@ -11267,7 +11265,7 @@ int main_TEST(int argc, char* argv[]) {
     char *utc = "2010-07-12T00:00:00.000";
     printf("utc = %s\n", utc);   // DEBUG
     utc2et_c(utc, &et);
-    checkSpiceError(tstr, TRUE, TRUE);
+    CheckSpiceError(tstr, TRUE, TRUE);
     
     ExitPDS(255);
 
