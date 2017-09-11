@@ -5748,9 +5748,9 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
     for(i=0; i<N_dir_entries; i++)
     {
         dentry=dir_entry_list[i];
-        if(!Match(filename_pattern,dentry->d_name))
+        if (!Match(filename_pattern,dentry->d_name) && strcmp(dentry->d_name, CALIB_MEAS_FILE_EXCEPTION_LBL))
         {
-            // CASE: Filename matches pattern.
+            // CASE: Filename matches pattern, but is not a calibration data product that should never be used, and always be kept.
 
 //             YPrintf("Reading CALIB_MEAS file: %s\n", dentry->d_name);  // Matching file name
 
@@ -7000,6 +7000,7 @@ int WritePTAB_File(
             const double r2 = cc_coeff_array[CALIB_COEFF_R_P2];
             const double s2 = cc_coeff_array[CALIB_COEFF_S_P2];
             
+            // Calculate offsets from CALIB_COEFF coefficients using third-order polynomial.
             for (j=0; j<256; j++) {
                 bdco[0][j] = p1*pow(j-s1, 3) + q1*(j-s1) + r1;
                 bdco[1][j] = p2*pow(j-s2, 3) + q2*(j-s2) + r2;

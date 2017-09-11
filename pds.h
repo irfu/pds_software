@@ -279,6 +279,21 @@
 #define CALIB_COEFF_ENABLED   TRUE
 // #define CALIB_COEFF_ENABLED   FALSE
 
+
+
+/*======================================================================================================
+ * Define one CALIB_MEAS file pair (LBL+TAB) which will not be deleted, even if CALIB_MEAS is not used.
+ * In practice, this is intended to prevent RPCLAP030101_CALIB_MEAS.LBL/TAB from being automatically
+ * deleted since that is a special ground-calibration data product that is not really part of the other
+ * CALIB_MEAS files.
+ * 
+ * NOTE: Must be a specified using a LBL file because of how the CALIB_MEAS automatic removal algorithm
+ * works.
+ ======================================================================================================*/
+#define CALIB_MEAS_FILE_EXCEPTION_LBL   ("RPCLAP030101_CALIB_MEAS.LBL")
+
+
+
 /*========================================================================================================
  * Determine whether to attempt to load CALIB_COEFF files before the actual processing of data.
  * 
