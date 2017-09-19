@@ -483,8 +483,9 @@ typedef struct curr_type_def
   unsigned int sensor;      // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
   unsigned int transmitter; // LAP currently transmitting sensor
   double       seq_time_TM;           // Current time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
-  double       seq_time_corrected;    // Like seq_time_TM, but (possibly) adjusted for analog signal delays.
-  double       stop_time_corrected;   // Current stop time (SCCD) of a measurement sequence in a macro cycle, but (possibly) adjusted for analog signal delays.
+  double       stop_time_TM;          // Current stop time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
+  double       seq_time_corrected;    // Like seq_time_TM  (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
+  double       stop_time_corrected;   // Like stop_time_TM (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
   double       offset_time; // Time since raw start time
   double       old_time;    // Used to test if we have extra bias settings
   unsigned int old_macro;   // Used to test if we have a new macro

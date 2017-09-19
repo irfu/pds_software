@@ -141,7 +141,8 @@
  *      /Erik P G Johansson 2017-08-31
  * * Bugfix: Use SPICE mutex for ConvertUtc2Sccd_SPICE. Seems to prevent random crashes for CALIB+CALIB_COEFF_PRELOAD=FALSE.
  *      /Erik P G Johansson 2017-09-01
- * 
+ * * Bugfix: DecideWhetherToExcludeData now uses only TM timestamps (i.e. never corrected for group delay).
+ *      /Erik P G Johansson 2017-09-19
  *
  *
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
@@ -307,7 +308,7 @@ int  LoadModeDesc(prp_type *p,char *path);              // Load human descriptio
 int  LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt,char *path);		// Load bias settings file
 int  LoadExclude(unsigned int **exclude,char *path);                                   // Load exclude file
 int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath);   // Load data exclude times file.
-int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData);
+int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, curr_type *curr, int *excludeData);
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
 int  InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m);             // Get measured data calibration files
@@ -1944,7 +1945,7 @@ void *DecodeScience(void *arg)
     
     // Structure with current settings for various parameters
 //     curr_type curr={0,0,0,0,0,0,0,0,0,0x7f,0x7f,0};
-    curr_type curr={0,0,0,0,0,0,0,0,0,0, 0x7f, 0x7f, 0};
+    curr_type curr={0,0,0,0,0, 0,0,0,0,0, 0, 0x7f, 0x7f, 0};    // Correct? Does not set all curr_type fields and 0x7f assignments do not make sense. Important?
     
     int          finger_printing=0; // Are we doing fingerprinting ?
     sweep_type   sw_info;           // Sweep info structure steps, step height, duration, ...
@@ -2928,7 +2929,7 @@ void *DecodeScience(void *arg)
                                                                 state=S06_GET_MACRO_DESC; // Break out of switch, and get macro description
                                                                 break;
                                                             }
-                                                        }		  
+                                                        }
                                                     }
                                                     
                                                     if(length==8950 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
@@ -3554,22 +3555,23 @@ void *DecodeScience(void *arg)
                                                             curr.seq_time_TM = sccd + curr.offset_time;   // Calculate time of current sequence.
                                                             
                                                             /*==================================================
-                                                            // Adjust the timing of calibrated-level ADC20 data.
-                                                            //==================================================
-                                                            // NOTE: This change should affect
-                                                            // (1) data (TAB files contents),
-                                                            // (2) SPACECRAFT_CLOCK_START/STOP_COUNT,
-                                                            // (3) START/STOP_TIME
-                                                            // NOTE: On the one hand, the time is also used for other purposes and care has to be taken to make sure that these
-                                                            // use the desired time. On the other hand, the actual effect on these is very, very small, given the size of the
-                                                            // time delay, but still, in principle, the delay can affect all of these.
-                                                            // (1) When commanded bias (pds.bias) is interpreted as having been set.
-                                                            // (2) How anomaly timestamps (pds.anomalies) are interpreted.
-                                                            //     NOTE: This requires exact matching of timestamps. Approximate does not give approximate result (?).
-                                                            // (3) Which bias-dependent current offset to use (CALIB_MEAS).
-                                                            // (4) In which day directory a data file ends up.
-                                                            // Therefore, both the original TM value and the adjusted ("corrected") value are kept.
-                                                            */
+                                                             * Adjust the timing of calibrated-level ADC20 data.
+                                                             *==================================================
+                                                             * NOTE: This change should affect
+                                                             * (1) TAB files (timestamp columns),
+                                                             * (2) LBL files: SPACECRAFT_CLOCK_START/STOP_COUNT,
+                                                             * (3) LBL files: START/STOP_TIME
+                                                             *
+                                                             * NOTE: On the one hand, the time is also used for other purposes and care has to be taken to make sure that these
+                                                             * use the desired time. On the other hand, the actual effect on these is very, very small, given the size of the
+                                                             * time delay, but still, in principle, the delay MIGHT affect all of these.
+                                                             * (1) When commanded bias (pds.bias) is interpreted as having been set.
+                                                             * (2) How anomaly timestamps (pds.anomalies) are interpreted.
+                                                             *     NOTE: This requires exact matching of timestamps. Approximate does not give approximate result (?).
+                                                             * (3) Which bias-dependent current offset to use (CALIB_MEAS).
+                                                             * (4) In which day directory a data file ends up.
+                                                             * Therefore, both the original TM value and the adjusted ("corrected") value are kept.
+                                                             */
                                                             if (calib && (param_type==ADC20_PARAMS)) {
                                                                 curr.seq_time_corrected = curr.seq_time_TM - ADC20_DELAY_S;
                                                             } else {
@@ -3695,11 +3697,13 @@ void *DecodeScience(void *arg)
                                                                         break;
                                                                 }
                                                             }
-                                                            curr.stop_time_corrected = curr.seq_time_corrected + (samples-1)*curr.factor;   // Calculate current STOP time.
                                                             
-                                                            ConvertSccd2Sccs(curr.stop_time_corrected, pds.SCResetCounter, tstr5, TRUE);  // Compile OBT string and add reset number of S/C clock.
+                                                            // Calculate current STOP time.
+                                                            curr.stop_time_corrected = curr.seq_time_corrected + (samples-1)*curr.factor;   
+                                                            curr.stop_time_TM        = curr.seq_time_TM        + (samples-1)*curr.factor;
                                                             
-                                                            SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT",  tstr5, 1);
+                                                            ConvertSccd2Sccs(curr.stop_time_corrected, pds.SCResetCounter, tstr5, TRUE);
+                                                            SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT", tstr5, 1);
                                                             
                                                             ConvertSccd2Utc(curr.stop_time_corrected, tstr5, NULL);  // Decode raw time into PDS compliant UTC time.
                                                             CPrintf("    Current sequence stop  time is: %s\n", tstr5);
@@ -3803,18 +3807,18 @@ void *DecodeScience(void *arg)
                                                     // SPACECRAFT_CLOCK_STOP_COUNT to have been set.
                                                     //------------------------------------------------------------------------
                                                     int excludeData = 0;   // Boolean flag.
-                                                    if (dataExcludeTimes != NULL) {
-                                                        if (DecideWhetherToExcludeData(dataExcludeTimes, &comm, &excludeData)) {
-                                                            YPrintf("DecodeScience: Error when trying to determine whether to exclude data. - Keeps data by default.\n");
-                                                            printf( "DecodeScience: Error when trying to determine whether to exclude data. - Keeps data by default.\n");
-                                                        } else {
-                                                            if (excludeData) {
-                                                                CPrintf("DecodeScience: Excluding data.\n");  // Really superfluous printout since DecideWhetherToExcludeData also prints.
-                                                                ClearDictPDS(&dict);   // Clear dict     since that is what the macro CALIB macro exclusion code does.
-                                                                state=S04_GET_ID_CODE; // Set this state since that is what the macro CALIB macro exclusion code does.
-                                                                break;
-                                                            }
-                                                        }
+                                                    if (DecideWhetherToExcludeData(dataExcludeTimes, &curr, &excludeData)) {
+                                                        YPrintf("DecodeScience: Error when trying to determine whether to exclude data.\n");
+                                                        printf( "DecodeScience: Error when trying to determine whether to exclude data.\n");
+                                                        ExitPDS(1);
+                                                    }
+                                                    if (excludeData) {
+                                                        // Really superfluous printout since DecideWhetherToExcludeData also prints.
+                                                        CPrintf("DecodeScience: Excluding data - Not writing TAB & LBL file pair.\n");
+                                                        
+                                                        ClearDictPDS(&dict);   // Clear dict     since that is what the macro CALIB macro exclusion code does.
+                                                        state=S04_GET_ID_CODE; // Set this state since that is what the macro CALIB macro exclusion code does.
+                                                        break;
                                                     }
                                                     
                                                     // -------------------------------------------------------------------------------------
@@ -5147,11 +5151,13 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     
     rewind(fd); // Set position of stream to beginning.
     dataExcludeTimes_temp.SCResetCounter_begin_list = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
-    dataExcludeTimes_temp.sccd_begin_list              = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
-    dataExcludeTimes_temp.sccd_end_list                = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
+    dataExcludeTimes_temp.sccd_begin_list           = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
+    dataExcludeTimes_temp.sccd_end_list             = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
     
     i = 0;
-    YPrintf("Ingested data exclude time intervals: file contents strings and interpretations (true decimals)\n");  // Print to "pds system log".
+    YPrintf("Ingested data exclude time intervals:\n");  // Print to "pds system log".
+    YPrintf("    LEFT:  File contents strings (should be SCCS)\n");  // Print to "pds system log".
+    YPrintf("    RIGHT: Interpretations (reset counter + SCCD)\n");  // Print to "pds system log".
     while(fgets(line, 255, fd) != NULL)  // NOTE: "line" will end with a \n.
     {      
         if (line[0] == '\n') continue; // Ignore empty line.
@@ -5214,116 +5220,102 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
  * Erik P G Johansson 2015-03-25: Created function.
  * 
  * Checks whether a LBL/TAB file pair should be created at all depending on the data (time).
+ * NOTE: Applies to both EDITED and CALIB.
+ * NOTE: Function uses TM times, i.e. not corrected for ADC20 group delay.
  * 
- * Input  : file_properties : LBL file "properties".
- *                              NOTE: Requires SPACECRAFT_CLOCK_START/STOP_COUNT (used by algo.), START/STOP_TIME (for loggin) to already have been set.
- * Output : *excludeData    : false = Do not exclude data.
+ * 
+ * ARGUMENTS
+ * =========
+ * INPUT  : curr. Only uses TM time designations.
+ * OUTPUT : *excludeData    : false = Do not exclude data.
  *                            true  = Exclude data.
  * Return value: 0 (no error), -1 (error).
  *
  * 
- * IMPLEMENTATION NOTE: The code determines SPACECRAFT_CLOCK_START_COUNT and SPACECRAFT_CLOCK_STOP_COUNT
- * from property list used for writing LBL file(s). This means that the values are parsed from strings.
- * This may seem suboptimal but has the advantage of being largely independent of how the rest of
- * DecodeScience (a huge, complicated function) works.
- * NOTE: Uncertain whether to only look at checked or unchecked properties, or both, in property list.
- * Appears that SPACECRAFT_CLOCK_START/STOP_COUNT are set using UNCHECKED (default for SetP).
- * NOTE: Uncertain whether to assume exactly one occurrence of SPACECRAFT_CLOCK_START/STOP_COUNT in property list.
- * 
  * ASSUMES: Spacecraft reset counter is the same for all times involved in the algorithm (or something in that direction...).
+ * 
  * ALGORITHM: Excludes data if-and-only-if
- *     SPACECRAFT_CLOCK_STOP_COUNT >= t_exclude_begin
- *     and
- *     SPACECRAFT_CLOCK_START_COUNT <= t_exclude_end.
- *     Note the less-than-or-EQUAL.
+ *          sccd_end >= sccd_exclude_begin
+ *      and
+ *          sccd_begin <= sccd_exclude_end.
+ *      Note the less-than-or-EQUAL.
  *--------------------------------------------------------------------------------------------*/
-int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, prp_type *file_properties, int *excludeData) {
-    // PROPOSAL: Reverse exclude/include return result?
-    // PROPOSAL: Boolean parameter-by-reference for include/exclude and separate error/no-error return value.
-    // PROPOSAL: Move reading of START/STOP_TIME to inside if-then statement. ==> Speeds up.
-    // QUESTION: How handle not finding SPACECRAFT_CLOCK_START/STOP_COUNT? Include?
-    // QUESTION: How handle multiple findings for one key/name? Checks?
-    property_type *property1 = NULL;
-    property_type *property2 = NULL;
-    char *SPACECRAFT_CLOCK_START_COUNT = NULL;     // SCC = spacecraft count
-    char *SPACECRAFT_CLOCK_STOP_COUNT  = NULL;
-    char *START_TIME = NULL;
-    char *STOP_TIME  = NULL;
-    int /*junk_int,*/ i = -1;
-    int file_SCResetCounter_begin = -1;
+int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, curr_type *curr, int *excludeData) {
+    
+    char sccs_begin[MAX_STR];
+    char sccs_end  [MAX_STR];
+    char utc_begin[MAX_STR];
+    char utc_end  [MAX_STR];
     double sccd_file_begin = -1;
-    double sccd_file_end   = -1;    
-    
+    double sccd_file_end   = -1;
+    int  i = -1;
 
-    
-    if (
-        (FindP(file_properties, &property1, "SPACECRAFT_CLOCK_START_COUNT", 1, DNTCARE) < 0) ||
-        (FindP(file_properties, &property2, "SPACECRAFT_CLOCK_STOP_COUNT",  1, DNTCARE) < 0)
-    ) {
-        char *msg = "DecideWhetherToExcludeData: Can not find occurrence of SPACECRAFT_CLOCK_START/STOP_COUNT to use for determining whether to include/exclude data.";
-        YPrintf("%s\n", msg);
-        printf("%s\n", msg);  // NOTE: Using msg as format specifier instead makes gcc give warning (a warning which can be ignored, but still).
-        return -1;
+
+
+    // ASSERTION
+    if (dataExcludeTimes == NULL) {
+        printf( "Can not find data in dataExcludeTimes.\n");
+        YPrintf("Can not find data in dataExcludeTimes.\n");
+        ExitPDS(1);   // return -1;  ??
     }
-    SPACECRAFT_CLOCK_START_COUNT = property1->value;
-    SPACECRAFT_CLOCK_STOP_COUNT  = property2->value;
+
+    sccd_file_begin = curr->seq_time_TM;
+    sccd_file_end   = curr->stop_time_TM;
     
-    /*======================================================
-     * Convert
-     * spacecraft clock count (string; false decimals)
-     * ==>
-     * "raw" spacecraft clock count (double; true decimals)
-     ======================================================*/
-    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_START_COUNT, &file_SCResetCounter_begin, &sccd_file_begin)) {
-        YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
-        printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_START_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_START_COUNT);
-        return -2;
+    // ---------------DEBUG------------------
+    /*
+    ConvertSccd2Sccs(sccd_file_begin, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_begin, FALSE);   // No error handling needed.
+    ConvertSccd2Sccs(sccd_file_end,   ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_end,  FALSE);
+    if ((ConvertSccd2Utc(sccd_file_begin, utc_begin, NULL) != 0) ||
+        (ConvertSccd2Utc(sccd_file_end,   utc_end,  NULL) != 0)) {
+        CPrintf("Can not convert sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
+        printf( "Can not convert sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
+        ExitPDS(1);
     }
-//     if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  &junk_int,                  &sccd_file_end  )) {
-    if (ConvertSccs2Sccd(SPACECRAFT_CLOCK_STOP_COUNT,  NULL,                  &sccd_file_end  )) {
-        YPrintf("ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
-        printf( "ERROR: Can not interpret SPACECRAFT_CLOCK_STOP_COUNT: \"%s\"\n", SPACECRAFT_CLOCK_STOP_COUNT);
-        return -2;
-    }
-    
-    //=============================================
-    // Read START_TIME & STOP_TIME
-    // Will only be used for logging their values.
-    //=============================================
-    if (
-        (FindP(file_properties, &property1, "START_TIME", 1, DNTCARE) < 0) ||
-        (FindP(file_properties, &property2, "STOP_TIME",  1, DNTCARE) < 0)
-    ) {
-        YPrintf("DecideWhetherToExcludeData: Can not find occurrence of SPACECLOCK_START/STOP_COUNT.\n");
-        printf( "DecideWhetherToExcludeData: Can not find occurrence of SPACECLOCK_START/STOP_COUNT.\n");
-        return -1;
-    }
-    START_TIME = property1->value;
-    STOP_TIME  = property2->value;
-    
-    
-    
+    CPrintf("DecideWhetherToExcludeData: sccd_file_begin = %f\n", sccd_file_begin);   // DEBUG
+    CPrintf("DecideWhetherToExcludeData: sccd_file_end   = %f\n", sccd_file_end  );
+    CPrintf("DecideWhetherToExcludeData: SPACECRAFT_CLOCK_START_COUNT = %s\n", sccs_begin);
+    CPrintf("DecideWhetherToExcludeData: SPACECRAFT_CLOCK_STOP_COUNT  = %s\n", sccs_end );
+    CPrintf("DecideWhetherToExcludeData: START_TIME = %s\n", utc_begin);
+    CPrintf("DecideWhetherToExcludeData: STOP_TIME  = %s\n", utc_end);
+    //*/
+
     for (i=0; i<dataExcludeTimes->N_intervals; i++) {
         // Check if the file data overlaps with a specific data exclusion time interval.
         // If it does, then it is not necessary to check with other data exclusion intervals.
+        // NOTE: Uses ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER since no reset counter is submitted to the function.
         if (
-            (file_SCResetCounter_begin == dataExcludeTimes->SCResetCounter_begin_list[i])
+            (ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER == dataExcludeTimes->SCResetCounter_begin_list[i])
             && (sccd_file_end   >= dataExcludeTimes->sccd_begin_list[i])
             && (sccd_file_begin <= dataExcludeTimes->sccd_end_list[i])
         )
         {
-            CPrintf("DecideWhetherToExcludeData: Data for file with data in the stated time interval should be excluded:\n");
-            CPrintf("   SPACECRAFT_CLOCK_START_COUNT = %s\n", SPACECRAFT_CLOCK_START_COUNT);
-            CPrintf("   SPACECRAFT_CLOCK_STOP_COUNT  = %s\n", SPACECRAFT_CLOCK_STOP_COUNT );
-            CPrintf("   START_TIME = %s\n", START_TIME);
-            CPrintf("   STOP_TIME  = %s\n", STOP_TIME);
+            CPrintf("DecideWhetherToExcludeData: Files for data in the stated time interval should be excluded:\n");
             
-            *excludeData = 1; // Assign "true".
+            ConvertSccd2Sccs(sccd_file_begin, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_begin, FALSE);   // No error handling needed.
+            ConvertSccd2Sccs(sccd_file_end,   ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_end,   FALSE);
+            
+            if ((ConvertSccd2Utc(sccd_file_begin, utc_begin, NULL) != 0) ||
+                (ConvertSccd2Utc(sccd_file_end,   utc_end,   NULL) != 0)) {
+                CPrintf("Can not convert either sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
+                printf( "Can not convert either sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
+                ExitPDS(1);
+            }
+            
+            CPrintf("    (Note: Stated times not modified for group delay, ADC20_DELAY_S.)\n");
+            CPrintf("    sccd_file_begin = %f\n", sccd_file_begin);
+            CPrintf("    sccd_file_end   = %f\n", sccd_file_end  );
+            CPrintf("    SPACECRAFT_CLOCK_START_COUNT = sccs_begin = %s\n", sccs_begin);
+            CPrintf("    SPACECRAFT_CLOCK_STOP_COUNT  = sccs_end   = %s\n", sccs_end  );
+            CPrintf("    START_TIME                   = utc_begin  = %s\n", utc_begin);
+            CPrintf("    STOP_TIME                    = utc_end    = %s\n", utc_end  );
+            
+            *excludeData = 1;   // Assign "true".
             return 0;
         }
     }
     
-    *excludeData = 0;  // Assign "false".
+    *excludeData = 0;   // Assign "false".
     return 0;
 }
 
