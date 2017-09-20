@@ -45,7 +45,7 @@
 #define MAX_LINES       1024
 
 // Used by pds_x.xx.c: DecodeScience: param_type
-#define NO_PARAMS    0 // Parameter type indicator, no parameters
+#define NO_PARAMS    0 // Parameter type indicator, no parameters. Implicitly ADC16, non-sweep (?). Change name to ADC16_LF_PARAMS?
 #define SWEEP_PARAMS 1 // Parameter type indicator, sweep parameters
 #define ADC20_PARAMS 2 // Parameter type indicator, ADC 20 Bit parameters
 
@@ -582,7 +582,6 @@ typedef struct ground_stations
 // NOTE: Not necessarily strictly mission phases, since mission phases can be split up for data deliveries.
 typedef struct mission_phase_struct 
 {
-
   char data_set_id[MLEN_DSID];
   char data_set_name[MLEN_DSNA];
   char phase_name[64];

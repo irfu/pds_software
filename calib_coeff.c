@@ -59,8 +59,11 @@
  *          PRO: Still improves the code.
  *              CON: Not if it is only one function.
  * PROPOSAL: Create separate header file for these pds_3.09.c functions: ~pds_global.h, ~pds_export.h, ~pds_exposed
+ * PROPOSAL: Move to pds.h.
+ *      CON: pds_3.09.c already contains headers for these, AND pds_3.09.c includes pds.h.
  */
 int  YPrintf(const char *fmt, ...);                                         // Prints to pds system log
+int  OpenFileCountDataRows(char *file_path, FILE **file_descr, int *N_rows);
 
 int ConvertSccd2Utc         (double sccd, char *utc_3decimals, char *utc_6decimals);         // Decodes raw S/C time (calibration included) 
 int ConvertUtc2Timet(char *sdate,time_t *t);                                // Returns UTC time in seconds (since 1970) for a PDS date
@@ -70,7 +73,6 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);            // D
 
 double **CallocDoubleMatrix (int rows, int cols);                           // Dynamically allocate two dimensional array of doubles
 void FreeDoubleMatrix(double ** C, int rows, int cols);                     // Free two dim. array of doubles
-
 
 
 
@@ -119,52 +121,6 @@ void GetUtcYYMMDD(char *utc, char *date_str)
     date_str[5] = utc[9];   // D
     date_str[6] = '\0';
 }
-
-
-
-/* Prepare the reading of a datafile by
- * (1) opening generic text file (for reading),
- * (2) counting the number of rows with data, 
- * (3) rewinding file, 
- * (4) returning the file descriptor to the opened file.
- * This function is useful when reading the data file requires first allocating memory depending
- * on an unknown amount of data in the file. The read data is likely cached by the OS (if the file
- * is not closed and then reopened), and should therefor not slow down the application too much.
- * 
- * NOTE: Assumes that certain types of rows should be ignored.
- * 
- *
- * ARGUMENTS AND RETURN VALUE
- * ==========================
- * INPUT  : file_path    : Path to file that should be opened.
- * OUTPUT : file_descr   : File descriptor (pointer to ~object) returned by fopen(path,"r").
- * OUTPUT : N_rows       : Number of data rows. Ignores rows beginning with LF (works with rows ending with CR+LF?), "#", whitespace.
- * RETURN VALUE : Error code: 0=No error.
- */
-int OpenFileCountDataRows(char* file_path, FILE **file_descr, int *N_rows)
-{
-    char row_str[MAX_STR]; // Line buffer
-    int N_rows_p = 0;
-
-    if((*file_descr=fopen(file_path, "r"))==NULL)
-    {
-        YPrintf("Can not open file \"%s\".\n", file_path);
-        return -1;
-    }
-
-    // Count exclude table lines.
-    while(fgets(row_str, MAX_STR-1, *file_descr) != NULL)
-    {
-        if (row_str[0] == '\n') continue;   // Empty line.
-        if (row_str[0] == '#')  continue;   // Remove comments.
-        if (row_str[0] == ' ')  continue;   // Ignore whitespace line.
-        N_rows_p++;
-    }
-    *N_rows = N_rows_p;
-
-    rewind(*file_descr);   // Rewind index label to beginning of file.
-    return 0;
-}//*/
 
 
 
@@ -989,6 +945,7 @@ int GetInterpolatedCalibCoeff(
             coeff_array[i_coeff] = ccf_data_1->coeffs[i_coeff][i_sccd_1];
         }
     } else {    
+        // CASE: Nearest time before and after are NOT identical.
         const double sccd_1 = ccf_data_1->sccd_array[i_sccd_1];
         const double sccd_2 = ccf_data_2->sccd_array[i_sccd_2];
         const double C = (sccd - sccd_1) / (sccd_2 - sccd_1);

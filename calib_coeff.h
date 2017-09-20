@@ -65,6 +65,5 @@ int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data);
 int GetCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data, double sccd, double *coeff_array);
 
 // Not presently used by any other module, but could be useful elsewhere.
-int OpenFileCountDataRows(char *file_path, FILE **file_descr, int *N_rows);
 void ModifyUtc2BeginDay(char *utc);
 void GetUtcYYMMDD(char *utc, char *date_str);

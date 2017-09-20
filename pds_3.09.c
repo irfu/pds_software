@@ -131,7 +131,7 @@
  *      /Erik P G Johansson 2017-07-06
  * * Uses SPICE for ConvertSccd2Utc and implicitly for LBL (PDS keywords) and TAB files (columns). (Other conversions UTC<-->time_ still do not use SPICE.)
  *      /Erik P G Johansson 2017-07-10
- * * Will not write files for makro 710 P2 HF, and makro 910 P1 HF.
+ * * Will not write files for macro 710 P2 HF, and macro 910 P1 HF.
  *      /Erik P G Johansson 2017-07-14
  * * No longer read ADC16 calibration factors from PDS keywords in CALIB_MEAS files. Uses hardcoded values instead.
  *      /Erik P G Johansson 2017-08-21
@@ -187,6 +187,7 @@
  *      HK_NUM_LINES determines the number of HK packets(?) per HK TAB file, and (presumably) only one of these packets
  *      is used for the INSTRUMENT_MODE_ID in the corresponding HK-LBL file.
  *
+ * 
  * 
  * 
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
@@ -285,7 +286,9 @@ static void ExitWithGrace(int signo);				// Graceful exit
 // Logging and exit functions
 //----------------------------------------------------------------------------------------------------------------------------------
 void ExitPDS(int status);					// Closes logging and exits with status
+int YSPrintf(const char *fmt, ...);
 int  YPrintf(const char *fmt, ...);				// Prints to pds system log
+int  YPrintf2(const char *fmt, va_list args);
 int  DPrintf(const char *fmt, ...);				// Prints to DDS packet filter log 
 int  PPrintf(const char *fmt, ...);				// Prints to S/C packet filter log
 int  CPrintf(const char *fmt, ...);				// Prints to Science decoding log
@@ -301,6 +304,7 @@ int  HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if 
 // Pointer to file desc pointer pfd is needed and an error stream
 // Functions to load and test external information
 //----------------------------------------------------------------------------------------------------------------------------------
+int  OpenFileCountDataRows(char *file_path, FILE **file_descr, int *N_rows);
 int  LoadConfig1(pds_type *p);                          // Loads configuration information first part
 int  LoadConfig2(pds_type *p,char *data_set_id);        // Loads configuration information second part
 int  LoadAnomalies(prp_type *p,char *path);             // Load anomaly file
@@ -2126,18 +2130,17 @@ void *DecodeScience(void *arg)
     
     // Load Exclude file
     if(calib) {
-        if((nexcl=LoadExclude(&exclude, pds.epath))<0)
-        {
-            YPrintf("Warning: Calibration macros will not be excluded\n");
-            printf( "Warning: Calibration macros will not be excluded\n");
+        if((nexcl=LoadExclude(&exclude, pds.epath))<0) {
+            YSPrintf("ERROR: Calibration macros will not be excluded\n");
+            ExitPDS(1);
         }
     }
     
     // Erik P G Johansson 2015-03-25: Added reading data exclude list file.
     if((LoadDataExcludeTimes(&dataExcludeTimes, pds.depath)))
     {
-        YPrintf("Warning: Can not load data exclude times.\n");   // Write to "pds system log".
-        printf( "Warning: Can not load data exclude times.\n");
+        YSPrintf("ERROR: Can not load data exclude times.\n");
+        ExitPDS(1);
     }
 
 
@@ -2869,7 +2872,11 @@ void *DecodeScience(void *arg)
                                                 }
                                                 break;
 
+                                            //#######################
+                                            //#######################
                                             case S13_RECONNECT:
+                                            //#######################
+                                            //#######################
                                                 DispState(state,"STATE = S13_RECONNECT\n");
                                                 break;
 
@@ -3827,8 +3834,11 @@ void *DecodeScience(void *arg)
                                                     // descriptions/IDs since that functionality had not been implemented yet.
                                                     // /Erik P G Johansson summarizing Reine Gill 2015-03-26.
                                                     // -------------------------------------------------------------------------------------
-                                                    if(!macro_descr_NOT_found) // IF we do HAVE a macro description (macro_descr_NOT_found==0 means we have).
+                                                    if(!macro_descr_NOT_found)
                                                     {
+                                                        //===============================================================================
+                                                        // CASE: We do HAVE a macro description (macro_descr_NOT_found==0 means we have).
+                                                        //===============================================================================
                                                         if(calib)
                                                         {
                                                             for(i=0;i<nexcl;i++)
@@ -3859,7 +3869,7 @@ void *DecodeScience(void *arg)
                                                         //FindP(&comm,&property4,"STOP_TIME",1,DNTCARE);           // Get stop time
                                                         
                                                         
-                                                        // Find position there the root of the PDS archive starts
+                                                        // Find position where the root of the PDS archive starts
                                                         ti1=strlen(pds.apathpds); 
                                                         
                                                         
@@ -3947,13 +3957,15 @@ void *DecodeScience(void *arg)
                                                     }   // if(!macro_descr_NOT_found)
                                                     else
                                                     {
+                                                        //==============================================
                                                         // CASE: A macro description could not be found.
-                                                        // 
+                                                        //==============================================
                                                         // If fingerprinting was enabled it must have failed.
                                                         // Anomaly correction must also have failed at this point.
                                                         // 
                                                         // Data will be stored in the UnAccepted_Data directory instead
                                                         // and requires manual attention.
+                                                        // NOTE: TAB & LBL file pair will NOT be created
                                                         YPrintf("Macro description missing, data stored in UnAccepted_Data\n"); // Put a note in the system log
                                                         CPrintf("    Dump data to %s\n",pds.uapath); // No macro description dump to unaccepted files
                                                         
@@ -3983,10 +3995,15 @@ void *DecodeScience(void *arg)
                                                         }
                                                     }    // if (!macro_descr_NOT_found) ... else ...
                                                     state=S04_GET_ID_CODE;
-                                                    break;     
-                                                    default:
-                                                        DispState(state,"STATE = UNKNOWN\n");
-                                                        break;
+                                                    break;
+                                                    
+                                                //#######################
+                                                //#######################
+                                                default:
+                                                //#######################
+                                                //#######################
+                                                    DispState(state,"STATE = UNKNOWN\n");
+                                                    break;
         }
     }   // while
     return 0;
@@ -4301,12 +4318,42 @@ void ExitPDS(int status)
 
 
 
+
+// Like YPrintf (Y) + printf (S=stdout).
+// Intended for replacing many identical subsequent calls to YPrintf and printf.
+int YSPrintf(const char *fmt, ...)
+// PROPOSAL: Replace with function for error messages, EPrintf.
+//      PRO: Can add standardized prefix(es).
+//          Ex: "ERROR: "
+//          Ex: Argument for the calling function.
+{
+    va_list args;    
+    va_start(args,fmt);
+    
+    vprintf(fmt, args);                  // Equivalent of printf that uses va_list.
+    int status = YPrintf2(fmt, args);    // Equivalent of YPrintf that uses va_list.
+    
+    va_end(args);    
+    return status;
+}
+
+
 // Like printf but everything goes into PDS_LOG0.
 // If it can't open, then messages are printed to stderr.
-int YPrintf(const char *fmt, ...) 
+int YPrintf(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args,fmt);
+    
+    int status = YPrintf2(fmt, args);
+    
+    va_end(args);
+    return status;
+}
+
+int YPrintf2(const char *fmt, va_list args)
 {
     int status;
-    va_list args;
     char strp[32];
     int oldstate;
     
@@ -4321,7 +4368,6 @@ int YPrintf(const char *fmt, ...)
             {
                 GetCurrentUtc0(strp); // Get universal time
                 fprintf(pds.ylog_fd,"%s (UTC): ",strp);
-                va_start(args,fmt);
                 status=vfprintf(pds.ylog_fd,fmt, args);
                 fflush(pds.ylog_fd);
             }
@@ -4587,6 +4633,52 @@ int HasMoreArguments(int argc, char *argv[])
 
 // Functions to load and test external information 
 //----------------------------------------------------------------------------------------------------------------------------------
+
+/* Prepare the reading of a datafile by
+ * (1) opening generic text file (for reading),
+ * (2) counting the number of rows with data, 
+ * (3) rewinding file descriptor, 
+ * (4) returning the file descriptor to the opened file.
+ * This function is useful when reading the data file requires first allocating memory depending
+ * on an unknown amount of data in the file. The read data is likely cached by the OS (if the file
+ * is not closed and then reopened), and should therefor not slow down the application too much.
+ * 
+ * NOTE: Assumes that certain types of rows should be ignored.
+ * 
+ *
+ * ARGUMENTS AND RETURN VALUE
+ * ==========================
+ * INPUT  : file_path    : Path to file that should be opened.
+ * OUTPUT : file_descr   : File descriptor (pointer to ~object) returned by fopen(path,"r").
+ * OUTPUT : N_rows       : Number of data rows. Ignores rows beginning with LF (works with rows ending with CR+LF?), "#", whitespace.
+ * RETURN VALUE : Error code: 0=No error.
+ */
+int OpenFileCountDataRows(char* file_path, FILE **file_descr, int *N_rows)
+{
+    char row_str[MAX_STR]; // Line buffer
+    int N_rows_p = 0;
+
+    if((*file_descr=fopen(file_path, "r"))==NULL)
+    {
+        YPrintf("Can not open file \"%s\".\n", file_path);
+        return -1;
+    }
+
+    // Count exclude table lines.
+    while(fgets(row_str, MAX_STR-1, *file_descr) != NULL)
+    {
+        if (row_str[0] == '\n') continue;   // Empty line.
+        if (row_str[0] == '#')  continue;   // Remove comments.
+        if (row_str[0] == ' ')  continue;   // Ignore line beginning with whitespace.
+        N_rows_p++;
+    }
+    *N_rows = N_rows_p;
+
+    rewind(*file_descr);   // Rewind index label to beginning of file.
+    return 0;
+}
+
+
 
 // Load first part of configuration file
 int  LoadConfig1(pds_type *p) // Loads configuration information
@@ -6531,7 +6623,7 @@ char GetBiasMode(curr_type *curr, int dop) {
 
 
 /*
- * Function to select which bias voltage-dependent current offsets (calibration data) to use for a given point in time.
+ * Function to select which bias voltage-dependent current offsets (calibration data, CALIB_MEAS) to use for a given point in time.
  *
  * NOTE: The function will set the flag mc->calibration_used.
  *
@@ -6837,31 +6929,31 @@ int WritePTAB_File(
     // Variable naming convention:
     // *_TM        : (1) Quantity in TM units. (2) Time derived from TM without correcting for signal delay (ADC20).
     // *_corrected : Time adjusted for signal delay (ADC20).
-    
+
     char file_path[PATH_MAX];        // Temporary string
-    
+
     char current_sample_utc_corrected[MAX_STR];
     char first_sample_utc_TM[MAX_STR];   // TM=Time according to TM (no group delay).
 
     int curr_step = 3;               // Current sweep step, default value just there to get rid of compilation warning.
-    
+
     double t_delta_s;                // Time since first sample. Unit: seconds
     double current_sample_sccd_corrected;   // Time of current sample (current row) as SCCD.
-    
+
     int i_sample;                    // Sample number.
     int j,l,m;
     int k_proper_sweep_sample;       // Sample number during the actual sweep steps (not the initial samples, which number may vary).
-    
+
     int meas_value_TM;               // Measured value (i.e. not bias value) in TM units. NOTE: Integer.
     int sw_bias_voltage_TM = 0;      // Bias voltage during a sweep (sw) in TM units.
 
     int macro_id; 
     int current_TM;                  // Current variable in TM units (TC or TM).
     int voltage_TM;                  // Voltage variable in TM units (TC or TM).
-    
+
     int ibias;                       // Temporary current variable
     int vbias;                       // Temporary voltage variable
-    
+
     int ibias1;                      // Temporary current variable
     int vbias1;                      // Temporary voltage variable
     int ibias2;                      // Temporary current variable
@@ -7186,7 +7278,6 @@ int WritePTAB_File(
             vcalf *= ADC20_moving_average_bug_TM_factor;
         }
     }   //  if(calib) ...
-
     
 
     
@@ -7430,8 +7521,11 @@ int WritePTAB_File(
         if(data_type==D16) {
             if(meas_value_TM>=0) {
                 if (!calib) {
+                    // CASE: EDITED
                     meas_value_TM = meas_value_TM - ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM;    // NOTE: Subtraction from actual measured value.
                 } else {
+                    // CASE: CALIB
+                    
                     // Subtract ADC16 nonnegative values offset using local_calib_offset_ADC16TM instead of meas_value_TM,
                     // since the latter is an integer variable that can not handle decimal values.
                     // NOTE: Addition to offset which will later be subtracted from actual measured value.
@@ -7512,7 +7606,7 @@ int WritePTAB_File(
                 double ccurrent;
                 ccurrent  = ccalf * ((double)(current_TM));    // Factor calibration
                 ccurrent -= ccalf_ADC16 * local_calib_offset_ADC16TM;
-                    
+
                 if(param_type==SWEEP_PARAMS)
                 {
                     //=====================
@@ -9819,7 +9913,7 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decima
  * 
  * NOTE: Reacts on errors by exiting pds, rather than returning error code.
  *       Most (all?) calls to this function do not check the error code anyway.
- * NOTE: This function is THREAD-SAFE and used the SPICE mutex.
+ * NOTE: This function is THREAD-SAFE and uses the SPICE mutex.
  */ 
 int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
 {
@@ -9853,12 +9947,12 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     // "utc_3decimals" and "utc_6decimals" are buffers of unknown length.
     if (utc_3decimals != NULL) {
         et2utc_c(et, "ISOC", 3, MAX_STR, utc_temp);
-        CheckSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
+        CheckSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);   // Exit PDS on error.
         strcpy(utc_3decimals, utc_temp);
     }
     if (utc_6decimals != NULL) {
         et2utc_c(et, "ISOC", 6, MAX_STR, utc_temp);
-        CheckSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);
+        CheckSpiceError("SPICE failed to convert et-->UTC.", TRUE, FALSE);   // Exit PDS on error.
         strcpy(utc_6decimals, utc_temp);
     }
     
@@ -11252,19 +11346,19 @@ int main_TEST(int argc, char* argv[]) {
     ProtectPlnkInit();
     
     // NOTE: SPICE may or may not have been initialized by the core pds code, depending on from where main_TEST was called.
-    InitSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V040___birra.TM");
+//     InitSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V040___birra.TM");
 //     erract_c("SET", 99999, "DEFAULT");
     
 //     FindNearestInSortedArray_TEST();
 //     TimeConversion_TEST();
 //     CalibCoeff_TEST();
-    
-    char tstr[MAX_STR];
-    double et;
-    char *utc = "2010-07-12T00:00:00.000";
-    printf("utc = %s\n", utc);   // DEBUG
-    utc2et_c(utc, &et);
-    CheckSpiceError(tstr, TRUE, TRUE);
+
+//     char tstr[MAX_STR];
+//     double et;
+//     char *utc = "2010-07-12T00:00:00.000";
+//     printf("utc = %s\n", utc);   // DEBUG
+//     utc2et_c(utc, &et);
+//     CheckSpiceError(tstr, TRUE, TRUE);
     
     ExitPDS(255);
 
