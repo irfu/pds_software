@@ -612,8 +612,20 @@ typedef struct hk_lbl_info_struct
 //------------------------------------------------------------------------
 typedef struct data_exclude_times_struct
 {
-  int      N_intervals;       // Length of arrays = Number of time intervals.
-  int     *SCResetCounter_begin_list;
-  double  *sccd_begin_list;    // Spacecraft clock counter as double (true decimals). Pointer to array.
-  double  *sccd_end_list;      // Spacecraft clock counter as double (true decimals). Pointer to array.
+  int     N_intervals;       // Length of arrays = Number of time intervals.
+  int    *SCResetCounter_begin_list;   // Pointer to array.
+  double *sccd_begin_list;             // Pointer to array.
+  double *sccd_end_list;               // Pointer to array.
+  int    *probe_constraint_list;       // Pointer to array. Takes on values PROBE_CONSTRAINT_*
+  int    *data_type_constraint_list;   // Pointer to array. Takes on values DATA_TYPE_CONSTRAINT_*.
 } data_exclude_times_type;
+
+#define PROBE_CONSTRAINT_NONE   0
+#define PROBE_CONSTRAINT_P1    1
+#define PROBE_CONSTRAINT_P2    2
+#define PROBE_CONSTRAINT_P3    3
+
+#define DATA_TYPE_CONSTRAINT_NONE    0
+#define DATA_TYPE_CONSTRAINT_SWEEP   1
+#define DATA_TYPE_CONSTRAINT_LF      2
+#define DATA_TYPE_CONSTRAINT_HF      3

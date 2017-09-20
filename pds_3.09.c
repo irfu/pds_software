@@ -5208,94 +5208,141 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
  * Doubtful how useful that would be.
  */
 int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath) {
+// PROPOSAL: Read macro ID.
+//      PRO: Can include the 910 P1 HF, 710 P2 HF data exclusions.
+//          CON: Can not, since that applies to all times.
+//              PRO: Can do, since can give LONG time interval.
+
     FILE   *fd;
-    char   line[256]; // Line buffer
+    char   line[MAX_STR];   // Line buffer
     int    i = 0;
-    int    SCResetCounter1 = 0;
-//     int    SCResetCounter2 = 0;
-    double sscd_begin = 0.0;
+    int    SCResetCounter1 = -1;
+//     int    SCResetCounter2 = -1;
+    double sccd_begin = 0.0;
     double sccd_end   = 0.0;
-    char   l_tok[256]; // Left token
-    char   r_tok[256]; // Right token  
+    char sccs_begin[MAX_STR];
+    char sccs_end[MAX_STR];
+    char utc_begin[MAX_STR];
+    char utc_end[MAX_STR];
+    char probe_constraint_str[MAX_STR];
+    int  probe_constraint = -1;
+    char data_type_constraint_str[MAX_STR];
+    int  data_type_constraint = -1;
     data_exclude_times_type dataExcludeTimes_temp;
 
-    sprintf(line, "Loading data exclude times file: %s\n", depath);
-    YPrintf(line);  // Print to "pds system log".
+    YPrintf("Loading data exclude times file: %s\n", depath);  // Print to "pds system log".
     
     *dataExcludeTimes = (data_exclude_times_type*) NULL;   // Default value to be returned to the caller in case of error.
-    
-    if((fd=fopen(depath, "r"))==NULL) {
-        sprintf(line, "LoadDataExcludeTimes: ERROR: Can not find file: \"%s\"\n", depath);
-        YPrintf(line);
-        perror(line);
+
+    if (OpenFileCountDataRows(depath, &fd, &(dataExcludeTimes_temp.N_intervals))) {
+        YSPrintf("ERROR: LoadDataExcludeTimes: Can not find file: \"%s\"\n", depath);
         return -1;
     }
-    
-    // Count number of data exclude time intervals by counting lines of actual data in file.
-    dataExcludeTimes_temp.N_intervals = 0;
-    while(fgets(line, 255, fd) != NULL)
+
+    dataExcludeTimes_temp.SCResetCounter_begin_list = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
+    dataExcludeTimes_temp.sccd_begin_list           = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
+    dataExcludeTimes_temp.sccd_end_list             = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
+    dataExcludeTimes_temp.probe_constraint_list     = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
+    dataExcludeTimes_temp.data_type_constraint_list = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
+
+    i = 0;
+    YPrintf("Ingested data exclude time intervals:\n");  // Print to "pds system log".
+    while(fgets(line, MAX_STR, fd) != NULL)  // NOTE: "line" will end with a \n.
     {
         if (line[0] == '\n') continue; // Ignore empty line.
         if (line[0] == '#')  continue; // Ignore comments.
         //if (line[0] == ' ')  continue; // Ignore whitespace line
-        dataExcludeTimes_temp.N_intervals++;
-    }
-    
-    rewind(fd); // Set position of stream to beginning.
-    dataExcludeTimes_temp.SCResetCounter_begin_list = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
-    dataExcludeTimes_temp.sccd_begin_list           = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
-    dataExcludeTimes_temp.sccd_end_list             = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
-    
-    i = 0;
-    YPrintf("Ingested data exclude time intervals:\n");  // Print to "pds system log".
-    YPrintf("    LEFT:  File contents strings (should be SCCS)\n");  // Print to "pds system log".
-    YPrintf("    RIGHT: Interpretations (reset counter + SCCD)\n");  // Print to "pds system log".
-    while(fgets(line, 255, fd) != NULL)  // NOTE: "line" will end with a \n.
-    {      
-        if (line[0] == '\n') continue; // Ignore empty line.
-        if (line[0] == '#')  continue; // Ignore comments.
-        //if (line[0] == ' ')  continue; // Ignore whitespace line
-
-        if (sscanf(line, " %s %s ", l_tok, r_tok) != 2)   // Whitespace represent any sequence of whitespace and tab (incl. empty).
+        
+        //============================
+        // Interpret one line of data
+        //============================
+        // NOTE: This defines the columns and part of the file format/syntax.
+//         if (sscanf(line, " %s %s ", l_tok, r_tok) != 2)   // Whitespace represent any sequence of whitespace and tab (incl. empty).
+        if (sscanf(line, " %[^,], %[^,], %[^,], %[^,]", sccs_begin, sccs_end, probe_constraint_str, data_type_constraint_str) != 4)
         {
-            YPrintf("ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
-            printf( "ERROR: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
+            YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
+            fclose(fd);
             return -1;
+        }
+        TrimWN(sccs_begin);   // Remove leading and trailing whitespace, remove CR (if any). Can be important depending on the exact chosen file format (future PDS compliant).
+        TrimWN(sccs_end);
+        TrimWN(probe_constraint_str);
+        TrimWN(data_type_constraint_str);   // Necessary to deal with end-of-line?
+        
+        // Convert SCCS --> SCCD.
+        if (ConvertSccs2Sccd(sccs_begin, &SCResetCounter1, &sccd_begin)) {
+            YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret interval BEGINNING in data exclude times file: \"%s\"\n", sccs_begin);
+            fclose(fd);
+            return -10;
+        }
+        if (ConvertSccs2Sccd(sccs_end, NULL, &sccd_end)) {    // NOTE: Does not read S/C clock reset counter.
+            YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret interval END in data exclude times file: \"%s\"\n", sccs_end);
+            fclose(fd);
+            return -11;
         }
         
-        if (ConvertSccs2Sccd(l_tok, &SCResetCounter1, &sscd_begin)) {
-            YPrintf("ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
-            printf( "ERROR: Can not interpret interval _beginning_ in data exclude times file: \"%s\"\n", l_tok);
-            return -1;
+        // Convert SCCD --> UTC -- Only for log messages.
+        if (ConvertSccd2Utc(sccd_begin, NULL, utc_begin)) {
+            YSPrintf("ERROR: LoadDataExcludeTimes: Can not convert interval BEGINNING in data exclude times file: \"%f\"\n", sccd_begin);
+            fclose(fd);
+            return -12;
         }
-//         if (ConvertSccs2Sccd(r_tok, &SCResetCounter2, &sccd_end)) {    // NOTE: temp_int2 never used.
-        if (ConvertSccs2Sccd(r_tok, NULL, &sccd_end)) {    // NOTE: temp_int2 never used.
-            YPrintf("ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
-            printf( "ERROR: Can not interpret interval _end_ in data exclude times file: \"%s\"\n", r_tok);
-            return -1;
+        if (ConvertSccd2Utc(sccd_end, NULL, utc_end)) {
+            YSPrintf("ERROR: LoadDataExcludeTimes: Can not convert interval END in data exclude times file: \"%f\"\n", sccd_end);
+            fclose(fd);
+            return -13;
+        }
+
+        // ASSERTIONS
+        if (sccd_begin > sccd_end) {
+            YSPrintf("ERROR: LoadDataExcludeTimes: Found time interval that runs backwards (sccd_begin > sccd_end) in data exclude times file.\n");
+            fclose(fd);
+            return -20;
         }
         
-        if (sscd_begin > sccd_end) {
-            YPrintf("ERROR: Found time interval runs backwards (sscd_begin > sccd_end) in data exclude times file.\n");
-            printf( "ERROR: Found time interval runs backwards (sscd_begin > sccd_end) in data exclude times file.\n");
+        // Translate probe_constraint_str --> probe_constraint + ASSERTION
+        if      (!strcmp(probe_constraint_str, "ALL_PROBES")) {   probe_constraint = PROBE_CONSTRAINT_NONE;  }
+        else if (!strcmp(probe_constraint_str, "P1"))         {   probe_constraint = PROBE_CONSTRAINT_P1;    }
+        else if (!strcmp(probe_constraint_str, "P2"))         {   probe_constraint = PROBE_CONSTRAINT_P2;    }
+        else if (!strcmp(probe_constraint_str, "P3"))         {   probe_constraint = PROBE_CONSTRAINT_P3;    }
+        else {
+            YSPrintf("ERROR: Illegal probe_constraint_str=\"%s\" at i=%i.\n", probe_constraint_str, i);
+            fclose(fd);
+            return -21;
         }
+        // Translate data_type_constraint_str --> data_type_constraint + ASSERTION
+        if      (!strcmp(data_type_constraint_str, "ALL_DATA_TYPES")) {   data_type_constraint = DATA_TYPE_CONSTRAINT_NONE;    }
+        else if (!strcmp(data_type_constraint_str, "SWEEPS"))         {   data_type_constraint = DATA_TYPE_CONSTRAINT_SWEEP;   }
+        else if (!strcmp(data_type_constraint_str, "LF"))             {   data_type_constraint = DATA_TYPE_CONSTRAINT_LF;      }
+        else if (!strcmp(data_type_constraint_str, "HF"))             {   data_type_constraint = DATA_TYPE_CONSTRAINT_HF;      }
+        else {
+            YSPrintf("ERROR: Illegal data_type_constraint_str=\"%s\" at i=%i.\n", data_type_constraint_str, i);
+            fclose(fd);
+            return -22;
+        }
+
         dataExcludeTimes_temp.SCResetCounter_begin_list[i] = SCResetCounter1;
-        dataExcludeTimes_temp.sccd_begin_list[i]              = sscd_begin;
-        dataExcludeTimes_temp.sccd_end_list[i]                = sccd_end;
-        
-        // Print to "pds system log".
-        // Useful for double-checking that the code interprets the file correctly. Could be deactivated
-        // together with introductory "title line" that is also printed to the log before the loop.
-        YPrintf("   %s %s  = %i/%f %i/%f\n", l_tok, r_tok, SCResetCounter1, sscd_begin, SCResetCounter1, sccd_end);
-        
+        dataExcludeTimes_temp.sccd_begin_list[i]           = sccd_begin;
+        dataExcludeTimes_temp.sccd_end_list[i]             = sccd_end;
+        dataExcludeTimes_temp.probe_constraint_list[i]     = probe_constraint;
+        dataExcludeTimes_temp.data_type_constraint_list[i] = data_type_constraint;
+
+        // Print table contents to "pds system log".
+        // NOTE: Preceded by "header row.
+        // Useful for double-checking that the code interprets the file correctly.
+//         YPrintf("   %s %s  = %i/%f %i/%f\n", l_tok, r_tok, SCResetCounter1, sccd_begin, SCResetCounter1, sccd_end);
+        //YPrintf("line = %s");
+        YPrintf("    %-18s %-18s %18f %18f %26s %26s %1i %1i\n", sccs_begin, sccs_end, sccd_begin, sccd_end, utc_begin, utc_end, probe_constraint, data_type_constraint);
+
         i++;
     }
     
     // Check that the two different counts of time intervals agree to detect bugs, especially when changing the file format.
     // NOTE: Could possibly remove this code.
     if (i != dataExcludeTimes_temp.N_intervals) {
-        YPrintf("LoadDataExcludeTimes: ERROR: Implementation bug. Can not obtain the number of time intervals.\n");  // Print to "pds system log".
-        printf( "LoadDataExcludeTimes: ERROR: Implementation bug. Can not obtain the number of time intervals.\n");
+        YSPrintf("ERROR: LoadDataExcludeTimes: Implementation bug. Can not obtain the number of time intervals.\n");  // Print to "pds system log".
+        fclose(fd);
+        return -30;
     }
     fclose(fd);
     
