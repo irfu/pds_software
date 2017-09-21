@@ -50,10 +50,11 @@
 #define ADC20_PARAMS 2 // Parameter type indicator, ADC 20 Bit parameters
 
 // Used by "curr_type_def#sensor".
+// NONE: Can not be set to arbitrary values since curr_type#sensor is incremented in DecodeScience.
 #define SENS_NONE    0
 #define SENS_P1      1
 #define SENS_P2      2
-#define SENS_P1P2    3
+#define SENS_P1P2    3    // = P3
 
 // ADC sampling frequencies.
 #define SAMP_FREQ_ADC16   18750.0
@@ -612,18 +613,15 @@ typedef struct hk_lbl_info_struct
 //------------------------------------------------------------------------
 typedef struct data_exclude_times_struct
 {
-  int     N_intervals;       // Length of arrays = Number of time intervals.
-  int    *SCResetCounter_begin_list;   // Pointer to array.
+  int     N_intervals;                 // Length of arrays = Number of time intervals.
+  int    *scrc_begin_list;             // Pointer to array. SCRC = Spacecraft reset counter
   double *sccd_begin_list;             // Pointer to array.
   double *sccd_end_list;               // Pointer to array.
-  int    *probe_constraint_list;       // Pointer to array. Takes on values PROBE_CONSTRAINT_*
+  int    *probe_constraint_list;       // Pointer to array. Takes on values PROBE_CONSTRAINT_NONE, SENS_P1, SENS_P2, SENS_P1P2.
   int    *data_type_constraint_list;   // Pointer to array. Takes on values DATA_TYPE_CONSTRAINT_*.
 } data_exclude_times_type;
 
-#define PROBE_CONSTRAINT_NONE   0
-#define PROBE_CONSTRAINT_P1    1
-#define PROBE_CONSTRAINT_P2    2
-#define PROBE_CONSTRAINT_P3    3
+#define PROBE_CONSTRAINT_NONE   0   // Must have value different from SENS_P1, SENS_P1, SENS_P1P2.
 
 #define DATA_TYPE_CONSTRAINT_NONE    0
 #define DATA_TYPE_CONSTRAINT_SWEEP   1

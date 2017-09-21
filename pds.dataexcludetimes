@@ -1,8 +1,12 @@
 #
-# List of time intervals for which data should be excluded (ignored).
-# -------------------------------------------------------------------
-# Data files for time intervals which overlap with the time intervals listed here
-# are never written to disk.
+# Specify criterion/rules for excluding data
+# ------------------------------------------
+# Column 1-2: Beginning & end of time interval as "spacecraft clock count strings" (SCCS),
+#             without being compensated for ADC20 group delay. E.g. 1/0376707707.15680.
+# Column 3:   ALL_PROBES, P1, P2, P3, 
+# Column 4:   ALL_DATA_TYPES, SWEEPS, LF, HF
+# 
+# See functions LoadDataExcludeTimes, DecideWhetherToExcludeData for syntax and implementation.
 #
 # NOTE: Times have to be given
 # (1) as "spacecraft clock count strings" (SCCS), i.e. using reset counter and false decimals designating a 16-bit number,
@@ -11,36 +15,38 @@
 # This is necessary to make the time designations independent of 
 # (1) time conversions (SCCS<->UTC; SPICE kernels), and
 # (2) the compensation for group delay.
-#
+
 
 
 # Timestamps appear to be 32 s too early.
 # 2014-11-09T00:46:58.295 - 2014-11-09T00:49:34.029
-1/0374114747.15680 1/0374114902.63740
+1/0374114747.15680, 1/0374114902.63740, ALL_PROBES, ALL_DATA_TYPES
 
 
 
 # Alla data from macro 614. Macro produced corrupt data and was run only once.
 # 2014-12-09T01:02:59.148  2014-12-09T12:57:09.412
-1/0376707707.15680 1/0376750557.32064
+#
 # Exclusion added but I have not actually double-checked if data is actually correctly excluded.
 # /Erik P G Johansson 2015-04-13
+1/0376707707.15680, 1/0376750557.32064, ALL_PROBES, ALL_DATA_TYPES
 
 
 
 # All of macro 0x624 on 2015-01-23.
 # Bad programming on Rosetta led to generating more data than bandwidth permitted.
 # 2015-01-23T01:29:40.432 - 2015-01-23T06:28:50.388
-1/0380597307.15680 1/0380615257.12403
+1/0380597307.15680, 1/0380615257.12403, ALL_PROBES, ALL_DATA_TYPES
 
 
 
 # Time appears to be 32 s behind for a few minutes.
 # 2015-03-01T00:09:41.469640 - 2015-03-01T00:14:26.269731
-1/0383789275.15680 1/0383789592.2573
+1/0383789275.15680, 1/0383789592.2573, ALL_PROBES, ALL_DATA_TYPES
 
 
 
 # Mistakenly runs macro 601 (BM) with NM telemetry instead of new macro 611 which was mistakenly written to the wrong place in LAP memory.
 # 2016-08-04T09:14:59.168 - 2016-08-04T09:15:05.797
-1/0428922811.15680 1/0428922817.56880
+# i=4
+1/0428922811.15680, 1/0428922817.56880, ALL_PROBES, ALL_DATA_TYPES

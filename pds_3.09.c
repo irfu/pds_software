@@ -312,7 +312,14 @@ int  LoadModeDesc(prp_type *p,char *path);              // Load human descriptio
 int  LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt,char *path);		// Load bias settings file
 int  LoadExclude(unsigned int **exclude,char *path);                                   // Load exclude file
 int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath);   // Load data exclude times file.
-int  DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, curr_type *curr, int *excludeData);
+int DecideWhetherToExcludeData(
+    data_exclude_times_type *dataExcludeTimes,
+    curr_type curr,
+    int param_type,
+    unsigned int macro_id,
+    int dop,
+    int *shouldExcludeFilePair);
+
 int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  // Load time correlation packets
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
 int  InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m);             // Get measured data calibration files
@@ -1798,7 +1805,7 @@ void *DecodeHK(void *arg)
         //
         sprintf(tstr3,"RPCLAP%s%s*_*_*H.LBL",&tstr2[2],&tstr2[5]);
         GetAlphaNum(alphanum_h,pds.spathh,tstr3);
-        IncAlphaNum(alphanum_h); // Increment alphanumeric value
+        IncAlphaNum(alphanum_h); // Increment alphanumeric value (HK)
         
         sprintf(stub_fname,"RPCLAP%s%s%s_%s_H",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);
         
@@ -2000,8 +2007,9 @@ void *DecodeScience(void *arg)
     int oldstate;
     int oldtype;
     int status;
-    
-    
+
+
+
     //#############################################################################################################################
     /* Function to remove repetition and shorten the code that writes TAB/LBL file pairs.
      * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
@@ -2013,14 +2021,17 @@ void *DecodeScience(void *arg)
      * lbl_fname, tab_fname: Sets byte 19 (E=E-field/D=Density) and 21 (probe number) 
      * prod_id:              Same as for lbl_fname, tab_fname but for byte 20 and 22, presumably because the first byte/character is a quote.
      * 
-     * dop : Defined in analogy with in "WritePTAB_File".
+     * ARGUMENTS
+     * =========
+     * dop       : Defined in analogy with in "WritePTAB_File".
+     * probe_nbr : 1, 2, or 3
      */
-    void WriteTABLBL_FilePair(int dop, unsigned int probeNbr) {
+    void WriteTABLBL_FilePair(int dop, unsigned int probe_nbr) {
         // PROPOSAL: Re-write as true function, not using variables defined outside of function, and with all input data as parameters.
 
         char tempChar;
-        char tstr10[256];
-        char indexStr[256];
+        char tstr10[MAX_STR];
+        char indexStr[MAX_STR];
         
         // Modify filenames and product ID.
         if(GetBiasMode(&curr, dop)==E_FIELD) {
@@ -2032,7 +2043,7 @@ void *DecodeScience(void *arg)
         tab_fname[19]=tempChar;
         prod_id[19+1]=tempChar;
         
-        sprintf(tstr10, "%1d", probeNbr);
+        sprintf(tstr10, "%1d", probe_nbr);
         lbl_fname[21]=tstr10[0];
         tab_fname[21]=tstr10[0];
         prod_id[21+1]=tstr10[0];
@@ -2046,24 +2057,16 @@ void *DecodeScience(void *arg)
         SetP(&comm,"FILE_NAME",tstr10,1);      // Set filename in common PDS parameters
         sprintf(tstr10,"\"%s\"",tab_fname);    // Add PDS quotes ".." 
         SetP(&comm,"^TABLE",tstr10,1);         // Set link to table in common PDS parameters
-
-        //===========================================
-        // Exclude files for specific cases of data:
-        // (1) makro 710 P2 HF
-        // (2) makro 910 P1 HF
-        //===========================================
-        if ((param_type!=SWEEP_PARAMS) && (param_type!=ADC20_PARAMS)) {
-            // CASE: HF data (not sweep, not ADC20). Conditions taken from the filenaming code.
-            // param_type=NO_PARAMS might work instead judging from the source code, since param_type only appears to
-            // only take on three values.
-            if ((curr.sensor==SENS_P1 || dop==1) && (macro_id==0x0910)) {
-                CPrintf("Excluding makro 910 P1 HF data (does not write TAB+LBL file).\n");
-                return;
-            }
-            if ((curr.sensor==SENS_P2 || dop==2) && (macro_id==0x0710)) {
-                CPrintf("Excluding makro 710 P2 HF data (does not write TAB+LBL file).\n");
-                return;
-            }
+        
+        int shouldExcludeFilePair = 0;   // Boolean flag.
+        if (DecideWhetherToExcludeData(dataExcludeTimes, curr, param_type, macro_id, dop, &shouldExcludeFilePair)) {
+            YSPrintf("ERROR: WriteTABLBL_FilePair: When trying to determine whether to exclude data.\n");
+            ExitPDS(1);
+        }
+        if (shouldExcludeFilePair) {
+            // Really superfluous printout since DecideWhetherToExcludeData also prints.
+            CPrintf("WriteTABLBL_FilePair: Excluding data - Not writing TAB & LBL file pair.\n");
+            return;
         }
 
         //====================
@@ -2082,9 +2085,9 @@ void *DecodeScience(void *arg)
         }
     }   // WriteTABLBL_FilePair
     //#############################################################################################################################
-    
-    
-    
+
+
+
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
     status+= pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,&oldtype);
     
@@ -3611,7 +3614,7 @@ void *DecodeScience(void *arg)
                                                             //
                                                             sprintf(tstr3,"RPCLAP%s%s*_*_*S.LBL",&tstr1[2],&tstr1[5]);
                                                             GetAlphaNum(alphanum_s, pds.spaths, tstr3); 
-                                                            IncAlphaNum(alphanum_s);         // Increment alphanumeric value
+                                                            IncAlphaNum(alphanum_s);         // Increment alphanumeric value (SCI)
 
 
                                                             //=======================================================
@@ -3804,29 +3807,6 @@ void *DecodeScience(void *arg)
                                                     DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
                                                     //CPrintf("1 dsa16_p1=%i\n", dsa16_p1);
                                                     //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
-
-                                                    //------------------------------------------------------------------------
-                                                    // Erik P G Johansson 2015-03-25: Added functionality for excluding data.
-                                                    // 
-                                                    // Determine whether to include/exclude entire TAB&LBL file pair.
-                                                    // Can be compared with the (CALIB) macro exclusion check.
-                                                    // NOTE: DecideWhetherToExcludeData requires SPACECRAFT_CLOCK_START_COUNT,
-                                                    // SPACECRAFT_CLOCK_STOP_COUNT to have been set.
-                                                    //------------------------------------------------------------------------
-                                                    int excludeData = 0;   // Boolean flag.
-                                                    if (DecideWhetherToExcludeData(dataExcludeTimes, &curr, &excludeData)) {
-                                                        YPrintf("DecodeScience: Error when trying to determine whether to exclude data.\n");
-                                                        printf( "DecodeScience: Error when trying to determine whether to exclude data.\n");
-                                                        ExitPDS(1);
-                                                    }
-                                                    if (excludeData) {
-                                                        // Really superfluous printout since DecideWhetherToExcludeData also prints.
-                                                        CPrintf("DecodeScience: Excluding data - Not writing TAB & LBL file pair.\n");
-                                                        
-                                                        ClearDictPDS(&dict);   // Clear dict     since that is what the macro CALIB macro exclusion code does.
-                                                        state=S04_GET_ID_CODE; // Set this state since that is what the macro CALIB macro exclusion code does.
-                                                        break;
-                                                    }
                                                     
                                                     // -------------------------------------------------------------------------------------
                                                     // Look for the existence of a macro ID before checking for macros to exclude in CALIB.
@@ -3924,7 +3904,7 @@ void *DecodeScience(void *arg)
                                                             //=====================================================
                                                             if (debug >= 1) {
                                                                 CPrintf("    Creating LBL/TAB file pair (dop=0) - There is data for exactly one probe (?).\n");
-                                                            }                                                            
+                                                            }
 
                                                             WriteTABLBL_FilePair(0, curr.sensor);
                                                         }
@@ -3953,7 +3933,8 @@ void *DecodeScience(void *arg)
                                                             WriteTABLBL_FilePair(2, 2);
                                                         }
                                                         
-                                                        ClearDictPDS(&dict);   // Clear dictionary PDS LAP parameters, common parameters are not cleared until a new measurement cycle beginns
+                                                        // Clear dictionary PDS LAP parameters, common parameters are not cleared until a new measurement cycle begins.
+                                                        ClearDictPDS(&dict);
                                                     }   // if(!macro_descr_NOT_found)
                                                     else
                                                     {
@@ -5186,6 +5167,7 @@ int LoadExclude(unsigned int **exclude, char *path) // Load exclude file
 
 
 /* Erik P G Johansson 2015-03-25: Created function
+ * 
  * Load file with time intervals for which data should be excluded.
  * Every line in the data exclude file specifies one time interval.
  *
@@ -5216,8 +5198,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     FILE   *fd;
     char   line[MAX_STR];   // Line buffer
     int    i = 0;
-    int    SCResetCounter1 = -1;
-//     int    SCResetCounter2 = -1;
+    int    scrc_begin = -1;    // SCRC = Spacecraft reset counter
     double sccd_begin = 0.0;
     double sccd_end   = 0.0;
     char sccs_begin[MAX_STR];
@@ -5239,7 +5220,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         return -1;
     }
 
-    dataExcludeTimes_temp.SCResetCounter_begin_list = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
+    dataExcludeTimes_temp.scrc_begin_list           = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
     dataExcludeTimes_temp.sccd_begin_list           = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
     dataExcludeTimes_temp.sccd_end_list             = (double *) CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(double));
     dataExcludeTimes_temp.probe_constraint_list     = (int *)    CallocArray(dataExcludeTimes_temp.N_intervals, sizeof(int));
@@ -5251,7 +5232,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     {
         if (line[0] == '\n') continue; // Ignore empty line.
         if (line[0] == '#')  continue; // Ignore comments.
-        //if (line[0] == ' ')  continue; // Ignore whitespace line
+        if (line[0] == ' ')  continue; // Ignore whitespace line
         
         //============================
         // Interpret one line of data
@@ -5270,7 +5251,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         TrimWN(data_type_constraint_str);   // Necessary to deal with end-of-line?
         
         // Convert SCCS --> SCCD.
-        if (ConvertSccs2Sccd(sccs_begin, &SCResetCounter1, &sccd_begin)) {
+        if (ConvertSccs2Sccd(sccs_begin, &scrc_begin, &sccd_begin)) {
             YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret interval BEGINNING in data exclude times file: \"%s\"\n", sccs_begin);
             fclose(fd);
             return -10;
@@ -5302,9 +5283,9 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         
         // Translate probe_constraint_str --> probe_constraint + ASSERTION
         if      (!strcmp(probe_constraint_str, "ALL_PROBES")) {   probe_constraint = PROBE_CONSTRAINT_NONE;  }
-        else if (!strcmp(probe_constraint_str, "P1"))         {   probe_constraint = PROBE_CONSTRAINT_P1;    }
-        else if (!strcmp(probe_constraint_str, "P2"))         {   probe_constraint = PROBE_CONSTRAINT_P2;    }
-        else if (!strcmp(probe_constraint_str, "P3"))         {   probe_constraint = PROBE_CONSTRAINT_P3;    }
+        else if (!strcmp(probe_constraint_str, "P1"))         {   probe_constraint = SENS_P1;      }
+        else if (!strcmp(probe_constraint_str, "P2"))         {   probe_constraint = SENS_P2;      }
+        else if (!strcmp(probe_constraint_str, "P3"))         {   probe_constraint = SENS_P1P2;    }
         else {
             YSPrintf("ERROR: Illegal probe_constraint_str=\"%s\" at i=%i.\n", probe_constraint_str, i);
             fclose(fd);
@@ -5321,7 +5302,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
             return -22;
         }
 
-        dataExcludeTimes_temp.SCResetCounter_begin_list[i] = SCResetCounter1;
+        dataExcludeTimes_temp.scrc_begin_list[i]           = scrc_begin;
         dataExcludeTimes_temp.sccd_begin_list[i]           = sccd_begin;
         dataExcludeTimes_temp.sccd_end_list[i]             = sccd_end;
         dataExcludeTimes_temp.probe_constraint_list[i]     = probe_constraint;
@@ -5330,7 +5311,6 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         // Print table contents to "pds system log".
         // NOTE: Preceded by "header row.
         // Useful for double-checking that the code interprets the file correctly.
-//         YPrintf("   %s %s  = %i/%f %i/%f\n", l_tok, r_tok, SCResetCounter1, sccd_begin, SCResetCounter1, sccd_end);
         //YPrintf("line = %s");
         YPrintf("    %-18s %-18s %18f %18f %26s %26s %1i %1i\n", sccs_begin, sccs_end, sccd_begin, sccd_end, utc_begin, utc_end, probe_constraint, data_type_constraint);
 
@@ -5358,103 +5338,157 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
 /*--------------------------------------------------------------------------------------------
  * Erik P G Johansson 2015-03-25: Created function.
  * 
- * Checks whether a LBL/TAB file pair should be created at all depending on the data (time).
- * NOTE: Applies to both EDITED and CALIB.
- * NOTE: Function uses TM times, i.e. not corrected for ADC20 group delay.
+ * Checks whether a LBL/TAB file pair should be created at all depending on the time covered by the files, and other parameters.
+ * NOTE: Intended for both EDITED and CALIB, but could be changed (include "calib" flag).
+ * NOTE: Function uses (and should use) TM times, i.e. not corrected for ADC20 group delay.
  * 
  * 
  * ARGUMENTS
  * =========
- * INPUT  : curr. Only uses TM time designations.
- * OUTPUT : *excludeData    : false = Do not exclude data.
- *                            true  = Exclude data.
- * Return value: 0 (no error), -1 (error).
+ * INPUT  : curr. Function only uses TM time designations.
+ * OUTPUT : *shouldExcludeFilePair    : false = Do not exclude data.
+ *                                      true  = Exclude data.
+ * RETURN VALUE: 0 (no error), -1 (error).
  *
  * 
  * ASSUMES: Spacecraft reset counter is the same for all times involved in the algorithm (or something in that direction...).
  * 
- * ALGORITHM: Excludes data if-and-only-if
+ * 
+ * ALGORITHM FOR TIME
+ * ==================
+ * Excludes data if-and-only-if
  *          sccd_end >= sccd_exclude_begin
  *      and
  *          sccd_begin <= sccd_exclude_end.
  *      Note the less-than-or-EQUAL.
  *--------------------------------------------------------------------------------------------*/
-int DecideWhetherToExcludeData(data_exclude_times_type *dataExcludeTimes, curr_type *curr, int *excludeData) {
+int DecideWhetherToExcludeData(
+    data_exclude_times_type *dataExcludeTimes,
+    curr_type curr,
+    int param_type,
+    unsigned int macro_id,
+    int dop,
+    int *shouldExcludeFilePair)
+{
+    int i = -1;
+
+    const double sccd_file_begin = curr.seq_time_TM;
+    const double sccd_file_end   = curr.stop_time_TM;
+    const int writing_P1_data = (curr.sensor==SENS_P1   || dop==1);
+    const int writing_P2_data = (curr.sensor==SENS_P2   || dop==2);
+    const int writing_P3_data = (curr.sensor==SENS_P1P2 && dop==0);
     
-    char sccs_begin[MAX_STR];
-    char sccs_end  [MAX_STR];
-    char utc_begin[MAX_STR];
-    char utc_end  [MAX_STR];
-    double sccd_file_begin = -1;
-    double sccd_file_end   = -1;
-    int  i = -1;
+    //================================================================================================================================
+    void PrintExcludedFilePairData_LOCAL() {
+        // PROPOSAL: Print more info: probe, macro ID, ...
+        char sccs_begin[MAX_STR];
+        char sccs_end  [MAX_STR];
+        char utc_begin[MAX_STR];
+        char utc_end  [MAX_STR];
+        
+        ConvertSccd2Sccs(sccd_file_begin, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_begin, FALSE);   // No error handling needed.
+        ConvertSccd2Sccs(sccd_file_end,   ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_end,   FALSE);
+        
+        if ((ConvertSccd2Utc(sccd_file_begin, utc_begin, NULL) != 0) ||
+            (ConvertSccd2Utc(sccd_file_end,   utc_end,   NULL) != 0)) {
+            YSPrintf("ERROR: DecideWhetherToExcludeData: Can not convert either sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
+            ExitPDS(1);
+        }
+        
+        CPrintf("DecideWhetherToExcludeData: File pair (TAB+LBL) for below parameters should be excluded:\n");
+        CPrintf("    (Note: Stated times not modified for group delay, ADC20_DELAY_S.)\n");
+//         CPrintf("    sccd_file_begin = %f\n", sccd_file_begin);
+//         CPrintf("    sccd_file_end   = %f\n", sccd_file_end  );
+        CPrintf("    SPACECRAFT_CLOCK_START_COUNT = sccs_begin = %s\n", sccs_begin);
+        CPrintf("    SPACECRAFT_CLOCK_STOP_COUNT  = sccs_end   = %s\n", sccs_end  );
+        CPrintf("    START_TIME                   = utc_begin  = %s\n", utc_begin);
+        CPrintf("    STOP_TIME                    = utc_end    = %s\n", utc_end  );
+        CPrintf("    macro_id    = 0x%04x\n", macro_id);
+        CPrintf("    param_type  = %i\n",     param_type);
+        CPrintf("    dop         = %i\n",     dop);
+        CPrintf("    curr.sensor = %i\n",     curr.sensor);
+    }
+    //================================================================================================================================
 
 
 
     // ASSERTION
     if (dataExcludeTimes == NULL) {
-        printf( "Can not find data in dataExcludeTimes.\n");
-        YPrintf("Can not find data in dataExcludeTimes.\n");
+        YSPrintf( "ERROR: DecideWhetherToExcludeData: Can not find data in dataExcludeTimes.\n");
         ExitPDS(1);   // return -1;  ??
     }
 
-    sccd_file_begin = curr->seq_time_TM;
-    sccd_file_end   = curr->stop_time_TM;
-    
-    // ---------------DEBUG------------------
-    /*
-    ConvertSccd2Sccs(sccd_file_begin, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_begin, FALSE);   // No error handling needed.
-    ConvertSccd2Sccs(sccd_file_end,   ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_end,  FALSE);
-    if ((ConvertSccd2Utc(sccd_file_begin, utc_begin, NULL) != 0) ||
-        (ConvertSccd2Utc(sccd_file_end,   utc_end,  NULL) != 0)) {
-        CPrintf("Can not convert sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
-        printf( "Can not convert sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
-        ExitPDS(1);
-    }
-    CPrintf("DecideWhetherToExcludeData: sccd_file_begin = %f\n", sccd_file_begin);   // DEBUG
-    CPrintf("DecideWhetherToExcludeData: sccd_file_end   = %f\n", sccd_file_end  );
-    CPrintf("DecideWhetherToExcludeData: SPACECRAFT_CLOCK_START_COUNT = %s\n", sccs_begin);
-    CPrintf("DecideWhetherToExcludeData: SPACECRAFT_CLOCK_STOP_COUNT  = %s\n", sccs_end );
-    CPrintf("DecideWhetherToExcludeData: START_TIME = %s\n", utc_begin);
-    CPrintf("DecideWhetherToExcludeData: STOP_TIME  = %s\n", utc_end);
-    //*/
 
+
+    //========================================================================================================
+    // Check if the file data overlaps with a specific data exclusion time interval.
+    // If it does, then it is not necessary to check with other data exclusion intervals.
+    // NOTE: Uses ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER since no reset counter is submitted to the function.
+    //========================================================================================================
     for (i=0; i<dataExcludeTimes->N_intervals; i++) {
-        // Check if the file data overlaps with a specific data exclusion time interval.
-        // If it does, then it is not necessary to check with other data exclusion intervals.
-        // NOTE: Uses ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER since no reset counter is submitted to the function.
-        if (
-            (ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER == dataExcludeTimes->SCResetCounter_begin_list[i])
+        if (   (ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER == dataExcludeTimes->scrc_begin_list[i])
             && (sccd_file_end   >= dataExcludeTimes->sccd_begin_list[i])
             && (sccd_file_begin <= dataExcludeTimes->sccd_end_list[i])
         )
         {
-            CPrintf("DecideWhetherToExcludeData: Files for data in the stated time interval should be excluded:\n");
+            const int probe_nbr =
+                writing_P1_data * SENS_P1 +
+                writing_P2_data * SENS_P2 +
+                writing_P3_data * SENS_P1P2;
             
-            ConvertSccd2Sccs(sccd_file_begin, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_begin, FALSE);   // No error handling needed.
-            ConvertSccd2Sccs(sccd_file_end,   ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs_end,   FALSE);
-            
-            if ((ConvertSccd2Utc(sccd_file_begin, utc_begin, NULL) != 0) ||
-                (ConvertSccd2Utc(sccd_file_end,   utc_end,   NULL) != 0)) {
-                CPrintf("Can not convert either sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
-                printf( "Can not convert either sccd_file_begin=%f or sccd_file_end=%f.\n", sccd_file_begin, sccd_file_end);
-                ExitPDS(1);
-            }
-            
-            CPrintf("    (Note: Stated times not modified for group delay, ADC20_DELAY_S.)\n");
-            CPrintf("    sccd_file_begin = %f\n", sccd_file_begin);
-            CPrintf("    sccd_file_end   = %f\n", sccd_file_end  );
-            CPrintf("    SPACECRAFT_CLOCK_START_COUNT = sccs_begin = %s\n", sccs_begin);
-            CPrintf("    SPACECRAFT_CLOCK_STOP_COUNT  = sccs_end   = %s\n", sccs_end  );
-            CPrintf("    START_TIME                   = utc_begin  = %s\n", utc_begin);
-            CPrintf("    STOP_TIME                    = utc_end    = %s\n", utc_end  );
-            
-            *excludeData = 1;   // Assign "true".
+            const int data_type =
+                (param_type==SWEEP_PARAMS) * DATA_TYPE_CONSTRAINT_SWEEP +
+                (param_type==NO_PARAMS   ) * DATA_TYPE_CONSTRAINT_HF +
+                (param_type==ADC20_PARAMS) * DATA_TYPE_CONSTRAINT_LF;
+
+            const int probe_constraint     = dataExcludeTimes->probe_constraint_list[i];
+            const int data_type_constraint = dataExcludeTimes->data_type_constraint_list[i];
+            if  (
+                    (
+                            (probe_constraint == PROBE_CONSTRAINT_NONE)
+                        ||
+                            (probe_constraint == probe_nbr)
+                    )
+                &&
+                    (
+                            (data_type_constraint == DATA_TYPE_CONSTRAINT_NONE)
+                        ||
+                            (data_type_constraint == data_type)
+                    )
+                )
+            {
+                CPrintf("DecideWhetherToExcludeData: Matching data exclusion rule (i=%i).\n", i);
+                PrintExcludedFilePairData_LOCAL();
+                *shouldExcludeFilePair = TRUE;
+                return 0;
+            }   // if
+        }   // if
+    }   // for
+
+    //===========================================
+    // Exclude files for specific cases of data:
+    // (1) macro 710 P2 HF
+    // (2) macro 910 P1 HF
+    //===========================================
+    if ((param_type!=SWEEP_PARAMS) && (param_type!=ADC20_PARAMS)) {
+        // CASE: HF data (not sweep, not ADC20). Conditions taken from the filenaming code.
+        // param_type=NO_PARAMS might work instead judging from the source code, since param_type only appears to
+        // only take on three values.
+        if ((writing_P1_data) && (macro_id==0x0910)) {
+            CPrintf("DecideWhetherToExcludeData: Matching macro 910 P1 HF.\n");
+            PrintExcludedFilePairData_LOCAL();
+            *shouldExcludeFilePair = TRUE;
             return 0;
         }
-    }
-    
-    *excludeData = 0;   // Assign "false".
+        if ((writing_P2_data) && (macro_id==0x0710)) {
+            CPrintf("DecideWhetherToExcludeData: Matching macro 710 P2 HF.\n");
+            PrintExcludedFilePairData_LOCAL();
+            *shouldExcludeFilePair = TRUE;
+            return 0;
+        }
+    }   // if
+
+    *shouldExcludeFilePair = FALSE;
     return 0;
 }
 
