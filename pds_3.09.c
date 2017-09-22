@@ -5804,6 +5804,21 @@ void RunShellCommand(char *command_str)
 
 
 
+// Function for telling whether a filename is a CALIB_MEAS file.
+// A separate function is convenient since there is an exception to the pattern.
+//
+// ARGUMENTS AND RETURN VALUE
+// ==========================
+// INPUT : calib_meas_filename_pattern = Filename (not path) pattern that works with "Match" function.
+// INPUT : filename
+// RETURN VALUE : TRUE = "filename" represents a CALIB_MEAS file.
+int FilenameMatchesCalibMeas(char *calib_meas_filename_pattern, char *filename)
+{
+    return (!Match(calib_meas_filename_pattern, filename) && strcmp(filename, CALIB_MEAS_FILE_EXCEPTION_LBL));
+}
+
+
+
 /*
  * Reads measured offset calibration (CALIB_MEAS) files and the offset calibration exceptions list (CALIB_MEAS_EXCEPT).
  * The offset calibration exceptions file contains manually selected time intervals which specify
@@ -5869,7 +5884,7 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
     for(i=0; i<N_dir_entries; i++)
     {
         dentry=dir_entry_list[i];
-        if(!Match(filename_pattern,dentry->d_name)) // Match filename to pattern
+        if (FilenameMatchesCalibMeas(filename_pattern, dentry->d_name))
         {
             N_calibrations++;
         }
@@ -5913,11 +5928,10 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
     for(i=0; i<N_dir_entries; i++)
     {
         dentry=dir_entry_list[i];
-        if (!Match(filename_pattern,dentry->d_name) && strcmp(dentry->d_name, CALIB_MEAS_FILE_EXCEPTION_LBL))
+        if (FilenameMatchesCalibMeas(filename_pattern, dentry->d_name))
         {
-            // CASE: Filename matches pattern, but is not a calibration data product that should never be used, and always be kept.
-
-//             YPrintf("Reading CALIB_MEAS file: %s\n", dentry->d_name);  // Matching file name
+            // CASE: Filename matches pattern, UNLESS it is a specific calibration data product CALIB_MEAS_FILE_EXCEPTION_LBL
+            // that should never be used, and always be kept. ==> CALIB_MEAS_FILE_EXCEPTION_LBL must never be deleted.
 
             //================================================
             // Read and update (rewrite) calibration LBL file
