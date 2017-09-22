@@ -218,6 +218,8 @@
  * PROPOSAL: Flag for outputting data set in arbitrary directory.
  *    PRO: Useful for automatizing generation for delivery. (Data sets need further automatic processsing after generation.)
  * PROPOSAL: Flag --test for triggering test code, instead of preprocessing variable.
+ * PROPOSAL: Add CALIB_COEFF file pattern to pds.conf, analogous to CALIB_COEFF file pattern.
+ *    NOTE: lap_agility.sh will need to be updated?
  *====================================================================================================================
  */
 
@@ -1136,7 +1138,6 @@ int main(int argc, char *argv[])
     else {
         YPrintf("Loaded %d macro descriptions\n",status);
     }
-    
     
     // Initialize inverse log table to decode logarithm sweeps
     DoILogTable(ilogtab); 
@@ -4533,7 +4534,7 @@ int AddPathsToSystemLog(pds_type *p)
     YPrintf(" Path to coarse voltage bias file : %s\n", p->cpathc);
     YPrintf(" Path to fine voltage bias file   : %s\n", p->cpathf);
     YPrintf(" Path to current bias file        : %s\n", p->cpathi);
-    YPrintf(" Path to offset files             : %s\n", p->cpathm);
+    YPrintf(" CALIB_MEAS offset files          : %s\n", p->cpathm);
     
     return 0;
 }
@@ -5242,8 +5243,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         if (sscanf(line, " %[^,], %[^,], %[^,], %[^,]", sccs_begin, sccs_end, probe_constraint_str, data_type_constraint_str) != 4)
         {
             YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret line in data exclude times file (sscanf): \"%s\"\n", line);
-            fclose(fd);
-            return -1;
+            fclose(fd);   return -1;
         }
         TrimWN(sccs_begin);   // Remove leading and trailing whitespace, remove CR (if any). Can be important depending on the exact chosen file format (future PDS compliant).
         TrimWN(sccs_end);
@@ -5253,32 +5253,27 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         // Convert SCCS --> SCCD.
         if (ConvertSccs2Sccd(sccs_begin, &scrc_begin, &sccd_begin)) {
             YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret interval BEGINNING in data exclude times file: \"%s\"\n", sccs_begin);
-            fclose(fd);
-            return -10;
+            fclose(fd);   return -10;
         }
         if (ConvertSccs2Sccd(sccs_end, NULL, &sccd_end)) {    // NOTE: Does not read S/C clock reset counter.
             YSPrintf("ERROR: LoadDataExcludeTimes: Can not interpret interval END in data exclude times file: \"%s\"\n", sccs_end);
-            fclose(fd);
-            return -11;
+            fclose(fd);   return -11;
         }
         
         // Convert SCCD --> UTC -- Only for log messages.
         if (ConvertSccd2Utc(sccd_begin, NULL, utc_begin)) {
             YSPrintf("ERROR: LoadDataExcludeTimes: Can not convert interval BEGINNING in data exclude times file: \"%f\"\n", sccd_begin);
-            fclose(fd);
-            return -12;
+            fclose(fd);   return -12;
         }
         if (ConvertSccd2Utc(sccd_end, NULL, utc_end)) {
             YSPrintf("ERROR: LoadDataExcludeTimes: Can not convert interval END in data exclude times file: \"%f\"\n", sccd_end);
-            fclose(fd);
-            return -13;
+            fclose(fd);   return -13;
         }
 
         // ASSERTIONS
         if (sccd_begin > sccd_end) {
             YSPrintf("ERROR: LoadDataExcludeTimes: Found time interval that runs backwards (sccd_begin > sccd_end) in data exclude times file.\n");
-            fclose(fd);
-            return -20;
+            fclose(fd);   return -20;
         }
         
         // Translate probe_constraint_str --> probe_constraint + ASSERTION
@@ -5288,8 +5283,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         else if (!strcmp(probe_constraint_str, "P3"))         {   probe_constraint = SENS_P1P2;    }
         else {
             YSPrintf("ERROR: Illegal probe_constraint_str=\"%s\" at i=%i.\n", probe_constraint_str, i);
-            fclose(fd);
-            return -21;
+            fclose(fd);   return -21;
         }
         // Translate data_type_constraint_str --> data_type_constraint + ASSERTION
         if      (!strcmp(data_type_constraint_str, "ALL_DATA_TYPES")) {   data_type_constraint = DATA_TYPE_CONSTRAINT_NONE;    }
@@ -5298,8 +5292,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
         else if (!strcmp(data_type_constraint_str, "HF"))             {   data_type_constraint = DATA_TYPE_CONSTRAINT_HF;      }
         else {
             YSPrintf("ERROR: Illegal data_type_constraint_str=\"%s\" at i=%i.\n", data_type_constraint_str, i);
-            fclose(fd);
-            return -22;
+            fclose(fd);   return -22;
         }
 
         dataExcludeTimes_temp.scrc_begin_list[i]           = scrc_begin;
@@ -5321,8 +5314,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
     // NOTE: Could possibly remove this code.
     if (i != dataExcludeTimes_temp.N_intervals) {
         YSPrintf("ERROR: LoadDataExcludeTimes: Implementation bug. Can not obtain the number of time intervals.\n");  // Print to "pds system log".
-        fclose(fd);
-        return -30;
+        fclose(fd);   return -30;
     }
     fclose(fd);
     
@@ -5697,6 +5689,7 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
             }
             YPrintf("Loading detailed macro desc: %s, Length: %d\n", path, FileLen(mac_fd));
             
+            
             n_macs++;
             while (fgets(line,255,mac_fd) != NULL)
             {
@@ -5741,12 +5734,14 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
                             // Print what was read.
                             //YPrintf("   %-30s = %s\n", n_tok, v_tok);     // NOTE: Does not print prefix "ROSETTA:" since it only repeats.
 
+//                             YSPrintf("LoadMacroDesc: 8\n");   // DEBUG
                             Append(&macs[m_bl][m_n],line, v_tok);
+//                             YSPrintf("LoadMacroDesc: 9\n");   // DEBUG
                         }
                         
                         break;
-                }
-            }
+                }    // switch
+            }    // while
             
             if(state==0) YPrintf("Warning: couldn't find <START> tag\n");
             if(state==1) YPrintf("Warning: couldn't find <END> tag\n");
@@ -5757,8 +5752,9 @@ int LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *home) // Load all macro
             state = 0; // Restore state
             macro_descr_error = 0;
             fclose(mac_fd);
-        }
-    }
+        }    // for
+    }    // for
+
     return n_macs;
 }
 
@@ -5847,8 +5843,8 @@ int FilenameMatchesCalibMeas(char *calib_meas_filename_pattern, char *filename)
  */
 int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m)
 {
-    // FKJN 2014-09-04
-    // Completely rewritten to accommodate for scandir (and alphanumerical sorting).
+// Fredrik Johansson 2014-09-04: Completely rewritten to accommodate for scandir (and alphanumerical sorting).
+// PROPOSAL: Iterate over files only once and increase array sizes as needed as in InitCalibCoeff.
     
     prp_type mc_lbl;            // Linked property/value list for measured data offset and conversion to volts/ampere.
 //     property_type *property;
@@ -5865,13 +5861,13 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
 
 
     // Get the name of the file/directory (the part of the path after the last "/"). Is used as a filename pattern for measured data calib files.
-    // NOTE: The rest of the string fpath is never used(!).
-    filename_pattern=basename(fpath);
+    // NOTE: The rest of the string fpath is never used in this function(!).
+    filename_pattern = basename(fpath);
 
     // Read files in CALIB directory.
     // FKJN sort it alphanumerically first. 2/9 2014
     N_dir_entries = scandir(rpath, &dir_entry_list, 0, alphasort);
-    if (N_dir_entries <0)
+    if (N_dir_entries < 0)
     {
         YPrintf("Could not open/scan calibration directory\n");
         return -1;
@@ -5901,21 +5897,14 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
     // Allocate memory (arrays) for the calibration data structure (one component per offset calibration/CALIB_MEAS file pair)
     //=========================================================================================================================
     m->N_calib_meas = N_calibrations;
-//     if((m->CF=(cf_type *)CallocArray(m->N_calib_meas,sizeof(cf_type)))==NULL)
-//     {
-//         YPrintf("Error allocating memory for array of factor structures\n");        
-//         return -3;
-//     }
     if((m->CD=(c_type *)CallocArray(m->N_calib_meas,sizeof(c_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration table structures\n");
-//         free(m->CF);
         return -4;
     }
     if((m->calib_meas_data=(calib_meas_file_type *)CallocArray(m->N_calib_meas,sizeof(calib_meas_file_type)))==NULL)
     {
         YPrintf("Error allocating memory for array of calibration info structures\n");
-//         free(m->CF);
         return -5;
     }
 
@@ -5983,17 +5972,6 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
     }
     
     FreeDirEntryList(dir_entry_list, N_dir_entries);
-
-
-
-    //===================================
-    // Update CALIB_MEAS_EXCEPT LBL file
-    //===================================
-//     if (UpdateODLFile(pathocel, NULL, 0) < 0)
-//     {
-//         YPrintf("Can not update CALIB_MEAS exceptions label file \"%s\".\n", pathocel);
-//         return -7;
-//     }
 
 
 
@@ -6097,7 +6075,7 @@ int InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_ty
 
     }
     fclose(fd);
-
+    
     return 0;
 }  // InitCalibMeas
 
@@ -6838,12 +6816,12 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
  * m        : Data structure used for determining files to delete. The criterion is m->calib_meas_data[i].calibration_file_used==FALSE.
  *
  * 
- * NOTE: Does not update the CALIB_MEAS LBL keywords.
+ * NOTE: Does not update the CALIB_MEAS LBL keywords. Assumes that other code does that.
  * NOTE: The algorithm deletes files with calibration_file_used==FALSE, and deletes CALIB_MEAS_EXCEPT when calibration_file_used==FALSE
  * for __all__ dated CALIB_MEAS files. The effect should be that:
  * (1) for EDITED, it deletes all CALIB_MEAS files for EDITED (incl. CALIB_MEAS_EXCEPT).
  * (2) for CALIB it deletes all unused CALIB_MEAS files (incl. CALIB_MEAS_EXCEPT).
- * NOTE: If CALIB_MEAS functionality is not used (CALIB_COEFF functionality is used instead), then calibration_file_used==FALSE
+ * If CALIB_MEAS functionality is not used (CALIB_COEFF functionality is used instead), then calibration_file_used==FALSE
  * for all dated CALIB_MEAS files, which means the files are automatically deleted. This function can thus be called also then.
  * NOTE: Returns on error to delete file. Will not continue to try to delete other files.
  */
@@ -6851,11 +6829,13 @@ int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 //      Ex: Destruct, Destructor (cf Constructor), Done
 int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
 {
-    int exit_code = 0;
+//     int exit_code = 0;
     int i;
     int removed_all_calib_meas_files = TRUE;   // Initial value until proven false.
+    
+//     YPrintf("DestroyCalibMeas: m->N_calib_meas = %i\n", m->N_calib_meas);   // DEBUG
 
-    for (i=0; i<m->N_calib_meas; i++)   // Iterate over CALIB_MEAS files.
+    for (i=0; i<m->N_calib_meas; i++)   // Iterate over CALIB_MEAS files (which are registered in data structure).
     {
         // Set LBL_file_path.
         char LBL_file_path[PATH_MAX];
@@ -6866,6 +6846,7 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
         if (ReadLabelFile(&lbl_info, LBL_file_path)<0)  // Read offset and TM calibration LBL file
         {
             FreePrp(&lbl_info); // Free linked property/value list
+//             exit_code = -6;    break;
             return -6;
         }
         property_type *property;
@@ -6886,31 +6867,36 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
             YPrintf("Deleting unused calibration files: %s, %s\n", m->calib_meas_data[i].LBL_filename, TAB_filename);  // Print only filenames (not entire paths).
             if (remove(TAB_file_path)!=0) {
                 YPrintf("Error when deleting file \"%s\"\n", TAB_file_path);
-                exit_code = -1;
+//                 exit_code = -1;    break;
+                return -1;
                 // NOTE: Does not return from function yet.
             }
             if (remove(LBL_file_path)!=0) {
                 YPrintf("Error when deleting file \"%s\"\n", LBL_file_path);
-                exit_code = -1;
+//                 exit_code = -1;    break;
+                return -1;
                 // NOTE: Does not return from function yet.
             }
 
             FreePrp(&lbl_info); // Free linked property/value list
         }
-    }
+    }   // for
 
     
     
     //==============================
     // Delete CALIB_MEAS_EXCEPT file
     //==============================
-    if (!calib || removed_all_calib_meas_files) {
+//     YPrintf("removed_all_calib_meas_files = %i\n", removed_all_calib_meas_files);    // DEBUG
+    //if (!calib || removed_all_calib_meas_files) {
+    if (removed_all_calib_meas_files) {
         // NOTE: Prints entire paths.
         YPrintf("Deleting unused OCE calibration files: \"%s\"\n", pathocet);
         YPrintf("                                       \"%s\"\n", pathocel);
         if ((remove(pathocel)!=0) || (remove(pathocet)!=0)) {
             YPrintf("Error when deleting files \"%s\", \"%s\"\n");
-            exit_code = -2;
+//             exit_code = -2;
+            return -2;
             // NOTE: Does not return from function yet.
         }
     }
@@ -6947,7 +6933,8 @@ int DestroyCalibMeas(char *cpathd, char *pathocel, char *pathocet, m_type *m)
         free(m->calib_meas_data);
     }
 
-    return exit_code;
+//     return exit_code;
+    return 0;
 }
 
 
@@ -7726,9 +7713,10 @@ int WritePTAB_File(
                         //==================
                         // CASE: FINE SWEEP
                         //==================                                
-                        // Offset and factor calibration, voltage is not entirely correct here!!
+                        // NOTE: Offset and factor calibration, voltage is not entirely correct here!!
                         // We should perhaps have a calibration mode for fine sweeps in space
                         // but it would be rather many 4096.
+                        
                         // Edit FKJN 2014-09-02: Here we need to convert a number from 0-4096 (p1_fine_offs*256 + voltage)
                         // to a number from 0-255 if we want to use the same offset calibration file.
                         double cvoltage;

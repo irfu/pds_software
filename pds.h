@@ -533,7 +533,7 @@ typedef struct pds_type_def
   char cpathf[PATH_MAX];       // Path to fine bias calibration data
   char cpathc[PATH_MAX];       // Path to coarse bias calibration data
   char cpathi[PATH_MAX];       // Path to current bias calibration data
-  char cpathm[PATH_MAX];       // Path to offset calibration data. The filename part is a filename pattern.
+  char cpathm[PATH_MAX];       // Path and filename pattern for CALIB_MEAS calibration data files.
   char cpathdfp1[PATH_MAX];    // Path to density (d) frequency (f) response probe 1 (p1)
   char cpathdfp2[PATH_MAX];    // Path to density (d) frequency (f) response probe 2 (p2)
   char cpathefp1[PATH_MAX];    // Path to E-field (e) frequency (f) response probe 1 (p1)

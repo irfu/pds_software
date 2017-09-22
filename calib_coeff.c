@@ -73,6 +73,7 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);            // D
 
 double **CallocDoubleMatrix (int rows, int cols);                           // Dynamically allocate two dimensional array of doubles
 void FreeDoubleMatrix(double ** C, int rows, int cols);                     // Free two dim. array of doubles
+int YSPrintf(const char *fmt, ...);
 
 
 
@@ -525,15 +526,12 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
  * ASSUMPTION: Relies on time_t being interpreted as number of seconds (without leap seconds).
  * NOTE: Does not update the CALIB_COEFF LBL keywords.
  * 
- * IMPLEMENTATION NOTE: Does not re-adjust the allocated array size downwards at the end. ==> Allocates too much, but should work.
  * NOTE: Pre-loading files assumes that there must be CALIB_COEFF files for every day in the dataset, even if there is no LAP data.
  */
 int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data)
 {
     calib_coeff_data_type ccd;   // Temporary struct being built up internally before begin assigned to the return argument.
     
-//     YPrintf("Initializing CALIB_COEFF data structure. Using directory: %s\n", cc_dir);
-
     //===============================================================
     // Derive sccd_dataset1, sccd_dataset2
     // These define which CALIB_COEFF files to pre-load, if enabled.
@@ -560,13 +558,9 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
     if ((ccd.ccf_sccd_begin_array = calloc(N_alloc, sizeof *ccd.ccf_sccd_begin_array))==NULL) {
         perror("InitCalibCoeff: Can not allocate memory.");   return -1;
     }
-    if ((ccd.ccf_data_array       = calloc(N_alloc, sizeof *ccd.ccf_data_array       ))==NULL) {
+    if ((ccd.ccf_data_array       = calloc(N_alloc, sizeof *ccd.ccf_data_array      ))==NULL) {
         perror("InitCalibCoeff: Can not allocate memory.");   return -1;
     }
-
-//     printf("sccd_dataset1/2 = %f, %f\n", sccd_dataset1, sccd_dataset2);    // DEBUG
-//     printf("sccd_mission1/2 = %f, %f\n", sccd_mission1, sccd_mission2);    // DEBUG
-//     printf("InitCalibCoeff 1\n");   // DEBUG
 
     //==================================================================================
     // Iterate over all days for which there might be CALIB_COEFF files (whole mission)
@@ -574,19 +568,15 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
     // this stage or wait until data is requested.
     //==================================================================================
     double sccd;
-    for (sccd=sccd_mission1; sccd<sccd_mission2;) {   // NOTE: sccd is not updated/incremented here.
-        
-//         printf("InitCalibCoeff 2\n");   // DEBUG
+    for (sccd=sccd_mission1; sccd<sccd_mission2;)
+    {   // NOTE: sccd is not updated/incremented here.
+
         char tab_file_path[PATH_MAX];
         double sccd_file1, sccd_file2;
         if (GetCalibCoeffFileMetadata(cc_dir, sccd, tab_file_path, NULL, &sccd_file1, &sccd_file2)) {
-//             printf("InitCalibCoeff 3\n");   // DEBUG
-            YPrintf("Can not derive CALIB_COEFF file metadata.\n");
+            YSPrintf("Can not derive CALIB_COEFF file metadata.\n");
             return -2;
         }
-//         printf("InitCalibCoeff 4\n");   // DEBUG
-//         printf("InitCalibCoeff tab_file_path = %s\n", tab_file_path);   // DEBUG
-//         printf("sccd_file1/2 = %f, %f\n", sccd_file1, sccd_file2);    // DEBUG
         
 
         
@@ -602,7 +592,6 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
         // NOTE: Assumes that there are files for every day in the time interval. Must be no missing files.
         if (CALIB_COEFF_PRELOAD) {
             if ((sccd_dataset1 <= sccd_file2) && (sccd_file1 < sccd_dataset2)) {
-//                 printf("InitCalibCoeff 9\n");   // DEBUG
                 // CASE: The current CALIB_COEFF file overlaps with the current dataset (incl. margin).
                 if (ReadCalibCoeffFile(tab_file_path, sccd_file1, sccd_file2, &ccf_data) != 0) {
                     return -3;
@@ -612,20 +601,22 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
         }
         //-------------------------------------------------------------------------------------------
 
-//         printf("InitCalibCoeff 5\n");   // DEBUG
-        //=====================================================================
-        // Replace the array allocations with larger allocations if necessary.
-        //=====================================================================
+        //=============================================================
+        // Reallocate the arrays if they are too small to be added to.
+        //=============================================================
         if (ccd.N+1 > N_alloc) {
             N_alloc = 2 * N_alloc;
-//             printf("ccd.N   = %i\n", ccd.N);      // DEBUG
-//             printf("N_alloc = %i\n", N_alloc);    // DEBUG
-//             printf("InitCalibCoeff 6\n");   // DEBUG
+//             YSPrintf("ccd.N   = %i\n", ccd.N);      // DEBUG
+//             YSPrintf("N_alloc = %i\n", N_alloc);    // DEBUG
+//             YSPrintf("InitCalibCoeff 6\n");   // DEBUG
 //             printf("N_alloc*sizeof *ccd.ccf_sccd_begin_array = %i\n", N_alloc*sizeof *ccd.ccf_sccd_begin_array);   // DEBUG
             ccd.ccf_sccd_begin_array = realloc(                ccd.ccf_sccd_begin_array,
                                                N_alloc*sizeof *ccd.ccf_sccd_begin_array);   // Ignoring error.
             ccd.ccf_data_array       = realloc(                ccd.ccf_data_array,
                                                N_alloc*sizeof *ccd.ccf_data_array       );   // Ignoring error.
+            if ((ccd.ccf_sccd_begin_array==NULL) || (ccd.ccf_data_array==NULL)) {
+                perror("Can not reallocate memory.\n");   return -1;
+            }
         }
         
         // Add ccf_data to ccd.
@@ -634,11 +625,28 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
         ccd.N++;
         
         sccd = sccd_file2;   // Prepare for next iteration.
+    }    // for
+
+    //=====================================================================
+    // Reallocate arrays so that their sizes match exactly what is needed.
+    //=====================================================================
+    // IMPLEMENTATION NOTE: Needs to alloc (ccd.N+1) elements but unknown why ccd.N is not enough.
+    // If allocates ccd.N, then the code crashes in LoadMacroDesc, at "Append(&macs[m_bl][m_n],line, v_tok);" for unknown reasons (as of 2017-09-22; Erik P G Johansson).
+    // Maybe some form of memory corruption since LoadMacroDesc should have nothing to do with these data structures.
+//     YSPrintf("ccd.N   = %i\n", ccd.N);      // DEBUG
+//     YSPrintf("N_alloc = %i\n", N_alloc);    // DEBUG
+//     YSPrintf("InitCalibCoeff 7\n");   // DEBUG
+    ccd.ccf_sccd_begin_array = realloc(                  ccd.ccf_sccd_begin_array,
+                                       (ccd.N+1)*sizeof *ccd.ccf_sccd_begin_array);   // Ignoring error.
+    ccd.ccf_data_array       = realloc(                  ccd.ccf_data_array,
+                                       (ccd.N+1)*sizeof *ccd.ccf_data_array      );   // Ignoring error.
+    if ((ccd.ccf_sccd_begin_array==NULL) || (ccd.ccf_data_array==NULL)) {
+        perror("Can not reallocate memory.\n");   return -1;
     }
 
     // Add extra SCCD value which marks the end of the time range covered by the last ccf_data (the struct with index N-1).
     ccd.ccf_sccd_begin_array[ccd.N] = sccd;    // sccd == sccd_file2
-    
+
     *cc_data = ccd;
     return 0;
 }
@@ -662,6 +670,7 @@ int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, c
 int DestroyCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data)
 {
     int i_ccf;
+    
     for (i_ccf=0; i_ccf<cc_data->N; i_ccf++) {
         calib_coeff_file_type *ccf_data = &(cc_data->ccf_data_array[i_ccf]);
         
@@ -735,7 +744,6 @@ int GetCalibCoeffFileData(
     char *cc_dir, calib_coeff_data_type *cc_data,
     int i_ccf, calib_coeff_file_type **ccf_data)
 {
-//     printf("GetCalibCoeffFileData 1\n");    // DEBUG
     //===============================
     // ASSERTION: i_ccf within range
     //===============================
@@ -953,7 +961,6 @@ int GetInterpolatedCalibCoeff(
         for (i_coeff = 0; i_coeff<2*N_CALIB_COEFFS; i_coeff++) {
             const double coeff_1 = ccf_data_1->coeffs[i_coeff][i_sccd_1];
             const double coeff_2 = ccf_data_2->coeffs[i_coeff][i_sccd_2];
-//             printf("(coeff_1, coeff_2) = %e, %e\n", coeff_1, coeff_2);    // DEBUG
             coeff_array[i_coeff] = coeff_1 + C * (coeff_2 - coeff_1);
         }
     }
@@ -978,7 +985,6 @@ int GetInterpolatedCalibCoeff(
  */
 int GetCalibCoeff(char *cc_dir, calib_coeff_data_type *cc_data, double sccd, double *coeff_array)
 {
-//     PrintCalibCoeff(cc_data);    // DEBUG
     
     //=================================================================
     // Find the two nearest data points (moments in time), as indices.
