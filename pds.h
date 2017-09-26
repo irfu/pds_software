@@ -344,6 +344,16 @@
 #define MISSION_START_UTC                          "2004-03-03T00:00:00"
 #define MISSION_END_UTC                            "2016-09-30T23:59:59"
 
+/*===============================================================
+ * FALSE = Keep fine sweeps in all datasets.
+ * TRUE  = Exclude fine sweeps from CALIB datasets.
+ * 
+ * NOTE: Variable only meant to be temporary.
+ * Fine sweeps should always be excluded (from CALIB) eventually.
+ *===============================================================*/
+// #define EXCLUDE_FINE_SWEEPS_FROM_CALIB     FALSE
+#define EXCLUDE_FINE_SWEEPS_FROM_CALIB     TRUE
+
 
 
 // Time correlation data structure (for non-SPICE time conversion)

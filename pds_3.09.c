@@ -318,6 +318,7 @@ int DecideWhetherToExcludeData(
     data_exclude_times_type *dataExcludeTimes,
     curr_type curr,
     int param_type,
+    sweep_type *sw_info,
     unsigned int macro_id,
     int dop,
     int *shouldExcludeFilePair);
@@ -2060,7 +2061,7 @@ void *DecodeScience(void *arg)
         SetP(&comm,"^TABLE",tstr10,1);         // Set link to table in common PDS parameters
         
         int shouldExcludeFilePair = 0;   // Boolean flag.
-        if (DecideWhetherToExcludeData(dataExcludeTimes, curr, param_type, macro_id, dop, &shouldExcludeFilePair)) {
+        if (DecideWhetherToExcludeData(dataExcludeTimes, curr, param_type, &sw_info, macro_id, dop, &shouldExcludeFilePair)) {
             YSPrintf("ERROR: WriteTABLBL_FilePair: When trying to determine whether to exclude data.\n");
             ExitPDS(1);
         }
@@ -2083,6 +2084,9 @@ void *DecodeScience(void *arg)
             tstr10[25]='\0';   // Remove the file type ".LBL".
             
             WriteToIndexTAB(indexStr, tstr10, property2->value);
+        } else {
+            YSPrintf("Failed to write LBL file.\n");
+            ExitPDS(1);
         }
     }   // WriteTABLBL_FilePair
     //#############################################################################################################################
@@ -5330,9 +5334,10 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
 /*--------------------------------------------------------------------------------------------
  * Erik P G Johansson 2015-03-25: Created function.
  * 
- * Checks whether a LBL/TAB file pair should be created at all depending on the time covered by the files, and other parameters.
- * NOTE: Intended for both EDITED and CALIB, but could be changed (include "calib" flag).
+ * Checks whether a SCI LBL/TAB file pair should be created at all depending on the time
+ * covered by the files, and other parameters.
  * NOTE: Function uses (and should use) TM times, i.e. not corrected for ADC20 group delay.
+ * NOTE: Not intended for HK.
  * 
  * 
  * ARGUMENTS
@@ -5358,6 +5363,7 @@ int DecideWhetherToExcludeData(
     data_exclude_times_type *dataExcludeTimes,
     curr_type curr,
     int param_type,
+    sweep_type *sw_info,
     unsigned int macro_id,
     int dop,
     int *shouldExcludeFilePair)
@@ -5479,6 +5485,21 @@ int DecideWhetherToExcludeData(
             return 0;
         }
     }   // if
+    
+    //==============================================================
+    // Exclude all FINE sweeps from CALIB (but keep them in EDITED)
+    //==============================================================
+    if (EXCLUDE_FINE_SWEEPS_FROM_CALIB) {
+        if (calib && (param_type==SWEEP_PARAMS) && (!strcmp(sw_info->resolution,"FINE"))) {
+            // IMPLEMENTATION NOTE: Calls strcmp as seldomly as possible.
+            // IMPLEMENTATION NOTE: Important exclamation mark/negation for "strcmp".
+            CPrintf("DecideWhetherToExcludeData: Excluding FINE sweep from CALIB datasets.\n");
+            *shouldExcludeFilePair = TRUE;
+            return 0;
+        }
+    }
+
+
 
     *shouldExcludeFilePair = FALSE;
     return 0;
