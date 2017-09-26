@@ -15,6 +15,8 @@
 # This is necessary to make the time designations independent of 
 # (1) time conversions (SCCS<->UTC; SPICE kernels), and
 # (2) the compensation for group delay.
+# 
+# NOTE: This does not exclude anything from HK, e.g. when excluding an entire macro.
 
 
 
@@ -53,7 +55,8 @@
 
 
 
-# Two strange sweeps.
+# Two strange macro 612 sweeps
+# ----------------------------
 # Exclude EXACTLY TWO macro 612 P1 sweeps at
 # --
 # START_TIME = 2016-08-04T09:53:55.173
@@ -67,6 +70,11 @@
 # SPACECRAFT_CLOCK_STOP_COUNT  = "1/0428925787.41179"
 #
 # NOTE: Must have one selection for each sweep.
+# 
+# NOTE: Lapdog removes LF (and HF?) data that overlap with sweeps
+# ==> Removing the CALIB1 sweeps only ==> Lapdog keeps the LF samples that overlap with the sweeps.
+# ==> Should remove the LF and HF data that coincides with the sweeps.
+# AE: It is OK to remove the entire CALIB1 files containing the faulty samples. ==> Remove all data types for sweep time intervals.
 # i=5, i=6
-1/0428925147.15680, 1/0428925147.41179, P1, SWEEPS
-1/0428925787.15680, 1/0428925787.41179, P1, SWEEPS
+1/0428925147.15680, 1/0428925147.41179, P1, ALL_DATA_TYPES
+1/0428925787.15680, 1/0428925787.41179, P1, ALL_DATA_TYPES
