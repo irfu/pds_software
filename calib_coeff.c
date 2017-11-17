@@ -519,7 +519,7 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
  * 
  * ARGUMENTS AND RETURN VALUE
  * ==========================
- * INPUT  : t_dataset_begin, t_dataset_end : Beginning and end of dataset. Used for pre-loading CALIB_COEFF files, if enabled.
+ * INPUT  : t_dataset_begin, t_dataset_end : Beginning and end of dataset (in practice the search limits for data); Used for pre-loading CALIB_COEFF files, if enabled.
  * OUTPUT : cc_data
  * RETURN VALUE : 0 = No error; -1 = Could not allocate memory; -2 = Can not obtain file metadata; -3 = Error reading file.
  * 
@@ -530,6 +530,8 @@ int ReadCalibCoeffFile(char *tab_file_path, double sccd1, double sccd2, calib_co
  */
 int InitCalibCoeff(char *cc_dir, time_t t_dataset_begin, time_t t_dataset_end, calib_coeff_data_type *cc_data)
 {
+    // NOTE: Arguments t_dataset_begin, t_dataset_end could easily be converted to SCCD if there is a need to abolish time_t.
+    
     calib_coeff_data_type ccd;   // Temporary struct being built up internally before begin assigned to the return argument.
     
     //===============================================================

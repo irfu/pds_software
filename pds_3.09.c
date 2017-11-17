@@ -156,7 +156,7 @@
  * BUG?: HK LBL files and INDEX.LBL have PRODUCT_ID without quotes. Uncertain if it is required but (1) the examples
  * in "Planetary Data System Standards Referense, Version 3.6" imply that one probably should, and (2) it is
  * inconsistent with the SCI LBL files and the CALIB/RPCLAP*.LBL files which do have quotes.
- * "BUG": Does not update CATALOG/DATASET.CAT:TARGET_NAME.  /Erik P G Johansson 2016-07-26
+ *      Update 2017-10-03: Changed INDEX.LBL file to have quoted PRODUCT_ID.
  * BUG?: Probably does not handle leap seconds correctly all the time. Has found a ~one second error at leap second in
  *    DATA/EDITED/2015/JUL/D01/RPCLAP150701_001_H.LBL : START_TIME-SPACECRAFT_CLOCK_START_COUNT.
  *    /Erik P G Johansson, 2016-10-17
@@ -187,6 +187,10 @@
  *      HK_NUM_LINES determines the number of HK packets(?) per HK TAB file, and (presumably) only one of these packets
  *      is used for the INSTRUMENT_MODE_ID in the corresponding HK-LBL file.
  *
+ * BUG: DATASET.CAT:START_TIME set according to mission calender (or arguments), but is not adjusted for those data products which
+ * often begin before the official mission phase due to(?) not splitting data products. Note that data products in some mission phases,
+ * e.g. AST1, begin long __AFTER__ DATASET.CAT:START_TIME.
+ *      /Erik P G Johansson 2017-11-06
  * 
  * 
  * 
@@ -506,7 +510,7 @@ int debug=0;               // Debug message level. 0=Off; higher number=increasi
 
 int macro_priority=0;      // Priority of macros (Trust more or less than info in data). 0=Trust data, 1=Trust macro info
 
-int calib=0;               // Indicate if we are creating a calibrated (1) or edited (0) archive.
+int calib=0;               // Indicate whether we are creating a calibrated (1) or edited (0) archive.
 
 extern char IDList[][33];  // ID array, string with short name of ID code. Defined in "id.c".
 
@@ -1219,8 +1223,8 @@ int main(int argc, char *argv[])
     // For real time version of PDS, (not needed)
     //SetPRandSched(sctmthread,minp+2,SCHEDULING); // Set priority and scheduling
     
-    sarg.arg1=&cbs; // Pass circular science buffer pointer as an argument
-    sarg.arg2=&cmb; // Pass circular mirror buffer pointer as an argument
+    sarg.arg1 = &cbs; // Pass circular science buffer pointer as an argument.
+    sarg.arg2 = &cmb; // Pass circular mirror  buffer pointer as an argument.
     
     if(pthread_create(&scithread,NULL,DecodeScience,(void *)&sarg)!=0)
     { 
@@ -1250,6 +1254,7 @@ int main(int argc, char *argv[])
     YPrintf("--------------------------------\n");
     
     // Go through all DDS archive files, if no new ones can be found we wait 10s and try again.
+    // NOTE: Reuses the current thread.
     TraverseDDSArchive(&pds);
     
 
@@ -1810,6 +1815,7 @@ void *DecodeHK(void *arg)
         IncAlphaNum(alphanum_h); // Increment alphanumeric value (HK)
         
         sprintf(stub_fname,"RPCLAP%s%s%s_%s_H",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);
+        //sprintf(stub_fname,"\"RPCLAP%s%s%s_%s_H\"",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);   // Add quotes - Untested.
         
         sprintf(tab_fname,"%s.TAB",stub_fname);                     // Compile HK data TAB path+filename
         sprintf(lbl_fname,"%s.LBL",stub_fname);                     // Compile HK data LBL path+filename
@@ -4158,8 +4164,9 @@ void ExitPDS(int status)
     }
 
     
-    if(comm.no_prop!=0 && comm.properties!=NULL) // Something in comm structure?
+    if(comm.no_prop!=0 && comm.properties!=NULL) { // Something in comm structure?
         FreePrp(&comm);                           // Then free comm memory
+    }
         
         /*=============================
          * NOTE: Bad indentation below
@@ -6122,6 +6129,8 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
 // Given a path (p->mcpath) and mission phase abbreviation (m->abbrev),
 // initialize an instance of mp_type with data from the mission calendar file.
 // Function previously called "GetMissionP".
+// 
+// NOTE: Could use global variable mp & pds but requires them through arguments instead to reduce dependence on global variables.
 int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
 {
     FILE *fd;
@@ -6363,13 +6372,18 @@ int UpdateODLFile(char *file_path, prp_type *odl_prp, int update_PUBLICATION_DAT
  * The function is in practice used for updating ODL files copied from the template directory.
  * 
  * NOTE: PUBLICATION_DATE should not be set to the same value everywhere. Therefore optional.
- * NOTE: Does not set VOLUME_ID, VOLUME_NAME which need  extra code to be derived and only apply   to VOLDESC.CAT (?).
+ * NOTE: Does not set VOLUME_ID, VOLUME_NAME which need  extra code to be derived and only applies to VOLDESC.CAT (?).
  * NOTE: Does not set DATA_SET_RELEASE_DATE  which needs extra code to be derived and only applies to DATASET.CAT (?).
  * 
  *
  * ARGUMENTS
  * =========
  * update_PUBLICATION_DATE : true iff keyword PUBLICATION_DATE should be updated.
+ * 
+ * 
+ * RETURN VALUE
+ * ============
+ * 0 = No error; -1 = Error
  */
 int WriteUpdatedLabelFile(prp_type *lb_data, char *name, int update_PUBLICATION_DATE)
 {
@@ -6407,9 +6421,12 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, int update_PUBLICATION_
  * 
  * ARGUMENTS
  * =========
- * OUTPUT: lb_data : Does not need to be initialized by caller.
+ * OUTPUT: lb_data : Does not need to (should not) be initialized by caller.
  * 
  * 
+ * RETURN VALUE : 0=success, -1=failure
+ *
+ *
  * NOTE: The function is implicitly used for modifying LBL/CAT files from the template directory
  * by first reading a file into linked list, then modifying the linked property values list,
  * then writing the linked list as LBL file.
@@ -6419,7 +6436,6 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, int update_PUBLICATION_
  * NOTE: Can not handle PDS comments.
  * NOTE: Will ignore file contents after "END".
  *
- * RETURN VALUE : 0=success, -1=failure
  */
 int ReadLabelFile(prp_type *lb_data, char *file_path)
 {
@@ -7206,6 +7222,7 @@ int WritePTAB_File(
         }
 
 
+
         //################################################################################################################
         //################################################################################################################
         // Find the correct calibration factors & offsets depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20, 4/8 kHz FILTER
@@ -7384,12 +7401,6 @@ int WritePTAB_File(
     
 
     
-    //###############################
-    //###############################
-    // START WRITING DATA TABLE FILE
-    //###############################
-    //###############################
-    
     strcpy(file_path, pds.spaths);  // Copy data path
     strcat(file_path, fname);       // For now put in root path, so add file name!
     
@@ -7448,9 +7459,11 @@ int WritePTAB_File(
 
 
 
-    //=================================================================
+    //#################################################################
+    //#################################################################
     // Iterate over all samples (i.e. over every row in the TAB file).
-    //=================================================================
+    //#################################################################
+    //#################################################################
     for(k_proper_sweep_sample=0,i_sample=0,j=0; i_sample<samples; i_sample++)   // NOTE: ONLY increments i_sample.
     {
         // Convert data from signed 16 bit and signed 20 bit to native signed integer
@@ -7725,8 +7738,8 @@ int WritePTAB_File(
                         double cvoltage;
 //                         if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][1];   cvoltage  = v_conv.C[voltage_TM][1];   }
 //                         else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][2];   cvoltage  = v_conv.C[voltage_TM][2];   }
-                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage  = v_conv.C[voltage_TM][1];   }
-                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage  = v_conv.C[voltage_TM][2];   }
+                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = v_conv.C[voltage_TM][1];   }
+                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = v_conv.C[voltage_TM][2];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else
@@ -7734,7 +7747,7 @@ int WritePTAB_File(
                         //==================
                         // CASE: FINE SWEEP
                         //==================                                
-                        // NOTE: Offset and factor calibration, voltage is not entirely correct here!!
+                        // NOTE/BUG: Offset and factor calibration, voltage is not entirely correct here!!
                         // We should perhaps have a calibration mode for fine sweeps in space
                         // but it would be rather many 4096.
                         
@@ -7744,8 +7757,8 @@ int WritePTAB_File(
                         // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
 //                         if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
 //                         else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
-                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
-                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
+                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
+                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                 }   // if(param_type==SWEEP_PARAMS)
@@ -8631,7 +8644,7 @@ int SetupIndex(prp_type *p)
         Append(p,"RELEASE_ID",            "0001");
         Append(p,"REVISION_ID",           "0000");
         Append(p,"DATA_SET_ID",           "XX");
-        Append(p,"PRODUCT_ID",            "INDEX");
+        Append(p,"PRODUCT_ID",            "\"INDEX\"");
         Append(p,"PRODUCT_CREATION_TIME", "YYYY-MM-DDTHH:MM:SS.FFF");
         
         Append(p,"^INDEX_TABLE",          "\"INDEX.TAB\"");   
@@ -10001,7 +10014,7 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decima
     }
     if (utc_6decimals != NULL) {
         ConvertTimet2Utc(craw, utc_6decimals, TRUE);
-    }    
+    }
     
     return 0;
 }
@@ -10837,7 +10850,9 @@ int Compare(const FTSENT **af, const FTSENT **bf)
     return 0;
 }
 
-// Decode a DDS file
+// Decode a DDS file.
+// 
+// NOTE: Uses global variable mp  (mp.t_start, mp.t_stop (time_t)).
 void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
 {
     char tmp_str[32];
