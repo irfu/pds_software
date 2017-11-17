@@ -143,7 +143,12 @@
  *      /Erik P G Johansson 2017-09-01
  * * Bugfix: DecideWhetherToExcludeData now uses only TM timestamps (i.e. never corrected for group delay).
  *      /Erik P G Johansson 2017-09-19
- *
+ * * Bugfix: DATASET.CAT:START_TIME first set according to mission calender (or arguments), but is then adjusted for those data products
+ *   (only SCI data; not HK yet) which often begin before the official mission phase due to(?) not splitting data products.
+ *   Note that data products in some mission phases, e.g. AST1, begin long __AFTER__ DATASET.CAT:START_TIME.
+ *      /Erik P G Johansson 2017-11-17
+ * 
+ * 
  *
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
  *        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
@@ -187,11 +192,6 @@
  *      HK_NUM_LINES determines the number of HK packets(?) per HK TAB file, and (presumably) only one of these packets
  *      is used for the INSTRUMENT_MODE_ID in the corresponding HK-LBL file.
  *
- * BUG: DATASET.CAT:START_TIME set according to mission calender (or arguments), but is not adjusted for those data products which
- * often begin before the official mission phase due to(?) not splitting data products. Note that data products in some mission phases,
- * e.g. AST1, begin long __AFTER__ DATASET.CAT:START_TIME.
- *      /Erik P G Johansson 2017-11-06
- * 
  * 
  * 
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
@@ -331,7 +331,8 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp);                                  
 int  LoadMacroDesc(prp_type macs[][MAX_MACROS_INBL],char *);                    // Loads all macro descriptions
 int  InitCalibMeas(char *rpath, char *fpath, char *pathocel, char *pathocet, m_type *m);             // Get measured data calibration files
 void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries);
-int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp, pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
+// int  InitMissionPhaseStructFromMissionCalendar(mp_type *mp, pds_type *pds);      // Given a path, data set version and mission abbreviation (in mp)
+int  InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar_path, int DPL_number, float data_set_version);
 
 // Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
 void DeriveDSIandDSN(
@@ -347,6 +348,7 @@ int UpdateODLFile(char *file_path, prp_type *odl_prp, int update_PUBLICATION_DAT
 int WriteUpdatedLabelFile(prp_type *pds, char *name, int update_PUBLICATION_DATE);      // Write label file
 int ReadLabelFile(prp_type *pds,char *name);                                            // Read a label file 
 int ReadTableFile(prp_type *lbl_data,c_type *cal,char *path, char *msg);                // Read "generic" table file
+int UpdateDATASET(mp_type *mp_arg, pds_type *pds_arg);                                  // Update DATASET.CAT
 
 // Miscellaneous functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -453,6 +455,8 @@ int ConvertSccs2Sccd(char *sccs, int *reset_counter, double *sccd);             
 int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals);            // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // use_6_digits is long or short fractions of seconds.
 
+void ConvertTimet2Sccd_SPICE(time_t t, int *reset_counter, double *sccd);
+
 int ConvertUtc2Timet(char *sdate,time_t *t);                                // Returns UTC time in seconds (since 1970) for a PDS date string
 // NOTE: This is not the inverse of Scet2Date!
 unsigned int ConvertUtc2Timet_2(char *utc);                                 // Get seconds from 1970 epoch to epoch "epoch"
@@ -527,7 +531,6 @@ prp_type mdesc;           // Linked property/value list for Macro Descriptions
 // prp_type cc_lbl;          // Linked property/value list for Coarse Bias Voltage Calibration Data Label
 // prp_type ic_lbl;          // Linked property/value list for Bias Current Calibration Data Label
 // prp_type fc_lbl;          // Linked property/value list for Fine Bias Voltage Calibration Data Label
-prp_type cat;             // Linked property/value list for Catalog Files 
 
 c_type v_conv;                            // Coarse-voltage-bias-conversion-to-TM data structure (table).
 c_type f_conv;                            // Fine  -voltage-bias-conversion-to-TM data structure (table. (fine=fine sweep)
@@ -667,8 +670,10 @@ int main(int argc, char *argv[])
     arg_type sarg;        // Argument structure Science thread
     arg_type harg;        // Argument structure HK thread
     
-    mp.start=0;           // Mission start time, small dummy
-    mp.stop=INT32_MAX;    // Mission stop time, big dummy ~68 years
+    mp.t_start = 0;            // Mission start time, small dummy
+    mp.t_stop  = INT32_MAX;    // Mission stop time, big dummy ~68 years
+    mp.sccd_start_data = NAN;
+    mp.sccd_stop_data  = NAN;
     
     unsigned int volume_id_nbr;   // The four-digit number in VOLUME_ID, ROLAP_xxxx
     
@@ -839,8 +844,11 @@ int main(int argc, char *argv[])
     
     sec_epoch=ConvertUtc2Timet_2(pds.SCResetClock);	// Compute seconds from epoch 1970 to S/C Clock reset. 
     
+
+
     // Get mission phase data
-    if(InitMissionPhaseStructFromMissionCalendar(&mp,&pds) < 0) {
+//     if(InitMissionPhaseStructFromMissionCalendar(&mp, &pds) < 0) {
+    if(InitMissionPhaseStructFromMissionCalendar(&mp, pds.mcpath, pds.DPLNumber, pds.DataSetVersion) < 0) {
         exit(1);
     }
 
@@ -870,7 +878,7 @@ int main(int argc, char *argv[])
         
         
         if (GetOption("-ps", argc, argv, tstr1)) {
-            if((status=ConvertUtc2Timet(tstr1,&(mp.start))) < 0) {
+            if((status=ConvertUtc2Timet(tstr1,&(mp.t_start))) < 0) {
                 fprintf(stderr, "Can not convert argument \"%s\" to a time: error code %i\n", tstr1, status);
                 exit(1);
             }
@@ -882,40 +890,63 @@ int main(int argc, char *argv[])
         
         if (GetOption("-pd", argc, argv, tstr1))
         {
-            float dur;
-            if (!sscanf(tstr1, "%e", &dur)) {
+            float dataset_duration_days;
+            if (!sscanf(tstr1, "%e", &dataset_duration_days)) {
                 fprintf(stderr, "Can not interpret argument \"%s\".\n", tstr1);    // NOTE: Periods shorter than one day are useful for debugging. Therefore permit decimal numbers.
                 exit(1);
             }
-            // Compute end time. NOTE: Approximate since it does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred
-            // in the time interval covered by the data set into account.
-            //mp.stop = mp.start + dur*24*3600 + 1;
-            mp.stop = mp.start + dur*24*3600;
+            // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred in time interval
+            // into account. However, these are time_t variables which might not use leap seconds anyway.
+            mp.t_stop = mp.t_start + dataset_duration_days*24*3600;
         }
         else
         {
             fprintf(stderr, "Can not find option -pd.\n");
             exit(1);
         }
+//         // Would like to execute these commands here but SPICE is not initialized yet.
+//         ConvertTimet2Sccd_SPICE(mp.t_start, NULL, &(mp.sccd_start_data));
+//         ConvertTimet2Sccd_SPICE(mp.t_stop,  NULL, &(mp.sccd_stop_data));
     }
 
     YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     printf( "DATA_SET_ID                 : %s\n",mp.data_set_id);
     
-    // Create unquoted data set ID
-    strcpy(tstr1, mp.data_set_id);    // Make temporary copy
-    TrimQN(tstr1);                    // Remove quotes in temporary copy
+
     
+    //========================================================================================================
     // Loads second part of configuration information into the PDS structure and opens some log/status files.
-    // NOTE: Creates data set directory!!
+    // 
+    // NOTE: LoadConfig2 creates data set directory!! Therefore needs sufficiently complete "pds" struct.
+    //========================================================================================================
+    strcpy(tstr1, mp.data_set_id);    // Make temporary copy.
+    TrimQN(tstr1);                    // Remove quotes in temporary copy.
     if((status=LoadConfig2(&pds, tstr1))<0)
     {
         // NOTE: Misleading error message for error=-3 or -2.
         fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
         exit(1);
     }
-    
 
+
+
+    //===================================================
+    // Configure SPICE, including loading the METAKERNEL
+    //===================================================
+    InitSpice(pds.pathmk);
+    
+    /* IMPLEMENTATION NOTE: Would like to execute these commands when initializing the "mp" struct (the t_start and t_stop fields)
+    /* (a) in InitMissionPhaseStructFromMissionCalendar and (b) when parsing the optional CLI arguments.
+     * However:
+     * (1) To initialize SPICE, pds.pathmk has to be initialized.
+     * (2) pds.pathmk is initialized in LoadConfig2 which needs the DATA_SET_ID (for creating data set directory),
+     * (3) DATA_SET_ID is partly initialized through either (a) InitMissionPhaseStructFromMissionCalendar or (b) CLI arguments.
+     * Thus, ideally, to solve this neatly, LoadConfig2 should be broken up somehow.
+     */
+    ConvertTimet2Sccd_SPICE(mp.t_start, NULL, &(mp.sccd_start_data));
+    ConvertTimet2Sccd_SPICE(mp.t_stop,  NULL, &(mp.sccd_stop_data));
+    
+    
     
     if(LoadTimeCorr(&pds,&tcp)<0)         // Load the time correlation packets, once and for all!
     {
@@ -942,27 +973,26 @@ int main(int argc, char *argv[])
     //===========================================
     // Open VOLDESC.CAT and change some keywords
     //===========================================
-    sprintf(tstr1,"%sVOLDESC.CAT",pds.apathpds);          // Get full path
-    status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
+    sprintf(tstr1, "%sVOLDESC.CAT", pds.apathpds);             // Get full path
+    status = ReadLabelFile(&tmp_lbl, tstr1);                   // Read catalog keywords into property value pair list
     
-    sprintf(tstr2,"ROLAP_%04d", volume_id_nbr);
-    SetP(&cat,"VOLUME_ID",tstr2,1);                       // Set VOLUME_ID
-    
-    
+    sprintf(tstr2, "ROLAP_%04d", volume_id_nbr);
+    SetP(&tmp_lbl, "VOLUME_ID", tstr2, 1);                     // Set VOLUME_ID
+
     // Create unquoted mission phase name
-    strcpy(tstr3,mp.phase_name); // Make temporary copy
-    TrimQN(tstr3);               // Remove quotes in temporary copy
+    strcpy(tstr3, mp.phase_name);    // Make temporary copy
+    TrimQN(tstr3);                   // Remove quotes in temporary copy
     
     // Construct and set VOLUME_NAME.
     if(calib) {
-        sprintf(tstr2,"\"RPCLAP CALIBRATED DATA FOR %s\"",tstr3);
+        sprintf(tstr2, "\"RPCLAP CALIBRATED DATA FOR %s\"", tstr3);
     } else {
-        sprintf(tstr2,"\"RPCLAP EDITED RAW DATA FOR %s\"",tstr3);
+        sprintf(tstr2, "\"RPCLAP EDITED RAW DATA FOR %s\"", tstr3);
     }    
-    SetP(&cat,"VOLUME_NAME",tstr2,1); // Set VOLUME_NAME
+    SetP(&tmp_lbl, "VOLUME_NAME", tstr2, 1); // Set VOLUME_NAME
     
-    WriteUpdatedLabelFile(&cat, tstr1, 1);                  // Write back label file with new info
-    FreePrp(&cat);                                          // Free property value list
+    WriteUpdatedLabelFile(&tmp_lbl, tstr1, 1);                  // Write back label file with new info
+    FreePrp(&tmp_lbl);                                          // Free property value list
 
 
 
@@ -997,27 +1027,11 @@ int main(int argc, char *argv[])
 
 
 
-    //===========================================
-    // Open DATASET.CAT and change some keywords
-    //===========================================
-    sprintf(tstr1,"%sCATALOG/DATASET.CAT",pds.apathpds);  // Get full path
-    status=ReadLabelFile(&cat,tstr1);                     // Read catalog keywords into property value pair list
-    
-    ConvertTimet2Utc((double)mp.start,tstr2,0);                // Decode raw time into PDS compliant UTC time
-    YPrintf("Mission phase start         : %s\n",tstr2);
-    printf( "Mission phase start         : %s\n",tstr2);
-    SetP(&cat,"START_TIME",tstr2,1);                      // Set START_TIME
-    
-    ConvertTimet2Utc((double)mp.stop,tstr2,0);                 // Decode raw time into PDS compliant UTC time
-    YPrintf("Mission phase stop          : %s\n\n",tstr2);
-    printf( "Mission phase stop          : %s\n",  tstr2);
-    SetP(&cat,"STOP_TIME",tstr2,1);                       // Set STOP_TIME
-    
-    SetP(&cat,"DATA_SET_RELEASE_DATE",pds.ReleaseDate,1); // Set DATA_SET_RELEASE_DATE
-    
-    WriteUpdatedLabelFile(&cat, tstr1, 1);                // Write back label file with new info
-    FreePrp(&cat);                                        // Free property value list
-    
+    //=======================================
+    // Update DATASET.CAT with some keywords
+    //=======================================
+    //UpdateDATASET(&mp, &pds));    // Moved to ExitPDS.
+
     
     
     //================================================================================
@@ -1040,13 +1054,6 @@ int main(int argc, char *argv[])
     
     
     
-    //===================================================
-    // Configure SPICE, including loading the METAKERNEL
-    //===================================================
-    InitSpice(pds.pathmk);
-
-
-
     // Write initial message to system log
     YPrintf("LAP PDS SYSTEM STARTED     \n");
     YPrintf("========================================================================\n");
@@ -1106,7 +1113,7 @@ int main(int argc, char *argv[])
     //========================================
     // Initialize CALIB_COEFF data structures
     //========================================
-    status = InitCalibCoeff(pds.cpathd, mp.start, mp.stop, &calib_coeff_data);        // Get measurement calibration files
+    status = InitCalibCoeff(pds.cpathd, mp.t_start, mp.t_stop, &calib_coeff_data);        // Get measurement calibration files
     if(status<0)
     {
         YPrintf("Can not load offset calibration TM conversion files or the offset calibration exceptions files. Function error code %i. Exiting.\n", status);
@@ -2076,7 +2083,21 @@ void *DecodeScience(void *arg)
             CPrintf("WriteTABLBL_FilePair: Excluding data - Not writing TAB & LBL file pair.\n");
             return;
         }
+        
+        // CASE: The TAB+LBL file pair will be written to disk.
 
+        //==============================================
+        // Update mp.sccd_start_data, mp.sccd_stop_data
+        //==============================================
+        property_type *property_start_tmp, *property_stop_tmp;
+        double        sccd_start_file,          sccd_stop_file;
+        FindP(&comm, &property_start_tmp,"SPACECRAFT_CLOCK_START_COUNT", 1, DNTCARE);
+        FindP(&comm, &property_stop_tmp, "SPACECRAFT_CLOCK_STOP_COUNT",  1, DNTCARE);
+        ConvertSccs2Sccd(property_start_tmp->value, NULL, &sccd_start_file);
+        ConvertSccs2Sccd(property_stop_tmp->value,  NULL, &sccd_stop_file );
+        mp.sccd_start_data = fmin(mp.sccd_start_data, sccd_start_file);
+        mp.sccd_stop_data  = fmax(mp.sccd_stop_data,  sccd_stop_file);
+        
         //====================
         // Write LBL+TAB file
         //====================
@@ -4167,6 +4188,13 @@ void ExitPDS(int status)
     if(comm.no_prop!=0 && comm.properties!=NULL) { // Something in comm structure?
         FreePrp(&comm);                           // Then free comm memory
     }
+    
+    //===========================================
+    // Open DATASET.CAT and change some keywords
+    //===========================================
+    UpdateDATASET(&mp, &pds);
+
+        
         
         /*=============================
          * NOTE: Bad indentation below
@@ -4527,7 +4555,9 @@ int OpenLogFile(FILE **pfd,char *name,FILE *fderr)
     return 0;
 }
 
-// Dump path information to system log
+
+
+// Dump path information to system log.
 int AddPathsToSystemLog(pds_type *p)
 {
     YPrintf("LAP PDS System paths\n"); 
@@ -4736,12 +4766,13 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
 /**
  * Load second part of configuration file
  *
- * Sets among others: p->apathpds   // Archive path PDS (Out data)
+ * Sets among others: p->apathpds  = PDS data set path (out data)
+ *                    p->pathmk    = Path to SPICE metakernel.
  *
  * NOTE: The function name is deceiving. The function does more than just read the configuration file.
  * NOTE: COPIES TEMPLATE DIRECTORY TO CREATE THE DATA SET DIRECTORY, and probably more.
  */
-int  LoadConfig2(pds_type *p,char *data_set_id) 
+int LoadConfig2(pds_type *p,char *data_set_id) 
 { 
     FILE *fd;
     FILE *pipe_fp;
@@ -4779,16 +4810,20 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     fgets(line,PATH_MAX,fd);
     fgets(line,PATH_MAX,fd);
     
-    fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
-    strncpy(p->apathpds,l_str,PATH_MAX);   // NOTE: Uses field variable as temporary variable. Is later overwritten.
+    fgets(line, PATH_MAX, fd);
+    Separate(line, l_str, r_str, '%', 1);
+    TrimWN(l_str);
+//     strncpy(p->apathpds,l_str,PATH_MAX);
+    strncpy(tstr, l_str, PATH_MAX);
     
-    if(SetupPath("PDS Archives base path      ",p->apathpds)<0) return -2; // Test if path exists
+//     if(SetupPath("PDS Data sets base path      ",p->apathpds)<0) return -2;
+    if(SetupPath("PDS Data sets base path      ", tstr)<0) return -2;
     
-    sprintf(p->apathpds,"%s%s/",l_str,data_set_id);
+    sprintf(p->apathpds,"%s%s/", l_str, data_set_id);    // Assigns final value to p->apathpds.
     
     
-    printf( "\nCreate archive path: %s\n",p->apathpds);
-    YPrintf("\nCreate archive path: %s\n",p->apathpds);
+    printf(    "\nCreate archive path:         %s\n",p->apathpds);
+    YPrintf(   "\nCreate archive path:         %s\n",p->apathpds);
     
     if(mkdir(p->apathpds,0775)<0)
     {
@@ -4839,19 +4874,19 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
     fgets(line,PATH_MAX,fd);Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
     strncpy(p->uapath,l_str,PATH_MAX);
     if(SetupPath("Path to unaccepted data     ",p->uapath)<0)  return -7;  // Test if path exists
-    
-    
+
+
     if(SetupPath("LAP_PDS_ROOT                ",p->apathpds)<0) return -8;  // Test PDS root path
     strncpy(line,p->apathpds,PATH_MAX); 
     strncat(line,"DATA",PATH_MAX);
     if(SetupPath("DATA                        ",line)<0)  return -9;  // Test if DATA directory exists
-    
+
     // Trying to remove preexisting DATA/EDITED, DATA/CALIBRATED? Unnecessary?
     sprintf(p->dpathse,"%sEDITED/",line); 
     sprintf(p->dpathsc,"%sCALIBRATED/",line);
     rmdir(p->dpathsc);
     rmdir(p->dpathse);
-    
+
     if(calib)
     {
         if(MakeDir("CALIBRATED",line,p->dpathsc)<0) // Create CALIBRATED directory
@@ -4862,20 +4897,21 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
         if(MakeDir("EDITED",line,p->dpathse)<0) // Create EDITED directory
             return -11;
     }
-    
-    if(calib)
+
+    if(calib) {
         strcpy(p->dpathse,p->dpathsc); // Override edited!...
-        
-        strncpy(p->dpathh,p->dpathse,PATH_MAX);  // Same data path for HK
-        
-        strncpy(p->ipath,p->apathpds,PATH_MAX);
+    }
+
+    strncpy(p->dpathh,p->dpathse,PATH_MAX);  // Same data path for HK
+
+    strncpy(p->ipath,p->apathpds,PATH_MAX);
     strncat(p->ipath,"INDEX",PATH_MAX);
     if(SetupPath("INDEX                       ",p->ipath)<0)  return -12;  // Test if INDEX directory exists
-    
+
     strncpy(p->cpathd,p->apathpds,PATH_MAX);
     strncat(p->cpathd,"CALIB",PATH_MAX);  // Root path to data used to perform calibrations 
     if(SetupPath("CALIB                       ",p->cpathd)<0)  return -13;  // Test if CALIB directory exists
-    
+
     if(fgets(line,PATH_MAX,fd)==NULL) return -14;
     Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
     sprintf(p->cpathc,"%s%s",p->cpathd,l_str); // Set up path to coarse voltage bias calibration file
@@ -4913,7 +4949,7 @@ int  LoadConfig2(pds_type *p,char *data_set_id)
 
     if(fgets(line,PATH_MAX,fd)==NULL) return -24;
     Separate(line,l_str,r_str,'%',1);TrimWN(l_str);
-    strncpy(p->pathmk, l_str, PATH_MAX);    // Add SPICE metakernel path.
+    strncpy(p->pathmk, l_str, PATH_MAX);          // Set SPICE metakernel path.
     
     fclose(fd); // Close config file
     
@@ -6126,23 +6162,30 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
 
 
 
-// Given a path (p->mcpath) and mission phase abbreviation (m->abbrev),
-// initialize an instance of mp_type with data from the mission calendar file.
-// Function previously called "GetMissionP".
-// 
-// NOTE: Could use global variable mp & pds but requires them through arguments instead to reduce dependence on global variables.
-int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
+/* Given a path (p->mcpath) and mission phase abbreviation (m->abbrev),
+ * initialize an instance of mp_type with data from the mission calendar file.
+ * Function previously called "GetMissionP".
+ * 
+ * ARGUMENTS
+ * =========
+ * OUTPUT: m
+ * 
+ * NOTE: Could use global variable mp & pds but requires them through arguments instead to reduce dependence on global variables.
+ */
+// int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
+int InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar_path, int DPL_number, float data_set_version)
 {
     FILE *fd;
     
     char nline[256];  // Input new line assume shorter than 256 characters
-    char duration[6]; // Duration of period
+    char dataset_duration_days_str[6]; // Duration of period
     char sdate[11];   // Date from mission calendar in string form
     char abbrev[5];
     int stat;         // Just a status variable
-    int dur;
+    int dataset_duration_days;
 
-    if((fd=fopen(p->mcpath,"r"))==NULL) 
+//     if((fd=fopen(p->mcpath,"r"))==NULL) 
+    if((fd=fopen(mission_calendar_path,"r"))==NULL) 
     {
         printf("ERROR: Could not open mission calendar file\n");
         YPrintf("Could not open mission calendar file\n");
@@ -6155,10 +6198,10 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
         if(nline[0] == '#')  continue;  // Remove any comments.
         
         // Extract values from columns, two columns at a time.
-        Separate(nline, m->phase_name,      abbrev,             ':', 1);  // Get mission phase name (incl. quotes) and abbreviation.
-        Separate(nline, sdate,              duration,           ':', 3);  // Get Duration and Date string.
-        Separate(nline, m->target_name_did, m->target_id,       ':', 5);  // Get "target name for DATA_SET_ID" and "target id".
-        Separate(nline, m->target_type,     m->target_name_dsn, ':', 7);  // Get "target type" and "target name for DATA_SET_NAME".
+        Separate(nline, m->phase_name,      abbrev,                    ':', 1);  // Get mission phase name (incl. quotes) and abbreviation.
+        Separate(nline, sdate,              dataset_duration_days_str, ':', 3);  // Get Duration and Date string.
+        Separate(nline, m->target_name_did, m->target_id,              ':', 5);  // Get "target name for DATA_SET_ID" and "target id".
+        Separate(nline, m->target_type,     m->target_name_dsn,        ':', 7);  // Get "target type" and "target name for DATA_SET_NAME".
         
         
         sdate[10]='\0';         // Null terminate
@@ -6167,7 +6210,7 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
         
         // Trim strings of whitespace (all but starting date).
         TrimWN(abbrev);
-        TrimWN(duration);
+        TrimWN(dataset_duration_days_str);
         TrimWN(m->phase_name);
         TrimWN(m->target_name_did);
         TrimWN(m->target_id);
@@ -6177,15 +6220,21 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
         if(!strcmp(m->abbrev,abbrev)) // Matching mission phase abbreviation
         {
             // Get new time from mission calendar, convert to seconds
-            if((stat=ConvertUtc2Timet(sdate,&(m->start)))<0) {
+            if((stat=ConvertUtc2Timet(sdate,&(m->t_start)))<0) {
                 CPrintf("    Error mission phase time conversion: %02d\n",stat);
             }
             
-            sscanf(duration,"%d",&dur);
+            sscanf(dataset_duration_days_str, "%d", &dataset_duration_days);
 
             // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred in time interval
-            // into account.
-            m->stop = m->start + dur*24*3600;
+            // into account. However, these are time_t variables which might not use leap seconds anyway.
+            m->t_stop = m->t_start + dataset_duration_days*24*3600;
+
+//             // Would like to execute these commands here but SPICE is not initialized yet.
+//             printf("InitMissionPhaseStructFromMissionCalendar: 1 \n");    // DEBUG
+//             ConvertTimet2Sccd_SPICE(m->t_start, NULL, &(m->sccd_start_data));   
+//             ConvertTimet2Sccd_SPICE(m->t_stop,  NULL, &(m->sccd_stop_data ));
+//             printf("InitMissionPhaseStructFromMissionCalendar: 2 \n");    // DEBUG
             
             char* descr;
             if(calib) {
@@ -6195,7 +6244,7 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
             }
             DeriveDSIandDSN(
                 m->data_set_id, m->data_set_name,
-                m->target_id, p->DPLNumber, m->abbrev, descr, p->DataSetVersion, m->target_name_dsn);
+                m->target_id, DPL_number, m->abbrev, descr, data_set_version, m->target_name_dsn);
             
             fclose(fd); // Close mission calendar
             return 0;   // Ok, Returns using previous ID and name, exactly what we want! 
@@ -6210,13 +6259,20 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
 
 
 
-// Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
+/* Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
+ * 
+ * ARGUMENTS
+ * =========
+ * OUTPUT: DATA_SET_ID   : PDS DATA_SET_ID   including quotes.
+ * OUTPUT: DATA_SET_NAME : PDS DATA_SET_NAME including quotes.
+ * INPUT: data_set_version : Data set version as a float (not string)
+ */
 void DeriveDSIandDSN(
     char* DATA_SET_ID, char* DATA_SET_NAME,
-    char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float dataSetVersion, char* targetName_dsn)
+    char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float data_set_version, char* targetName_dsn)
 {
-    sprintf(DATA_SET_ID,  "\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",              targetID,       DPLNumber, mpAbbreviation, descr, dataSetVersion);
-    sprintf(DATA_SET_NAME,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"", targetName_dsn, DPLNumber, mpAbbreviation, descr, dataSetVersion);
+    sprintf(DATA_SET_ID,  "\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",              targetID,       DPLNumber, mpAbbreviation, descr, data_set_version);
+    sprintf(DATA_SET_NAME,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"", targetName_dsn, DPLNumber, mpAbbreviation, descr, data_set_version);
 }
 
 
@@ -6702,6 +6758,58 @@ int ReadTableFile(prp_type *lbl_data, c_type *cal, char *dir_path, char *msg)
     
     fclose(fd);
     return 0; // Ok
+}
+
+
+
+/*
+ * Update DATASET.CAT with some values.
+ * 
+ * NOTE: Could use global variables mp & pds but requires them through arguments instead to reduce dependence on global variables.
+ * Hence the *_arg argument names.
+ * 
+ * 
+ * RETURN VALUE
+ * ============
+ * 0=No error; -1=Error
+ * 
+ */
+int UpdateDATASET(mp_type *mp_arg, pds_type *pds_arg) {
+    
+    char DATASET_path[MAX_STR];
+    char utc[MAX_STR];
+    prp_type DATASET_contents;
+
+    int status = 0;
+    
+    sprintf(DATASET_path, "%sCATALOG/DATASET.CAT", pds.apathpds);  // Get full path    
+    
+    status = ReadLabelFile(&DATASET_contents,DATASET_path);              // Read catalog keywords into property value pair list
+    if (status < 0) {
+        return -1;
+    }
+    
+    //ConvertTimet2Utc((double) mp_arg->t_start, utc, FALSE);          // Decode raw time into PDS compliant UTC time
+    ConvertSccd2Utc(mp_arg->sccd_start_data, utc, NULL);
+    YPrintf("Mission phase start         : %s\n", utc);
+    printf( "Mission phase start         : %s\n", utc);
+    SetP(&DATASET_contents,"START_TIME", utc, 1);                      // Set START_TIME
+    
+    //ConvertTimet2Utc((double) mp_arg->t_stop, utc, FALSE);           // Decode raw time into PDS compliant UTC time
+    ConvertSccd2Utc(mp_arg->sccd_stop_data, utc, NULL);
+    YPrintf("Mission phase stop          : %s\n\n", utc);
+    printf( "Mission phase stop          : %s\n",   utc);
+    SetP(&DATASET_contents,"STOP_TIME", utc, 1);                       // Set STOP_TIME
+    
+    SetP(&DATASET_contents,"DATA_SET_RELEASE_DATE", pds_arg->ReleaseDate, 1); // Set DATA_SET_RELEASE_DATE. NOTE: pds.ReleaseDate also used for keyword PUBLICATION_DATE.
+    
+    status = WriteUpdatedLabelFile(&DATASET_contents, DATASET_path, 1);         // Write back label file with new info. NOTE: This function may update more keywords.
+    FreePrp(&DATASET_contents);                                        // Free property value list
+    if (status < 0) {
+        return -1;    // NOTE: Return after having freed the property.
+    }
+    
+    return 0;
 }
 
 
@@ -9312,9 +9420,15 @@ int  FileStatus(FILE *fs,struct stat *sp)
 
 // Accepts a string and checks if it is a real path, and returns a "resolved" path (no symbolic links, no /../ etc).
 // Makes sure there is "/" at the end.
+// 
+// ARGUMENTS
+// =========
+// INPUT:  path: Path to directory
+// OUTPUT: path: Path to directory that ends with "/".
+// 
 // NOTE: Should only be used for DIRECTORY PATHS.
 // NOTE: "info_txt" is only used for log messages. NOT printed to logs, but stdout/stderr.
-int  SetupPath(char *info_txt,char *path)
+int SetupPath(char *info_txt,char *path)
 {
     char tp[PATH_MAX];
     int l;
@@ -10100,12 +10214,17 @@ void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd)
 
 //     printf("ConvertUtc2Sccd_SPICE - BEGIN\n");   // DEBUG
 //     printf("utc = %s\n", utc);   // DEBUG
+    
     utc2et_c(utc, &et);
     sprintf(tstr, "SPICE failed to convert UTC (\"%s\")-->et.", utc);
     CheckSpiceError(tstr, TRUE, TRUE);
 
+//     printf("et = %g\n", et);   // DEBUG
+    
     sce2s_c(ROSETTA_SPICE_ID, et, MAX_STR, sccs);
     CheckSpiceError("SPICE failed to convert et-->SCCS.", TRUE, TRUE);
+    
+//     printf("sccs = %s\n", sccs);   // DEBUG
     
     ConvertSccs2Sccd(sccs, reset_counter, sccd);    // reset_counter : Ignored if NULL.
 //     printf("ConvertUtc2Sccd_SPICE - END\n");   // DEBUG
@@ -10315,6 +10434,29 @@ int ConvertTimet2Utc(double raw, char *utc, int use_6_decimals)
     }
 
     return 0;
+}
+
+
+
+/* Convert time_t --> SCCD (via SPICE).
+ * NOTE: Probably not very fast due to converting via UTC strings.
+ * NOTE: Somewhat limited in precision due to UTC strings 6 decimals.
+ * 
+ * ARGUMENTS
+ * =========
+ * OUTPUT : reset_counter : Will be set to the spacecraft clock reset counter. Ignored if NULL.
+ */
+void ConvertTimet2Sccd_SPICE(time_t t, int *reset_counter, double *sccd)
+{
+//     printf("ConvertTimet2Sccd_SPICE - BEGIN\n");    // DEBUG
+//     printf("t = %i\n", (int) t);    // DEBUG
+    
+    char utc[MAX_STR];
+    ConvertTimet2Utc(t, utc, TRUE);
+//     printf("utc = %s\n", utc);    // DEBUG
+    
+    ConvertUtc2Sccd_SPICE(utc, reset_counter, sccd);
+//     printf("ConvertTimet2Sccd_SPICE - END\n");   // DEBUG
 }
 
 
@@ -10892,8 +11034,8 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
         scet = DecodeDDSTime2Timet(ibuff); // Get time of DDS packet
         
         // Determine if data lies within the specified data set (time interval).
-        if(mp.start>0)
-            if(scet<mp.start || scet>mp.stop)
+        if(mp.t_start>0)
+            if(scet<mp.t_start || scet>mp.t_stop)
             {
                 ibuff+=(18+length); // Skip DDS packet
                 continue;

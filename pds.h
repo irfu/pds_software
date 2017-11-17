@@ -603,8 +603,30 @@ typedef struct mission_phase_struct
   char target_id[8];             // Used in DATA_SET_ID.
   char target_type[32];
   
-  time_t start;                  // Beginning of data set.
-  time_t stop;                   // End of data set.
+    /*
+    * Beginning and end of dataset as specified by the CALL to pds, i.e.
+    * (1) the mission calender, or (2) CLI arguments.
+    * This is the time interval which will be searched for data.
+    */
+  time_t t_start;
+  time_t t_stop;
+  
+    /**
+     * Official beginning and end of dataset as will be specified in DATASET.CAT.
+     *
+     * This may be different from t_start, t_end (besides the difference in way of representing time) due to 
+     * not splitting time series (TAB files) when they cross the specified dataset time boundaries.
+     * Empirically, it is known that often, but not always, there are TAB files which begin before the dataset start time (t_start).
+     * Hence, t_start should not be used for setting DATASET.CAT:START_TIME.
+     * 
+     * Therefore, these variables are updated based on the files actually written to disk.
+     * 
+     * NOTE: In principle, the dataset may also contain data for a time interval much shorter than (t_start, t_time)
+     * due to data gaps but the current implementation (2017-11-17) only allows (sccd_start_data, sccd_stop_data)
+     * to specify a superset of (t_start, t_stop), i.e. they always specify a larger time interval.
+     */
+  double sccd_start_data;
+  double sccd_stop_data;
 } mp_type;
 
 typedef struct hk_lbl_info_struct
