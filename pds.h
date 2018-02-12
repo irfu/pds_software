@@ -87,7 +87,7 @@
 #define T_SCALE   0.0215  
 
 
-#define HK_NUM_LINES       16         // Maximum number of lines (HK packets) per HK TAB file.
+#define HK_NUM_LINES     2702         // Maximum number of lines (HK packets) per HK TAB file. 24*60*60/32 = 2700. Set high to minimize number of HK files.
 #define HK_LINE_SIZE      208
 #define HK_LINE_SIZE_STR "208"
 #define HK_LENGTH 14
