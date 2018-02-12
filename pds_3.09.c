@@ -936,7 +936,7 @@ int main(int argc, char *argv[])
     InitSpice(pds.pathmk);
     
     /* IMPLEMENTATION NOTE: Would like to execute these commands when initializing the "mp" struct (the t_start and t_stop fields)
-    /* (a) in InitMissionPhaseStructFromMissionCalendar and (b) when parsing the optional CLI arguments.
+     * (a) in InitMissionPhaseStructFromMissionCalendar and (b) when parsing the optional CLI arguments.
      * However:
      * (1) To initialize SPICE, pds.pathmk has to be initialized.
      * (2) pds.pathmk is initialized in LoadConfig2 which needs the DATA_SET_ID (for creating data set directory),
@@ -1774,7 +1774,7 @@ void *DecodeHK(void *arg)
         sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
         SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
 
-        AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble the very first HK line (of HK_NUM_LINES per TAB file).
+        AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble the very first HK line (out of HK_NUM_LINES per TAB file).
         
         //ConvertSccd2Utc( sccd,                     hk_info.utc_time_str, NULL);    // First convert spacecraft time to UTC to get time calibration right
         ConvertSccd2Sccs(sccd, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock
