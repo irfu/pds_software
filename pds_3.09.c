@@ -7392,16 +7392,12 @@ int WritePTAB_File(
                     //============
                     //  CASE: P1
                     //============
-//                     if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
-//                     else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
                     if (is_high_gain_P1) {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G1;      }
                     else                 {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G0_05;   }
                 } else if (writing_P2_data) {
                     //============
                     //  CASE: P2
                     //============
-//                     if (is_high_gain_P2) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
-//                     else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
                     if (is_high_gain_P2) {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G1;      }
                     else                 {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G0_05;   }
                 } else if (writing_P3_data) {
@@ -7409,8 +7405,6 @@ int WritePTAB_File(
                     //  CASE: P3
                     //============
                     // NOTE: USES P1 to determine high/low gain for P3 for now!!! Undetermined what one should really use.
-//                     if (is_high_gain_P1) {   ccalf=mc->CF[i_calib].c_cal_16b_hg1;   }
-//                     else                 {   ccalf=mc->CF[i_calib].c_cal_16b_lg;    }
                     if (is_high_gain_P1) {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G1;      }
                     else                 {   ccalf = CALIB_ADC16_FACTOR_CURRENT_G0_05;   }
                 }
@@ -7433,14 +7427,10 @@ int WritePTAB_File(
                     //  CASE: P1
                     //============
                     if (is_high_gain_P1) {
-                        //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P1;
                         ccalf       = CALIB_ADC16_FACTOR_CURRENT_G1 / 16.0 * ADC_RATIO_P1;                        
-                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
                         ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G1;
                     } else {
-                        //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P1;
                         ccalf       = CALIB_ADC16_FACTOR_CURRENT_G0_05 / 16.0 * ADC_RATIO_P1;                        
-                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
                         ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G0_05;
                     }
 
@@ -7452,14 +7442,10 @@ int WritePTAB_File(
                     //  CASE: P2
                     //============
                     if (is_high_gain_P2) {
-                        //ccalf       = mc->CF[i_calib].c_cal_16b_hg1 / 16.0 * ADC_RATIO_P2;
                         ccalf       = CALIB_ADC16_FACTOR_CURRENT_G1 / 16.0 * ADC_RATIO_P2;                        
-                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_hg1;
                         ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G1;
                     } else {
-                        //ccalf       = mc->CF[i_calib].c_cal_16b_lg / 16.0 * ADC_RATIO_P2;
                         ccalf       = CALIB_ADC16_FACTOR_CURRENT_G0_05 / 16.0 * ADC_RATIO_P2;                        
-                        //ccalf_ADC16 = mc->CF[i_calib].c_cal_16b_lg;
                         ccalf_ADC16 = CALIB_ADC16_FACTOR_CURRENT_G0_05;
                     }
 
@@ -7479,21 +7465,17 @@ int WritePTAB_File(
             //====================
             // CASE: E-FIELD MODE
             //====================
-            //vcalf_ADC16 = mc->CF[i_calib].v_cal_16b;
             vcalf_ADC16 = CALIB_ADC16_FACTOR_VOLTAGE;
             
             if(data_type==D16) {
                 //=================
                 //   CASE: ADC16
                 //=================
-                //vcalf = mc->CF[i_calib].v_cal_16b;
                 vcalf = CALIB_ADC16_FACTOR_VOLTAGE;
             } else {
                 //=================
                 //   CASE: ADC20
                 //=================
-                //if      (writing_P1_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P1;   }
-                //else if (writing_P2_data) {   vcalf = mc->CF[i_calib].v_cal_16b / 16.0 * ADC_RATIO_P2;   }
                 if      (writing_P1_data) {   vcalf = CALIB_ADC16_FACTOR_VOLTAGE / 16.0 * ADC_RATIO_P1;   }
                 else if (writing_P2_data) {   vcalf = CALIB_ADC16_FACTOR_VOLTAGE / 16.0 * ADC_RATIO_P2;   }
 
@@ -7567,11 +7549,11 @@ int WritePTAB_File(
 
 
 
-    //#################################################################
-    //#################################################################
-    // Iterate over all samples (i.e. over every row in the TAB file).
-    //#################################################################
-    //#################################################################
+    //#######################################################
+    //#######################################################
+    // ITERATE OVER ALL SAMPLES (I.E. OVER ROWS IN TAB FILE)
+    //#######################################################
+    //#######################################################
     for(k_proper_sweep_sample=0,i_sample=0,j=0; i_sample<samples; i_sample++)   // NOTE: ONLY increments i_sample.
     {
         // Convert data from signed 16 bit and signed 20 bit to native signed integer
@@ -7706,10 +7688,10 @@ int WritePTAB_File(
                 ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
                 ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2.
                 /* The above lines were corrected by aie@irfu.se 2012-08-22 as the current bias is permuted 
-                * in the bias command. Original code:
-                *      curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
-                *      curr->ibias2=(bias[l][2] & 0xff);         // Override macro present current bias p2 
-                */
+                 * in the bias command. Original code:
+                 *      curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
+                 *      curr->ibias2= (bias[l][2] & 0xff);        // Override macro present current bias p2 
+                 */
                 
                 CPrintf("    Extra bias setting applied at: %s \n", current_sample_utc_corrected);
                 CPrintf("      Density P1: 0x%02x P2: 0x%02x\n",vbias1,vbias2);
@@ -7741,7 +7723,7 @@ int WritePTAB_File(
         double local_calib_offset_ADC16TM = global_calib_offset_ADC16TM;
         
         /* Subtract offset for ADC16 non-negative values.
-        * See comments on ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM / ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM. */
+         * See comments on ADC16_EDITED_NONNEGATIVE_OFFSET_ADC16TM / ADC16_CALIB_NONNEGATIVE_OFFSET_ADC16TM. */
         if(data_type==D16) {
             if(meas_value_TM>=0) {
                 if (!calib) {
@@ -7807,21 +7789,22 @@ int WritePTAB_File(
             current_TM = ibias;           // Set FIX Current bias in TM units. Not defined for P3.
             voltage_TM = meas_value_TM;   // Set sampled voltage value in TM units.
         }
-
+            
         pthread_testcancel();
 
 
 
-        //###############
-        //###############
-        // WRITE TO DISK
-        //###############
-        //###############
+        //#########################
+        //#########################
+        // WRITE TO DISK (ONE ROW)
+        //#########################
+        //#########################
         if(calib)
         {
             //##################
             // CASE: CALIB data
             //##################
+            
             if(bias_mode==DENSITY)
             {
                 //====================
@@ -7844,10 +7827,8 @@ int WritePTAB_File(
                         // CASE: NOT(!) FINE SWEEP
                         //=========================
                         double cvoltage;
-//                         if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][1];   cvoltage  = v_conv.C[voltage_TM][1];   }
-//                         else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[voltage_TM][2];   cvoltage  = v_conv.C[voltage_TM][2];   }
-                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = v_conv.C[voltage_TM][1];   }
-                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = v_conv.C[voltage_TM][2];   }
+                        if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = v_conv.C[voltage_TM][1];   }
+                        else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = v_conv.C[voltage_TM][2];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else
@@ -7863,10 +7844,8 @@ int WritePTAB_File(
                         // to a number from 0-255 if we want to use the same offset calibration file.
                         double cvoltage;
                         // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
-//                         if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][1];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
-//                         else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16   * mc->CD[i_calib].C[voltage_TM][2];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
-                        if      (curr->sensor==SENS_P1)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
-                        else if (curr->sensor==SENS_P2)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
+                        if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
+                        else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                 }   // if(param_type==SWEEP_PARAMS)
@@ -7877,15 +7856,12 @@ int WritePTAB_File(
                     //===============================
                     if (writing_P1_data || writing_P2_data) {
                         double cvoltage;
-//                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias1][1];   cvoltage  = v_conv.C[vbias1][1];   }
-//                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * mc->CD[i_calib].C[vbias2][2];   cvoltage  = v_conv.C[vbias2][2];   }
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][vbias1];   cvoltage  = v_conv.C[vbias1][1];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][vbias2];   cvoltage  = v_conv.C[vbias2][2];   }
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else if(writing_P3_data)
                     {
-//                         ccurrent -= ccalf_ADC16 * (mc->CD[i_calib].C[vbias1][1] - mc->CD[i_calib].C[vbias2][2]);
                         ccurrent -= ccalf_ADC16 * (bdco[0][vbias1] - bdco[1][vbias2]);
                         // Write ONE CURRENT (difference), TWO VOLTAGES (one per probe).
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
@@ -7904,11 +7880,17 @@ int WritePTAB_File(
                 cvoltage  = vcalf * ((double) voltage_TM);
                 cvoltage -= vcalf_ADC16 * local_calib_offset_ADC16TM;
                 if(writing_P3_data) {
+                    //==========
+                    // CASE: P3
+                    //==========
                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                             i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                 }
                 else
                 {
+                    //================
+                    // CASE: P1 or P2
+                    //================
                     double ccurrent;
                     if      (writing_P1_data) {   ccurrent = i_conv.C[ibias1][1];   }
                     else if (writing_P2_data) {   ccurrent = i_conv.C[ibias2][2];   }
@@ -7923,6 +7905,9 @@ int WritePTAB_File(
             //###################
             if(writing_P3_data)
             {
+                //==========
+                // CASE: P3
+                //==========
                 // For difference data P1-P2 we need to add two bias vectors. They can be different!
                 if(bias_mode==DENSITY) {
                     fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
@@ -7934,6 +7919,9 @@ int WritePTAB_File(
             }
             else
             {
+                //================
+                // CASE: P1 or P2
+                //================
                 // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
                 fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                         current_TM,   voltage_TM); // Write time, current and voltage
@@ -7958,10 +7946,13 @@ int WritePTAB_File(
 
 
 /*================================================================================================================================================
- * WRITE TO DATA LABEL FILE .LBL
+ * WRITE LABEL FILE (.LBL)
  * 
  * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is. See "WritePTAB_File" (assuming it has the same meaning).
  * NOTE: This function only has very little dependence on "dop". Compare "WritePTAB_File".
+ * 
+ * NOTE: This function does not have a MISSING_CONSTANT value for SATURATION_TAB_CONSTANT and therefore does not technically produce proper
+ * PDS-compliant LBL files.
  ================================================================================================================================================*/
 int WritePLBL_File(
     char *path,
@@ -10042,6 +10033,9 @@ int ConvertSccd2Utc(double sccd, char *utc_3decimals, char *utc_6decimals)
 {
     int exit_code;
     
+    // Use regular if-then-else, not #ifdef-#else-#endif, to
+    // (1) make USE_SPICE easier to convert to a C variable (e.g. for CLI argument flag),
+    // (2) ensure compilation checking of code for both cases.
     if (USE_SPICE) {
         exit_code = ConvertSccd2Utc_SPICE   (sccd, utc_3decimals, utc_6decimals);
     } else {

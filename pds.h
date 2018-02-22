@@ -65,7 +65,7 @@
 
 // Prefix "D16" = ADC16 (NOT the same as 16-bit data!)
 // Prefix "D20" = ADC20
-// D20x(T), x=probe
+// D20(x)(T), x=probe
 // T = Truncated (i.e. 16 bit data from ADC20)
 #define D16     16
 #define D20     20
