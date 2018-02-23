@@ -344,6 +344,64 @@
 #define MISSION_START_UTC                          "2004-03-03T00:00:00"
 #define MISSION_END_UTC                            "2016-09-30T23:59:59"
 
+
+
+/*===============================================================================================================
+ * Constants controlling how saturation is detected in CALIB data sets using
+ * (1) min-max limits in calibrated values (voltage, ampere)
+ * (2) The special values (in TM units) that ADC:s generate when they are saturated.
+ * When a saturated sample is detected, it is replaced by a special value.
+ *
+ * NOTE: This saturation detection algorithm does not work for P3 and is not used for P3, since:
+ * (1) There are no (calibrated) min-max limits that separate saturated from non-saturated values
+ *  min < x1 < max
+ *  min < x2 < max
+ *  ==> min-max < x1-x2 < max-min
+ *  which is what is needed to avoid false negatives, but which also produces many false positives
+ *  (positive=saturation).
+ * (2) The subtraction between the probe signals is done digitally onboard and there is (presumably)
+ *  no checking for saturation in the two probe signals before the subtraction
+ * ==> There is no special value in the difference that represents saturation.
+ *  
+ * NOTE: For saturated truncated ADC20 data, the same TM value may correspond to both saturation, and
+ * non-saturation, since the (onboard) 4-bit truncation reduces sets of 16 different values to one.
+ * Saturation detection on truncated ADC20 data via TM special value will therefore produce some false positives
+ * (positive=saturation).
+ * NOTE: Saturation can not be detected in onboard averaged data, since only a subset of underlying
+ * samples may be saturated, or all are saturated but both at min and max (analog saturation), giving a seemingly
+ * non-saturated average.
+ * NOTE: Min-max limits are inclusive, i.e. only values outside of the range (e.g. x < x_min) count as saturated.
+ * NOTE: This functionality is unlikely to detect saturation for diffs since diffs are calculate (onboard) from
+ * digital values. If, for example, both probes are saturated, then the diff will still appear to be
+ * non-saturated.
+ ===============================================================================================================*/
+#define USE_SATURATION_LIMITS                   TRUE   // Enable/disable saturation
+//#define USE_SATURATION_LIMITS                   FALSE   // Enable/disable saturation
+
+#define SATURATION_ADC20_NONTRUNC_TM_VALUE      -524288   // ADC20 non-truncated data (2^19=524288)
+#define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE    -32768   // (1) ADC16 data and (2) truncated ADC20 data (2^15=32768).
+// #define SATURATION_ADC20_NONTRUNC_TM_VALUE           60
+// #define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE       -89
+
+#define SATURATION_EFIELD_MIN                   -1e99
+#define SATURATION_EFIELD_MAX                    1e99
+// #define SATURATION_EFIELD_MIN                   1.7e0
+// #define SATURATION_EFIELD_MAX                   1.8e0
+
+#define SATURATION_DENSITY_LG_MIN               -1e99
+#define SATURATION_DENSITY_LG_MAX                1e99
+// #define SATURATION_DENSITY_LG_MIN                 -1e-8
+// #define SATURATION_DENSITY_LG_MAX                  1e-8
+
+#define SATURATION_DENSITY_HG_MIN               -1e99
+#define SATURATION_DENSITY_HG_MAX                1e99
+// #define SATURATION_DENSITY_HG_MIN              -1e-8
+// #define SATURATION_DENSITY_HG_MAX               1e-8
+
+#define SATURATION_TAB_CONSTANT                 -1000    // Special value used to represent saturation in sample in TAB files.
+
+
+
 /*===============================================================
  * FALSE = Keep fine sweeps in all datasets.
  * TRUE  = Exclude fine sweeps from CALIB datasets.

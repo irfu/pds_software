@@ -147,6 +147,8 @@
  *   (only SCI data; not HK yet) which often begin before the official mission phase due to(?) not splitting data products.
  *   Note that data products in some mission phases, e.g. AST1, begin long __AFTER__ DATASET.CAT:START_TIME.
  *      /Erik P G Johansson 2017-11-17
+ * * Implemented saturation detection.
+ *      /Erik P G Johansson 2018-02-23
  * 
  * 
  *
@@ -192,6 +194,8 @@
  *      HK_NUM_LINES determines the number of HK packets(?) per HK TAB file, and (presumably) only one of these packets
  *      is used for the INSTRUMENT_MODE_ID in the corresponding HK-LBL file.
  *
+ * BUG?: Some science data files in density mode do not contain ROSETTA:LAP_P1/P2_STRATEGY_OR_RANGE which specifies gain (among others).
+ *      See data for 2015-05-20.
  * 
  * 
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
@@ -361,6 +365,9 @@ int WritePTAB_File(
     unsigned char *buff, char *fname, int data_type, int samples, int id_code, int length, sweep_type *sw_info, adc20_type *a20_info,
     curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
     m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int ini_samples, int samp_plateau);
+
+void set_saturation_limits(double* x_phys_min, double* x_phys_max, int* x_TM_saturation, int is_ADC20_nontrunc, int is_high_gain, int is_Efield);
+double handle_saturation(double x_phys, int x_TM, double x_phys_min, double x_phys_max, int x_TM_saturation);
 
 // Write to data product label file .lbl
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type);
@@ -7213,7 +7220,12 @@ int WritePTAB_File(
 
     property_type *property1;       // Temporary property1
     
-    int ADC20_moving_average_enabled;                  // ADC20 Moving average boolean. Used for correcting for flight s/w bug.
+    int ADC20_moving_average_enabled;    // ADC20 Moving average boolean. Used for correcting for flight s/w bug.
+    
+    const int is_ADC20_nontrunc =       // True if-and-only-if current data is nontruncated ADC20.
+        (data_type==D20 ) |
+        (data_type==D201) |
+        (data_type==D202);
     
     /*======================================================================================================
      * There is a bug in the flight software implementation of moving average for ADC20 data.
@@ -7284,8 +7296,19 @@ int WritePTAB_File(
     const int writing_P2_data = (curr->sensor==SENS_P2   || dop==2);
     const int writing_P3_data = (curr->sensor==SENS_P1P2 && dop==0);
 
+    const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);    // GAIN 1 <==> High gain
+    const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
+    const int uses_8kHz_filter = (curr->afilter == 8);
 
-
+    // Derive constants needed for determining saturation.
+    double saturation_phys_min;
+    double saturation_phys_max;
+    int saturation_TM;
+    set_saturation_limits(&saturation_phys_min, &saturation_phys_max, &saturation_TM,
+                          is_ADC20_nontrunc, 
+                          (is_high_gain_P1 && writing_P1_data) || (is_high_gain_P2 && writing_P2_data) || (is_high_gain_P1 && writing_P3_data),
+                          bias_mode==E_FIELD);  // NOTE: Handling P3 case just for safety. P3 does not presently utilize saturation detection.
+    
     if(calib)
     {
         //=============
@@ -7336,11 +7359,6 @@ int WritePTAB_File(
         // Find the correct calibration factors & offsets depending on E-FIELD/DENSITY, GAIN, ADC16/ADC20, 4/8 kHz FILTER
         //################################################################################################################
         //################################################################################################################
-
-        const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);
-        const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
-        const int uses_8kHz_filter = (curr->afilter == 8);
-
         {
             /*=====================================================
             * Offset to remove from all ADC16 8 kHz-filtered data.
@@ -7829,6 +7847,7 @@ int WritePTAB_File(
                         double cvoltage;
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = v_conv.C[voltage_TM][1];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = v_conv.C[voltage_TM][2];   }
+                        ccurrent = handle_saturation(ccurrent, current_TM, saturation_phys_min, saturation_phys_max, saturation_TM);
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else
@@ -7846,6 +7865,7 @@ int WritePTAB_File(
                         // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
+                        ccurrent = handle_saturation(ccurrent, current_TM, saturation_phys_min, saturation_phys_max, saturation_TM);
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                 }   // if(param_type==SWEEP_PARAMS)
@@ -7858,11 +7878,13 @@ int WritePTAB_File(
                         double cvoltage;
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][vbias1];   cvoltage  = v_conv.C[vbias1][1];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][vbias2];   cvoltage  = v_conv.C[vbias2][2];   }
+                        ccurrent = handle_saturation(ccurrent, current_TM, saturation_phys_min, saturation_phys_max, saturation_TM);
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else if(writing_P3_data)
                     {
                         ccurrent -= ccalf_ADC16 * (bdco[0][vbias1] - bdco[1][vbias2]);
+                        // NOTE: No saturation detection, since method does not work for P3.
                         // Write ONE CURRENT (difference), TWO VOLTAGES (one per probe).
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                             ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
@@ -7883,6 +7905,7 @@ int WritePTAB_File(
                     //==========
                     // CASE: P3
                     //==========
+                    // NOTE: No saturation detection, since method does not work for P3.
                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                             i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
                 }
@@ -7894,6 +7917,7 @@ int WritePTAB_File(
                     double ccurrent;
                     if      (writing_P1_data) {   ccurrent = i_conv.C[ibias1][1];   }
                     else if (writing_P2_data) {   ccurrent = i_conv.C[ibias2][2];   }
+                    cvoltage  = handle_saturation(cvoltage, voltage_TM, saturation_phys_min, saturation_phys_max, saturation_TM);   
                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                 }
             }   // if(bias_mode==DENSITY) ... else ...
@@ -7942,6 +7966,78 @@ int WritePTAB_File(
     
     return 0;
 }   // WritePTAB_File
+
+
+
+/* Determine values used for detecting saturation in the current data using function "handle_saturation".
+ *
+ * This function is separated from "handle_saturation" (called once per sample) in order to only derive these values once
+ * per TAB file instead of once per sample, and hence speed up pds.
+ * 
+ * is_ADC20_nontrunc = True if-and-only-if data type is non-truncated ADC20 data.
+ */
+void set_saturation_limits(double* x_phys_min, double* x_phys_max, int* x_TM_saturation, int is_ADC20_nontrunc, int is_high_gain, int is_Efield)
+{    
+    // TODO-NEED-INFO: How specify argument value/expression that signifies NON-truncated ADC20 data?!
+
+    // NOTE: high/low gain only exists for density mode.
+    //  PROPOSAL: ADC20 saturation value truncated.
+
+    // Set x_TM_saturation
+    if (is_ADC20_nontrunc) {
+        *x_TM_saturation = SATURATION_ADC20_NONTRUNC_TM_VALUE;
+    } else {
+        *x_TM_saturation = SATURATION_ADC16_ADC20_TRUNC_TM_VALUE;
+    }
+
+    // Set x_phys_min/max
+    if (is_Efield)
+    {
+        *x_phys_min = SATURATION_EFIELD_MIN;
+        *x_phys_max = SATURATION_EFIELD_MAX;
+    }
+    else
+    {
+        if (is_high_gain) {
+            *x_phys_min = SATURATION_DENSITY_HG_MIN;
+            *x_phys_max = SATURATION_DENSITY_HG_MAX;
+        } else {
+            *x_phys_min = SATURATION_DENSITY_LG_MIN;
+            *x_phys_max = SATURATION_DENSITY_LG_MAX;
+        }
+    }
+}
+
+
+
+/* Replace calibrated value with special value if it is deemed to be saturated.
+ * 
+ * NOTE: When using min-max limits, values only count as saturated if they are strictly
+ * OUTSIDE the min-max value range (e.g. x_phys<x_phys_min).
+ * NOTE: Function/algorithm does not work for P3.
+ */
+double handle_saturation(double x_phys, int x_TM, double x_phys_min, double x_phys_max, int x_TM_saturation)
+{
+    // Use regular if-then-else, not #ifdef-#else-#endif, to
+    // (1) make USE_SPICE easier to convert to a C variable (e.g. for CLI argument flag),
+    // (2) ensure compilation checking of code for both cases.
+    if (USE_SATURATION_LIMITS)
+    {
+        if (   (x_phys < x_phys_min)
+            || (x_phys > x_phys_max)
+            || (x_TM   == x_TM_saturation))
+        {
+            return SATURATION_TAB_CONSTANT;
+        } else {
+            return x_phys;
+        }
+    }
+    else
+    {
+        // CASE: No saturation testing.
+        return x_phys;
+    }
+}
 
 
 
