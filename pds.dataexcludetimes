@@ -19,6 +19,12 @@
 # NOTE: This does not exclude anything from HK, e.g. when excluding an entire macro.
 
 
+# Saturated P3, HF/snapshot data
+# Exclude start: 2007-02-23T01:12:22.907441, 130813914.024414,
+# Exclude stop:  2007-02-23T01:18:46.915987, 130814298.032894
+1/0130813914.1600, 1/0130814298.2156, P3, HF
+
+
 
 # Timestamps appear to be 32 s too early.
 # 2014-11-09T00:46:58.295 - 2014-11-09T00:49:34.029
