@@ -348,21 +348,21 @@
 
 /*===============================================================================================================
  * Constants controlling how saturation is detected in CALIB data sets using
- * (1) min-max limits in calibrated values (voltage, ampere)
- * (2) The special values (in TM units) that ADC:s generate when they are saturated.
+ * (1) min-max limits (in calibrated values; voltage, ampere)
+ * (2) special values (in TM units) that ADC:s generate when they are saturated.
  * When a saturated sample is detected, it is replaced by a special value.
  *
  * NOTE: This saturation detection algorithm does not work for P3 and is not used for P3, since:
  * (1) There are no (calibrated) min-max limits that separate saturated from non-saturated values
- *  min < x1 < max
- *  min < x2 < max
- *  ==> min-max < x1-x2 < max-min
+ *  min1 < x1 < max1
+ *  min2 < x2 < max2
+ *  ==> min1-max2 < x1-x2 < max1-min2
  *  which is what is needed to avoid false negatives, but which also produces many false positives
  *  (positive=saturation).
  * (2) The subtraction between the probe signals is done digitally onboard and there is (presumably)
  *  no checking for saturation in the two probe signals before the subtraction
  * ==> There is no special value in the difference that represents saturation.
- *  
+ *
  * NOTE: For saturated truncated ADC20 data, the same TM value may correspond to both saturation, and
  * non-saturation, since the (onboard) 4-bit truncation reduces sets of 16 different values to one.
  * Saturation detection on truncated ADC20 data via TM special value will therefore produce some false positives
@@ -376,27 +376,30 @@
  * non-saturated.
  ===============================================================================================================*/
 #define USE_SATURATION_LIMITS                   TRUE   // Enable/disable saturation
-//#define USE_SATURATION_LIMITS                   FALSE   // Enable/disable saturation
+//#define USE_SATURATION_LIMITS                   FALSE
 
-#define SATURATION_ADC20_NONTRUNC_TM_VALUE      -524288   // ADC20 non-truncated data (2^19=524288)
-#define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE    -32768   // (1) ADC16 data and (2) truncated ADC20 data (2^15=32768).
-// #define SATURATION_ADC20_NONTRUNC_TM_VALUE           60
-// #define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE       -89
+// Special ADC values that are interpreted as saturation.
+// 20-bit data: ADC20 non-truncated data (2^19=524288)
+#define SATURATION_ADC20_NONTRUNC_TM_VALUE_1      -524288   
+#define SATURATION_ADC20_NONTRUNC_TM_VALUE_2       524287   
+// 16-bit data: (1) ADC16 data and (2) truncated ADC20 data (2^15=32768)
+#define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE_1    -32768
+#define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE_2     32767
 
 #define SATURATION_EFIELD_MIN                   -1e99
 #define SATURATION_EFIELD_MAX                    1e99
-// #define SATURATION_EFIELD_MIN                   1.7e0
-// #define SATURATION_EFIELD_MAX                   1.8e0
+// #define SATURATION_EFIELD_MIN                   1.7e0    // Test value
+// #define SATURATION_EFIELD_MAX                   1.8e0    // Test value
 
 #define SATURATION_DENSITY_LG_MIN               -1e99
 #define SATURATION_DENSITY_LG_MAX                1e99
-// #define SATURATION_DENSITY_LG_MIN                 -1e-8
-// #define SATURATION_DENSITY_LG_MAX                  1e-8
+// #define SATURATION_DENSITY_LG_MIN                 -1e-8    // Test value
+// #define SATURATION_DENSITY_LG_MAX                  1e-8    // Test value
 
 #define SATURATION_DENSITY_HG_MIN               -1e99
-#define SATURATION_DENSITY_HG_MAX                1e99
-// #define SATURATION_DENSITY_HG_MIN              -1e-8
-// #define SATURATION_DENSITY_HG_MAX               1e-8
+#define SATURATION_DENSITY_HG_MAX                9.7e-6    // Official saturation limit: 9.7 uA.
+// #define SATURATION_DENSITY_HG_MIN              -1e-8    // Test value
+// #define SATURATION_DENSITY_HG_MAX               1e-8    // Test value
 
 #define SATURATION_TAB_CONSTANT                 -1000    // Special value used to represent saturation in sample in TAB files.
 

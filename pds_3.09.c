@@ -131,7 +131,7 @@
  *      /Erik P G Johansson 2017-07-06
  * * Uses SPICE for ConvertSccd2Utc and implicitly for LBL (PDS keywords) and TAB files (columns). (Other conversions UTC<-->time_ still do not use SPICE.)
  *      /Erik P G Johansson 2017-07-10
- * * Will not write files for macro 710 P2 HF, and macro 910 P1 HF.
+ * * Will not write files for macro 710 P2 HF, and macro 910 P1 HF (hardcoded data exclusion).
  *      /Erik P G Johansson 2017-07-14
  * * No longer read ADC16 calibration factors from PDS keywords in CALIB_MEAS files. Uses hardcoded values instead.
  *      /Erik P G Johansson 2017-08-21
@@ -149,6 +149,8 @@
  *      /Erik P G Johansson 2017-11-17
  * * Implemented saturation detection.
  *      /Erik P G Johansson 2018-02-23
+ * * Modified saturation detection: Use two special TM values per bit resolution (16/20) (instead of just one).
+ *      /Erik P G Johansson 2018-03-12
  * 
  * 
  *
@@ -366,8 +368,22 @@ int WritePTAB_File(
     curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
     m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int ini_samples, int samp_plateau);
 
-void set_saturation_limits(double* x_phys_min, double* x_phys_max, int* x_TM_saturation, int is_ADC20_nontrunc, int is_high_gain, int is_Efield);
-double handle_saturation(double x_phys, int x_TM, double x_phys_min, double x_phys_max, int x_TM_saturation);
+void set_saturation_limits(
+    double* x_phys_min,
+    double* x_phys_max,
+    int* x_TM_saturation_1,
+    int* x_TM_saturation_2,
+    int is_ADC20_nontrunc,
+    int is_high_gain,
+    int is_Efield);
+double handle_saturation(
+    double x_phys,
+    int    x_TM,
+    double x_phys_min,
+    double x_phys_max,
+    int x_TM_saturation_1,
+    int x_TM_saturation_2);
+
 
 // Write to data product label file .lbl
 int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type);
@@ -7303,11 +7319,16 @@ int WritePTAB_File(
     // Derive constants needed for determining saturation.
     double saturation_phys_min;
     double saturation_phys_max;
-    int saturation_TM;
-    set_saturation_limits(&saturation_phys_min, &saturation_phys_max, &saturation_TM,
-                          is_ADC20_nontrunc, 
-                          (is_high_gain_P1 && writing_P1_data) || (is_high_gain_P2 && writing_P2_data) || (is_high_gain_P1 && writing_P3_data),
-                          bias_mode==E_FIELD);  // NOTE: Handling P3 case just for safety. P3 does not presently utilize saturation detection.
+    int saturation_TM_1;
+    int saturation_TM_2;
+    set_saturation_limits(
+        &saturation_phys_min,
+        &saturation_phys_max,
+        &saturation_TM_1,
+        &saturation_TM_2,
+        is_ADC20_nontrunc, 
+        (is_high_gain_P1 && writing_P1_data) || (is_high_gain_P2 && writing_P2_data) || (is_high_gain_P1 && writing_P3_data),
+        bias_mode==E_FIELD);  // NOTE: Handling P3 case just for safety. P3 does not presently utilize saturation detection.
     
     if(calib)
     {
@@ -7847,7 +7868,13 @@ int WritePTAB_File(
                         double cvoltage;
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = v_conv.C[voltage_TM][1];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = v_conv.C[voltage_TM][2];   }
-                        ccurrent = handle_saturation(ccurrent, current_TM, saturation_phys_min, saturation_phys_max, saturation_TM);
+                        ccurrent = handle_saturation(
+                            ccurrent,
+                            current_TM,
+                            saturation_phys_min,
+                            saturation_phys_max,
+                            saturation_TM_1,
+                            saturation_TM_2);
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else
@@ -7865,7 +7892,13 @@ int WritePTAB_File(
                         // NOTE: f_conv.C[ ... ][i] : [i] refers to column i+1 in the file from which the data is read (i.e. not probe i).
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p1_fine_offs*256+voltage_TM) ][2];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][voltage_TM];   cvoltage = f_conv.C[ (sw_info->p2_fine_offs*256+voltage_TM) ][3];   }
-                        ccurrent = handle_saturation(ccurrent, current_TM, saturation_phys_min, saturation_phys_max, saturation_TM);
+                        ccurrent = handle_saturation(
+                            ccurrent,
+                            current_TM,
+                            saturation_phys_min,
+                            saturation_phys_max,
+                            saturation_TM_1,
+                            saturation_TM_2);
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                 }   // if(param_type==SWEEP_PARAMS)
@@ -7878,13 +7911,20 @@ int WritePTAB_File(
                         double cvoltage;
                         if      (writing_P1_data)   {   ccurrent -= ccalf_ADC16 * bdco[0][vbias1];   cvoltage  = v_conv.C[vbias1][1];   }
                         else if (writing_P2_data)   {   ccurrent -= ccalf_ADC16 * bdco[1][vbias2];   cvoltage  = v_conv.C[vbias2][2];   }
-                        ccurrent = handle_saturation(ccurrent, current_TM, saturation_phys_min, saturation_phys_max, saturation_TM);
+                        ccurrent = handle_saturation(
+                            ccurrent,
+                            current_TM,
+                            saturation_phys_min,
+                            saturation_phys_max,
+                            saturation_TM_1,
+                            saturation_TM_2);
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                     }
                     else if(writing_P3_data)
                     {
                         ccurrent -= ccalf_ADC16 * (bdco[0][vbias1] - bdco[1][vbias2]);
-                        // NOTE: No saturation detection, since method does not work for P3.
+                        // NOTE: NO SATURATION DETECTION, since method does not work for P3.
+                        
                         // Write ONE CURRENT (difference), TWO VOLTAGES (one per probe).
                         fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                             ccurrent,   v_conv.C[vbias1][1],   v_conv.C[vbias2][2]);
@@ -7917,7 +7957,13 @@ int WritePTAB_File(
                     double ccurrent;
                     if      (writing_P1_data) {   ccurrent = i_conv.C[ibias1][1];   }
                     else if (writing_P2_data) {   ccurrent = i_conv.C[ibias2][2];   }
-                    cvoltage  = handle_saturation(cvoltage, voltage_TM, saturation_phys_min, saturation_phys_max, saturation_TM);   
+                    cvoltage  = handle_saturation(
+                        cvoltage,
+                        voltage_TM,
+                        saturation_phys_min,
+                        saturation_phys_max,
+                        saturation_TM_1,
+                        saturation_TM_2);
                     fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
                 }
             }   // if(bias_mode==DENSITY) ... else ...
@@ -7972,22 +8018,35 @@ int WritePTAB_File(
 /* Determine values used for detecting saturation in the current data using function "handle_saturation".
  *
  * This function is separated from "handle_saturation" (called once per sample) in order to only derive these values once
- * per TAB file instead of once per sample, and hence speed up pds.
+ * per TAB file instead of once per sample, and hence (hopefully) speed up pds.
  * 
- * is_ADC20_nontrunc = True if-and-only-if data type is non-truncated ADC20 data.
+ * ARGUMENTS
+ * =========
+ * Return value: x_phys_min
+ * Return value: x_phys_max
+ * Return value: x_TM_saturation_1
+ * Return value: x_TM_saturation_2
+ * is_ADC20_nontrunc : True if-and-only-if data type is non-truncated ADC20 data.
  */
-void set_saturation_limits(double* x_phys_min, double* x_phys_max, int* x_TM_saturation, int is_ADC20_nontrunc, int is_high_gain, int is_Efield)
+void set_saturation_limits(
+    double* x_phys_min,
+    double* x_phys_max,
+    int* x_TM_saturation_1,
+    int* x_TM_saturation_2,
+    int is_ADC20_nontrunc, int is_high_gain, int is_Efield)
 {    
     // TODO-NEED-INFO: How specify argument value/expression that signifies NON-truncated ADC20 data?!
 
-    // NOTE: high/low gain only exists for density mode.
+    // NOTE: High/low gain only exists for density mode.
     //  PROPOSAL: ADC20 saturation value truncated.
 
-    // Set x_TM_saturation
+    // Set x_TM_saturation_1/2
     if (is_ADC20_nontrunc) {
-        *x_TM_saturation = SATURATION_ADC20_NONTRUNC_TM_VALUE;
+        *x_TM_saturation_1 = SATURATION_ADC20_NONTRUNC_TM_VALUE_1;
+        *x_TM_saturation_2 = SATURATION_ADC20_NONTRUNC_TM_VALUE_2;
     } else {
-        *x_TM_saturation = SATURATION_ADC16_ADC20_TRUNC_TM_VALUE;
+        *x_TM_saturation_1 = SATURATION_ADC16_ADC20_TRUNC_TM_VALUE_1;
+        *x_TM_saturation_2 = SATURATION_ADC16_ADC20_TRUNC_TM_VALUE_2;
     }
 
     // Set x_phys_min/max
@@ -8016,16 +8075,24 @@ void set_saturation_limits(double* x_phys_min, double* x_phys_max, int* x_TM_sat
  * OUTSIDE the min-max value range (e.g. x_phys<x_phys_min).
  * NOTE: Function/algorithm does not work for P3.
  */
-double handle_saturation(double x_phys, int x_TM, double x_phys_min, double x_phys_max, int x_TM_saturation)
+double handle_saturation(
+    double x_phys,
+    int    x_TM,
+    double x_phys_min,
+    double x_phys_max,
+    int x_TM_saturation_1,
+    int x_TM_saturation_2)
 {
-    // Use regular if-then-else, not #ifdef-#else-#endif, to
+    // IMPLEMENTATION NOTE:
+    // Uses regular if-then-else, not #ifdef-#else-#endif, to
     // (1) make USE_SPICE easier to convert to a C variable (e.g. for CLI argument flag),
     // (2) ensure compilation checking of code for both cases.
     if (USE_SATURATION_LIMITS)
     {
         if (   (x_phys < x_phys_min)
             || (x_phys > x_phys_max)
-            || (x_TM   == x_TM_saturation))
+            || (x_TM   == x_TM_saturation_1)
+            || (x_TM   == x_TM_saturation_2))
         {
             return SATURATION_TAB_CONSTANT;
         } else {
