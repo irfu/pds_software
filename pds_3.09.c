@@ -1307,9 +1307,8 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "                                            waits for the science thread to empty the science buffer to below a certain\n");
     fprintf(stream, "                                            threshold before exiting.\n");
     fprintf(stream, "                                            Default value: %i s.\n", SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
-    
     fprintf(stream, "\n");
-    fprintf(stream, "   Alter default values and values in the mission calendar.\n");
+    fprintf(stream, "   Alter default values read from the mission calendar.\n");
     fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID and DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
     
     // Values normally obtained from the mission calendar.
@@ -1321,6 +1320,9 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions in the string.)\n");
     fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    // Should be exact number of days (despite leap seconds due to using time_t).
     //fprintf(stream, "                                            Slightly approximate since does not consider leap seconds.\n");
+    fprintf(stream, "       NOTE: Another three mission phase-dependent values (all target-related) are still read (and used) from the mission calendar.\n");
+    fprintf(stream, "             Therefore, the specified mission phase must still be described in the mission calender.\n");
+    fprintf(stream, "       NOTE: Note that all four options have to specified, or not at all.\n");
     fprintf(stream, "\n");
     fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
