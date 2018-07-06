@@ -151,7 +151,11 @@
  *      /Erik P G Johansson 2018-02-23
  * * Modified saturation detection: Use two special TM values per bit resolution (16/20) (instead of just one).
  *      /Erik P G Johansson 2018-03-12
- * 
+ * * Added flags for:
+ *      - Setting arbitrary output dataset parent directory.
+ *      - Setting end of time interval (an alternative to setting duration).
+ *      - Overriding the remaining values in the mission calendar.
+ *      /Erik P G Johansson 2018-07-06
  * 
  *
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
@@ -198,6 +202,7 @@
  *
  * BUG?: Some science data files in density mode do not contain ROSETTA:LAP_P1/P2_STRATEGY_OR_RANGE which specifies gain (among others).
  *      See data for 2015-05-20.
+ *      /Erik P G Johansson =<2017
  * 
  * 
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
@@ -209,7 +214,8 @@
  * Code that uses this includes (incomplete list): function ConvertUtc2Timet_2 (used only once), WritePTAB_File,
  * possibly the use of bias e.g. in LoadBias. Empirically (playing with TimeOfDatePDS/ConvertUtc2Timet, pds' default compiler),
  * time_t appears to correspond to number of seconds after 1970-01-01 00:00.00, not counting leap seconds.
- * (2) Code uses standard POSIX C functions that convert time_t <--> ~UTC which appear to NOT take leap seconds into account!
+ * (2) Code partly uses standard POSIX C functions that convert time_t <--> ~UTC which appear to NOT take leap seconds into account!
+ *      Data as such seems to be correct wrt. leap seconds though.
  * 
  * 
  * NAMING CONVENTIONS
@@ -223,13 +229,14 @@
  *
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
- * PROPOSAL: Add optional parameter for output directory.
- *    PRO: Useful for automatizing the production of delivery datasets. The calling code does not need to know the output directory (hardcoded; read pds.conf).
- * PROPOSAL: Flag for outputting data set in arbitrary directory.
- *    PRO: Useful for automatizing generation for delivery. (Data sets need further automatic processsing after generation.)
  * PROPOSAL: Flag --test for triggering test code, instead of preprocessing variable.
  * PROPOSAL: Add CALIB_COEFF file pattern to pds.conf, analogous to CALIB_COEFF file pattern.
  *    NOTE: lap_agility.sh will need to be updated?
+ * PROPOSAL: Be able to not use mission calendar data at all, including mission phase abbreviation which is still REQUIRED to be in the mission calendar.
+ *      CON/PROBLEM: Only want this when specifying exactly ALL mission calendar values. If not, then one still wants the remaining
+ *                   value(s) read from the mission calendar.
+ * 
+ * PROPOSAL: Let InitMissionPhaseStructFromMissionCalendar set DPL_number.
  *====================================================================================================================
  */
 
@@ -318,7 +325,8 @@ int  HasMoreArguments(int argc, char *argv[]);    // Return true if-and-only-if 
 //----------------------------------------------------------------------------------------------------------------------------------
 int  OpenFileCountDataRows(char *file_path, FILE **file_descr, int *N_rows);
 int  LoadConfig1(pds_type *p);                          // Loads configuration information first part
-int  LoadConfig2(pds_type *p,char *data_set_id);        // Loads configuration information second part
+int  LoadConfig2(pds_type *p, char *data_set_id);       // Loads configuration information second part
+
 int  LoadAnomalies(prp_type *p,char *path);             // Load anomaly file
 int  LoadModeDesc(prp_type *p,char *path);              // Load human description of macro modes into a linked list of properties.
 int  LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt,char *path);		// Load bias settings file
@@ -343,7 +351,7 @@ int  InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calenda
 // Derive DATA_SET_ID and DATA_SET_NAME keyword values, INCLUDING QUOTES!
 void DeriveDSIandDSN(
     char* DATA_SET_ID, char* DATA_SET_NAME,
-    char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float dataSetVersion, char* targetName_dsn);
+    char* target_name_dsi, int DPLNumber, char* mpAbbreviation, char* descr, float data_set_version, char* target_name_dsn);
 
 // void TestDumpMacs();   // Test dump of macro descriptions
 
@@ -595,8 +603,9 @@ pds_type pds =
     "",         // Path to data exclude file
     "",         // Path to macro description file
     "",         // Mission calendar path and file name
-    "",         // Archive path PDS (Out data)
-    "",         // Archive path DDS (In data)
+    "",         // Dataset parent directory
+    "",         // Archive path PDS (Out dataset)
+    "",         // Archive path DDS (In data/TM)
     "",         // Path to time correlation packets
     "",         // Log path
     "",         // Data path PDS science edited
@@ -709,9 +718,9 @@ int main(int argc, char *argv[])
     }
     
     // Basic check on number of input arguments.
-    if (argc>23 || argc<7) 
+    if (argc>1+(2*21+1) || argc<1+6)
     {
-        fprintf(stderr, "Called with too few or too many parameters.\n\n");
+        fprintf(stderr, "Called with too few or too many arguments.\n\n");
         PrintUserHelpInfo(stdout, argv[0]);    // NOTE: Prints to stderr.
         exit(1);
     }
@@ -783,9 +792,9 @@ int main(int argc, char *argv[])
     // Only process mission phase abbreviated as second column in mission calendar file.
     if(GetOption("-mp",argc,argv,tstr1))
     {
-        strncpy(mp.abbrev,tstr1,4);
-        mp.abbrev[4]='\0';
-        printf("Processing mission phase with ID %s\n",mp.abbrev);
+        strncpy(mp.mission_phase_abbrev, tstr1, 4);
+        mp.mission_phase_abbrev[4]='\0';
+        printf("Processing mission phase with ID %s\n", mp.mission_phase_abbrev);
     }
     else
     {
@@ -877,40 +886,36 @@ int main(int argc, char *argv[])
 
 
 
-    /*===================================================
-     * Get options for altering mission phase parameters
+    /*================================================================================================
+     * Get options for overriding mission phase parameters (and description string)
      *================================================================================================
      * Overwrite mission phase values if values can be found among (optional) command-line arguments.
-     * NOTE: Current implementation requires all or none of these extra options.
+     * NOTE: Current implementation requires 4 options and optionally another 3.
      * NOTE: These options have to be read AFTER reading and interpreting the mission calendar
      *       so that those values are available if they are not overwritten here.
      *================================================================================================*/
-    if (GetOption("-ds", argc, argv, tstr1))
+    char descr_str[MAX_STR];
+    if (GetOption("-ds", argc, argv, descr_str))
     {
-        DeriveDSIandDSN(
-            mp.data_set_id, mp.data_set_name,
-            mp.target_id, pds.DPLNumber, mp.abbrev, tstr1, pds.DataSetVersion, mp.target_name_dsn);        
-        
-        
         if (GetOption("-mpn", argc, argv, tstr1)) {
-            sprintf(mp.phase_name, "\"%s\"", tstr1);    // NOTE: Surround with quotes since the archiving standard requires it.
+            sprintf(mp.mission_phase_name, "\"%s\"", tstr1);    // NOTE: Surround with quotes since the archiving standard requires it.
         } else {
             fprintf(stderr, "Can not find option -mpn.\n");
             exit(1);
         }
         
         
-        if (GetOption("-ps", argc, argv, tstr1)) {
+        if (GetOption("-pb", argc, argv, tstr1)) {
             if((status=ConvertUtc2Timet(tstr1,&(mp.t_start))) < 0) {
                 fprintf(stderr, "Can not convert argument \"%s\" to a time: error code %i\n", tstr1, status);
                 exit(1);
             }
         } else {
-            fprintf(stderr, "Can not find option -ps.\n");
+            fprintf(stderr, "Can not find option -pb.\n");
             exit(1);
         }
         
-        
+        // Require exactly one of two options.
         if (GetOption("-pd", argc, argv, tstr1))
         {
             float dataset_duration_days;
@@ -922,16 +927,78 @@ int main(int argc, char *argv[])
             // into account. However, these are time_t variables which might not use leap seconds anyway.
             mp.t_stop = mp.t_start + dataset_duration_days*24*3600;
         }
+        else if (GetOption("-pe", argc, argv, tstr1))
+        {
+            if((status=ConvertUtc2Timet(tstr1,&(mp.t_stop))) < 0) {
+                fprintf(stderr, "Can not convert argument \"%s\" to a time: error code %i\n", tstr1, status);
+                exit(1);
+            }
+        }
         else
         {
-            fprintf(stderr, "Can not find option -pd.\n");
+            fprintf(stderr, "Can not find option -pd or -pe (exactly one of them is required).\n");
             exit(1);
         }
-//         // Would like to execute these commands here but SPICE is not initialized yet.
+
+        // ASSERTION
+        if (mp.t_stop < mp.t_start ) {
+            fprintf(stderr, "Dataset start time comes after dataset end time.\n");
+            exit(1);
+        }
+
+
+
+        if (GetOption("-dsitn", argc, argv, tstr1)) {
+            strncpy(mp.target_name_dsi, tstr1, 8);
+            
+            if (GetOption("-dsntn", argc, argv, tstr1)) {
+                strncpy(mp.target_name_dsn, tstr1, 32);
+            } else {
+                fprintf(stderr, "Can not find option -dsntn.\n");
+                exit(1);
+            }
+            
+            if (GetOption("-tn", argc, argv, tstr1)) {
+                sprintf(mp.target_name, "\"%s\"", tstr1);    // NOTE: Surround with quotes since the archiving standard requires it.
+            } else {
+                fprintf(stderr, "Can not find option -tn.\n");
+                exit(1);
+            }
+            
+            if (GetOption("-tt", argc, argv, tstr1)) {
+                sprintf(mp.target_type, "\"%s\"", tstr1);    // NOTE: Surround with quotes since the archiving standard requires it.
+            } else {
+                fprintf(stderr, "Can not find option -tt.\n");
+                exit(1);
+            }
+        }
+
+
+
+        // Update DATA_SET_ID and DATA_SET_NAME since the following have or might have changed (above):
+        //      DATA_SET_ID/DATA_SET_NAME description string.
+        //      target in DATA_SET_ID,
+        //      target in DATA_SET_NAME,
+        //      TARGET_TYPE
+        DeriveDSIandDSN(
+            mp.data_set_id, mp.data_set_name,
+            mp.target_name_dsi, pds.DPLNumber, mp.mission_phase_abbrev, descr_str, pds.DataSetVersion, mp.target_name_dsn);
+        
+//         // Would like to execute these commands here but SPICE is not initialized at this point.
 //         ConvertTimet2Sccd_SPICE(mp.t_start, NULL, &(mp.sccd_start_data));
 //         ConvertTimet2Sccd_SPICE(mp.t_stop,  NULL, &(mp.sccd_stop_data));
     }
+    
 
+
+    if (GetOption("-dpd", argc, argv, tstr1))
+    {
+        strncpy(pds.apathpds_parent, tstr1, PATH_MAX);
+        fprintf(stdout, "Reading from CLI option: apathpds_parent\n");   // DEBUG
+    }
+        
+        
+        
     YPrintf("DATA_SET_ID                 : %s\n",mp.data_set_id);
     printf( "DATA_SET_ID                 : %s\n",mp.data_set_id);
     
@@ -947,7 +1014,7 @@ int main(int argc, char *argv[])
     if((status=LoadConfig2(&pds, tstr1))<0)
     {
         // NOTE: Misleading error message for error=-3 or -2.
-        fprintf(stderr,"Mangled configuration file (part 2): %d\n",status); // Check arguments
+        fprintf(stderr,"Mangled configuration file (part 2), or dataset directory already exists: %d\n",status); // Check arguments
         exit(1);
     }
 
@@ -1003,8 +1070,8 @@ int main(int argc, char *argv[])
     SetP(&tmp_lbl, "VOLUME_ID", tstr2, 1);                     // Set VOLUME_ID
 
     // Create unquoted mission phase name
-    strcpy(tstr3, mp.phase_name);    // Make temporary copy
-    TrimQN(tstr3);                   // Remove quotes in temporary copy
+    strcpy(tstr3, mp.mission_phase_name);   // Make temporary copy
+    TrimQN(tstr3);                          // Remove quotes in temporary copy
     
     // Construct and set VOLUME_NAME.
     if(calib) {
@@ -1044,7 +1111,7 @@ int main(int argc, char *argv[])
     if (HasMoreArguments(argc, argv))
     {
         // Extra newline since preceeding log messages (not stderr) make it difficult to visually spot the error message.
-        fprintf(stderr, "\nCould not interpret all command-line options, or some command-line options occurred multiple times.\n\n");
+        fprintf(stderr, "\nCould not interpret all command-line options, or some command-line options occurred multiple times,\nor the combination of command-line options is illegal.\n\n");
         exit(1);
     }
 
@@ -1296,35 +1363,52 @@ int main(int argc, char *argv[])
 
 // executable_name : <String to be displayed as command name>.
 void PrintUserHelpInfo(FILE *stream, char *executable_name) {
-    fprintf(stream, "Usage: %s  [-h] [-debug <Level>]\n", executable_name);
-    fprintf(stream, "            [-c pds.conf] [-a pds.anomalies] [-b pds.bias] [-e pds.exclude] [-m pds.modes] [-d pds.dataexcludetimes]\n");
-    fprintf(stream, "            [-calib]\n");
-    fprintf(stream, "            -mp <Mission phase abbreviation>\n");
-    fprintf(stream, "            -vid <Volume ID number>         The four-digit number xxxx in VOLUME_ID = ROLAP_xxxx (VOLDESC.CAT).\n");
-    fprintf(stream, "            -dsv <Data set version>\n");
+    fprintf(stream, "Usage: %s\n", executable_name);
+    fprintf(stream, "           [-debug <Level>]                  Set debugging level.\n");
+    fprintf(stream, "           [-h]                              Display help.\n");
+    fprintf(stream, "           [-c <pds.conf path>]\n");
+    fprintf(stream, "           [-a <pds.anomalies path>]\n");
+    fprintf(stream, "           [-b <pds.bias path>]\n");
+    fprintf(stream, "           [-e <pds.exclude path>]\n");
+    fprintf(stream, "           [-m <pds.modes path>]\n");
+    fprintf(stream, "           [-d <pds.dataexcludetimes path>]\n");
+    fprintf(stream, "           [-calib]                          Produce CALIB dataset (EDITED is default).\n");
     fprintf(stream, "\n");
-    fprintf(stream, "            [-stctt <seconds>]              Science thread cancel threeshold timeout (STCTT), i.e. the time the program\n");
-    fprintf(stream, "                                            waits for the science thread to empty the science buffer to below a certain\n");
-    fprintf(stream, "                                            threshold before exiting.\n");
-    fprintf(stream, "                                            Default value: %i s.\n", SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
+    fprintf(stream, "            -mp  <Mission phase abbrev.>     Mission phase abbreviation in DATA_SET_ID, e.g. ESC1, PRL.\n");
+    fprintf(stream, "            -vid <Volume ID number>          The four-digit number xxxx in VOLUME_ID = ROLAP_xxxx (VOLDESC.CAT).\n");
+    fprintf(stream, "            -dsv <Data set version>          Version number in PDS keywords DATA_SET_ID and DATA_SET_NAME.\n");
     fprintf(stream, "\n");
-    fprintf(stream, "   Alter default values read from the mission calendar.\n");
-    fprintf(stream, "            [-ds <Description string>       The free-form component of DATA_SET_ID and DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
-    
+    fprintf(stream, "           [-stctt <seconds>]                Science thread cancel threeshold timeout (STCTT), i.e. the time the program\n");
+    fprintf(stream, "                                             waits for the science thread to empty the science buffer to below a certain\n");
+    fprintf(stream, "                                             threshold before exiting.\n");
+    fprintf(stream, "                                             Default value: %i s.\n", SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
+    fprintf(stream, "\n");
+    fprintf(stream, "           [-dpd <Dataset parent dir>]       Directory under which to put the new dataset\n");
+    fprintf(stream, "                                             NOTE: This setting overrides the corresponding setting in pds.conf.\n");
+    fprintf(stream, "\n");
+    fprintf(stream, "   Override (1) values read from the mission calendar, and (2) default description string\n");
+    fprintf(stream, "        [   -ds <Description string>         The free-form component of DATA_SET_ID and DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
+
     // Values normally obtained from the mission calendar.
-    // NOTE: Start and duration and  MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
+    // NOTE: Start and duration and MISSION_PHASE_NAME(!) are not necessarily those of an entire mission phase,
     // since deliveries may split up mission phases.
-    fprintf(stream, "             -mpn <MISSION_PHASE_NAME>      Mission phase name, e.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\".\n");
-    fprintf(stream, "                                            (The argument itself must contain no quotes though.)\n");
-    fprintf(stream, "             -ps <Period starting date>     Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
-    fprintf(stream, "                                            (Characters between field values are not important, only their absolute positions in the string.)\n");
-    fprintf(stream, "             -pd <Period duration>]         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    // Should be exact number of days (despite leap seconds due to using time_t).
-    //fprintf(stream, "                                            Slightly approximate since does not consider leap seconds.\n");
-    fprintf(stream, "       NOTE: Another three mission phase-dependent values (all target-related) are still read (and used) from the mission calendar.\n");
-    fprintf(stream, "             Therefore, the specified mission phase must still be described in the mission calender.\n");
-    fprintf(stream, "       NOTE: Note that all four options have to specified, or not at all.\n");
+    fprintf(stream, "            -mpn <MISSION_PHASE_NAME>        PDS keyword MISSION_PHASE_NAME, e.g. \"COMET ESCORT 2\", \"COMET ESCORT 2 MTP014\".\n");
+    fprintf(stream, "            -pb <Period begin time>          Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
+    fprintf(stream, "                                             (Characters between field values are not important, only their absolute positions in the string.)\n");
+    fprintf(stream, "         (  -pe <Period end time>            Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
+    fprintf(stream, "                                             (Characters between field values are not important, only their absolute positions in the string.)\n");
+    fprintf(stream, "          | -pd <Period duration>  )          Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
+    fprintf(stream, "                                             Footnote: Should be given as if there are no leap seconds, i.e. 1 day = 86400 s always.\n");
+    fprintf(stream, "          [ -dsitn <Target in DSI>           Target in PDS keyword DATA_SET_ID (DSI).\n");
+    fprintf(stream, "            -dsntn <Target in DSN>           Target in PDS keyword DATA_SET_NAME (DSN).\n");
+    fprintf(stream, "            -tn <TARGET_NAME>                PDS keyword TARGET_NAME (long target name).\n");
+    fprintf(stream, "            -tt <TARGET_TYPE>      ]  ]\n");
     fprintf(stream, "\n");
-    fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
+    fprintf(stream, "       NOTE: Even if one specifies options for all eight values represented in the mission calendar, the mission calendar still\n");
+    fprintf(stream, "             needs to contain the mission phase abbreviation used.\n");
+    fprintf(stream, "       NOTE: Options must not contain quotes, including PDS keywords which are quoted in LBL/CAT files.\n");
+    fprintf(stream, "\n");
+    //fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
 
 
@@ -1771,9 +1855,9 @@ void *DecodeHK(void *arg)
     SetupHK(&hkl);                          // Setup HK keywords
     SetP(&hkl,"RECORD_BYTES",       HK_LINE_SIZE_STR,1);        // Set number of bytes in a column of a record
     SetP(&hkl,"DESCRIPTION",        "\"LAP HK Data, Each line is a separate HK packet sent every 32s\"",1);
-    SetP(&hkl,"MISSION_PHASE_NAME", mp.phase_name,1);           // Set mission phase name in HK parameters
+    SetP(&hkl,"MISSION_PHASE_NAME", mp.mission_phase_name,1);   // Set mission phase name in HK parameters
     SetP(&hkl,"TARGET_TYPE",        mp.target_type,1);          // Set target type in  HK parameters
-    SetP(&hkl,"TARGET_NAME",        mp.target_name_did,1);      // Set target name in  HK parameters
+    SetP(&hkl,"TARGET_NAME",        mp.target_name,1);          // Set target name in  HK parameters
     SetP(&hkl,"DATA_SET_ID",        mp.data_set_id,1);          // Set DATA SET ID in HK parameters
     SetP(&hkl,"DATA_SET_NAME",      mp.data_set_name,1);        // Set DATA SET NAME in HK parameters
     
@@ -1808,7 +1892,7 @@ void *DecodeHK(void *arg)
         SetP(&hkl, "START_TIME",                   hk_info.utc_time_str, 1);    // Update START_TIME in common PDS parameters
         
         HPrintf("S/C time PDS Format: %s, Raw Time: %014.3f\n", hk_info.utc_time_str, sccd);
-        HPrintf("Mission ID: %s, Phase: %s\n", mp.abbrev, mp.phase_name);
+        HPrintf("Mission ID: %s, Phase: %s\n", mp.mission_phase_abbrev, mp.mission_phase_name);
 
         sprintf(tstr1, "MCID0X%04x", macro_id);
         SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
@@ -2287,10 +2371,10 @@ void *DecodeScience(void *arg)
                     break;
                 }
                 CPrintf("    SCET time: %s OBT time: %016.6f\n",utc,sccd);
-                CPrintf("Mission ID: %s Phase: %s\n",mp.abbrev,mp.phase_name);
-                SetP(&comm,"MISSION_PHASE_NAME",mp.phase_name,1);  // Set mission phase name in common PDS parameters
-                SetP(&comm,"TARGET_TYPE",mp.target_type,1);        // Set target type in common PDS parameters
-                SetP(&comm,"TARGET_NAME",mp.target_name_did,1);    // Set target name in common PDS parameters
+                CPrintf("Mission ID: %s Phase: %s\n",mp.mission_phase_abbrev,mp.mission_phase_name);
+                SetP(&comm,"MISSION_PHASE_NAME", mp.mission_phase_name,1);  // Set mission phase name in common PDS parameters
+                SetP(&comm,"TARGET_TYPE",        mp.target_type,1);         // Set target type in common PDS parameters
+                SetP(&comm,"TARGET_NAME",        mp.target_name,1);         // Set target name in common PDS parameters
                 
                 if(calib) {
                     SetP(&comm,"PRODUCT_TYPE","\"RDR\"",1);
@@ -4621,10 +4705,10 @@ int AddPathsToSystemLog(pds_type *p)
  * used-up arguments to NULL to make it possible to check if there are arguments left over that could not be interpreted. It will thus ignore
  * values argv[i] == null.
  * 
- * opt : Flag (string)
+ * opt  : Flag (string)
  * argv : (Remaining) command-line arguments.
  * argc : Number of command-line arguments (length of argv array)
- * arg : If-and-only-if non-null, then *arg will be assigned to the string value of the command-line argument that comes after the flag.
+ * arg  : If-and-only-if non-null, then *arg will be assigned to the string value of the command-line argument that comes after the flag.
  *
  * Return value : 0=failed, 1=success.
  */
@@ -4791,13 +4875,14 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
 /**
  * Load second part of configuration file
  *
- * Sets among others: p->apathpds  = PDS data set path (out data)
- *                    p->pathmk    = Path to SPICE metakernel.
+ * Sets among others: p->apathpds_parent = Parent dir of dataset. NOTE: Only set if pre-existing string is empty.
+ *                    p->apathpds        = PDS dataset path (out data)
+ *                    p->pathmk          = Path to SPICE metakernel
  *
  * NOTE: The function name is deceiving. The function does more than just read the configuration file.
  * NOTE: COPIES TEMPLATE DIRECTORY TO CREATE THE DATA SET DIRECTORY, and probably more.
  */
-int LoadConfig2(pds_type *p,char *data_set_id) 
+int LoadConfig2(pds_type *p, char *data_set_id)
 { 
     FILE *fd;
     FILE *pipe_fp;
@@ -4837,14 +4922,15 @@ int LoadConfig2(pds_type *p,char *data_set_id)
     
     fgets(line, PATH_MAX, fd);
     Separate(line, l_str, r_str, '%', 1);
-    TrimWN(l_str);
-//     strncpy(p->apathpds,l_str,PATH_MAX);
-    strncpy(tstr, l_str, PATH_MAX);
+
+    // Assign dataset parent path unless there already is a value.
+    if (strlen(p->apathpds_parent) == 0) {
+        TrimWN(l_str);
+        strncpy(p->apathpds_parent, l_str, PATH_MAX);
+    }    
+    if(SetupPath("PDS data set parent path    ", p->apathpds_parent)<0) return -2;   // NOTE: SetupPath adds trailing slash if necessary.
     
-//     if(SetupPath("PDS Data sets base path      ",p->apathpds)<0) return -2;
-    if(SetupPath("PDS Data sets base path      ", tstr)<0) return -2;
-    
-    sprintf(p->apathpds,"%s%s/", l_str, data_set_id);    // Assigns final value to p->apathpds.
+    sprintf(p->apathpds,"%s%s/", p->apathpds_parent, data_set_id);    // Assigns final value to p->apathpds.
     
     
     printf(    "\nCreate archive path:         %s\n",p->apathpds);
@@ -4856,7 +4942,7 @@ int LoadConfig2(pds_type *p,char *data_set_id)
         YPrintf("Can not create archive path: %s\n",p->apathpds);
         return -3;
     }
-    
+    if(SetupPath("PDS data set path           ", p->apathpds)<0) return -2;     // NOTE: Checks if created directory exists.
     
     printf( "Copying template archive to:  %s\n",p->apathpds);
     YPrintf("Copying template archive to:  %s\n",p->apathpds);
@@ -6187,7 +6273,7 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
 
 
 
-/* Given a path (p->mcpath) and mission phase abbreviation (m->abbrev),
+/* Given a path (p->mcpath) and mission phase abbreviation (m->mission_phase_abbrev),
  * initialize an instance of mp_type with data from the mission calendar file.
  * Function previously called "GetMissionP".
  * 
@@ -6200,16 +6286,18 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
 // int InitMissionPhaseStructFromMissionCalendar(mp_type *m, pds_type *p)
 int InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar_path, int DPL_number, float data_set_version)
 {
+    // NOTE: Does not set DPL_number, although it fits in with the function (DPL number is set outside of any function).
+    //  PROPOSAL: Correct for?
     FILE *fd;
     
     char nline[256];  // Input new line assume shorter than 256 characters
     char dataset_duration_days_str[6]; // Duration of period
     char sdate[11];   // Date from mission calendar in string form
-    char abbrev[5];
+    char mission_phase_abbrev[5];
     int stat;         // Just a status variable
     int dataset_duration_days;
 
-//     if((fd=fopen(p->mcpath,"r"))==NULL) 
+//     if((fd=fopen(p->mcpath,"r"))==NULL)
     if((fd=fopen(mission_calendar_path,"r"))==NULL) 
     {
         printf("ERROR: Could not open mission calendar file\n");
@@ -6222,33 +6310,33 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar
         if(nline[0] == '\n') continue;  // Skip empty lines.
         if(nline[0] == '#')  continue;  // Remove any comments.
         
-        // Extract values from columns, two columns at a time.
-        Separate(nline, m->phase_name,      abbrev,                    ':', 1);  // Get mission phase name (incl. quotes) and abbreviation.
-        Separate(nline, sdate,              dataset_duration_days_str, ':', 3);  // Get Duration and Date string.
-        Separate(nline, m->target_name_did, m->target_id,              ':', 5);  // Get "target name for DATA_SET_ID" and "target id".
-        Separate(nline, m->target_type,     m->target_name_dsn,        ':', 7);  // Get "target type" and "target name for DATA_SET_NAME".
-        
-        
-        sdate[10]='\0';         // Null terminate
-        abbrev[4]='\0';         // Null terminate
-        m->target_id[5]='\0';   // Null terminate
-        
+        // Extract values from columns, TWO columns at a time.
+        // NOTE: Some column values are quoted, some are not (1st, 5th, 7th are quoted).
+        Separate(nline, m->mission_phase_name,  mission_phase_abbrev,      ':', 1);  // Get mission phase name (incl. quotes) and abbreviation.
+        Separate(nline, sdate,                  dataset_duration_days_str, ':', 3);  // Get Duration and Date string.
+        Separate(nline, m->target_name,         m->target_name_dsi,        ':', 5);
+        Separate(nline, m->target_type,         m->target_name_dsn,        ':', 7);
+
+        sdate[10]='\0';                 // Null terminate
+        mission_phase_abbrev[4]='\0';   // Null terminate
+        m->target_name_dsi[5]='\0';     // Null terminate
+
         // Trim strings of whitespace (all but starting date).
-        TrimWN(abbrev);
+        TrimWN(mission_phase_abbrev);
         TrimWN(dataset_duration_days_str);
-        TrimWN(m->phase_name);
-        TrimWN(m->target_name_did);
-        TrimWN(m->target_id);
+        TrimWN(m->mission_phase_name);
+        TrimWN(m->target_name);
+        TrimWN(m->target_name_dsi);
         TrimWN(m->target_type);
         TrimWN(m->target_name_dsn);
-        
-        if(!strcmp(m->abbrev,abbrev)) // Matching mission phase abbreviation
+
+        if(!strcmp(m->mission_phase_abbrev, mission_phase_abbrev)) // Matching mission phase abbreviation
         {
             // Get new time from mission calendar, convert to seconds
             if((stat=ConvertUtc2Timet(sdate,&(m->t_start)))<0) {
                 CPrintf("    Error mission phase time conversion: %02d\n",stat);
             }
-            
+
             sscanf(dataset_duration_days_str, "%d", &dataset_duration_days);
 
             // Compute end time. NOTE: Does not take leap seconds (e.g. 2015-06-30, 23:59.60) that occurred in time interval
@@ -6269,7 +6357,7 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar
             }
             DeriveDSIandDSN(
                 m->data_set_id, m->data_set_name,
-                m->target_id, DPL_number, m->abbrev, descr, data_set_version, m->target_name_dsn);
+                m->target_name_dsi, DPL_number, m->mission_phase_abbrev, descr, data_set_version, m->target_name_dsn);
             
             fclose(fd); // Close mission calendar
             return 0;   // Ok, Returns using previous ID and name, exactly what we want! 
@@ -6288,16 +6376,16 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar
  * 
  * ARGUMENTS
  * =========
- * OUTPUT: DATA_SET_ID   : PDS DATA_SET_ID   including quotes.
- * OUTPUT: DATA_SET_NAME : PDS DATA_SET_NAME including quotes.
- * INPUT: data_set_version : Data set version as a float (not string)
+ * OUTPUT: DATA_SET_ID      : PDS DATA_SET_ID   including quotes.
+ * OUTPUT: DATA_SET_NAME    : PDS DATA_SET_NAME including quotes.
+ * INPUT:  data_set_version : Data set version as a float (not string)
  */
 void DeriveDSIandDSN(
     char* DATA_SET_ID, char* DATA_SET_NAME,
-    char* targetID, int DPLNumber, char* mpAbbreviation, char* descr, float data_set_version, char* targetName_dsn)
+    char* target_name_dsi, int DPLNumber, char* mpAbbreviation, char* descr, float data_set_version, char* target_name_dsn)
 {
-    sprintf(DATA_SET_ID,  "\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",              targetID,       DPLNumber, mpAbbreviation, descr, data_set_version);
-    sprintf(DATA_SET_NAME,"\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"", targetName_dsn, DPLNumber, mpAbbreviation, descr, data_set_version);
+    sprintf(DATA_SET_ID,   "\"RO-%s-RPCLAP-%d-%s-%s-V%3.1f\"",              target_name_dsi, DPLNumber, mpAbbreviation, descr, data_set_version);
+    sprintf(DATA_SET_NAME, "\"ROSETTA-ORBITER %s RPCLAP %d %s %s V%3.1f\"", target_name_dsn, DPLNumber, mpAbbreviation, descr, data_set_version);
 }
 
 
@@ -6474,8 +6562,8 @@ int WriteUpdatedLabelFile(prp_type *lb_data, char *name, int update_PUBLICATION_
     SetP(lb_data, "DATA_SET_NAME",      mp.data_set_name,       1);  
     SetP(lb_data, "PRODUCER_ID",        PDS_PRODUCER_ID,        1);  
     SetP(lb_data, "PRODUCER_FULL_NAME", PDS_PRODUCER_FULL_NAME, 1);
-    SetP(lb_data, "MISSION_PHASE_NAME", mp.phase_name,          1);  
-    SetP(lb_data, "TARGET_NAME",        mp.target_name_did,     1);   // Needed for DATASET.CAT.
+    SetP(lb_data, "MISSION_PHASE_NAME", mp.mission_phase_name,  1);  
+    SetP(lb_data, "TARGET_NAME",        mp.target_name,         1);   // Needed for DATASET.CAT.
     if (update_PUBLICATION_DATE) {
         SetP(lb_data, "PUBLICATION_DATE",   pds.ReleaseDate,          1); // Set publication date of data set
     }
@@ -9287,40 +9375,42 @@ int TrimWN(char *str)
     int len,nlen,i;
     char *pos;
     int state=0;
-    if(str==NULL) return -1;
-    if((len=strlen(str))<=0) return -1;
     
+    // ASSERTIONS
+    if (str==NULL)            return -1;
+    if ((len=strlen(str))<=0) return -1;
     
-    for(i=0;i<len;i++) {    // First make all newlines or carriage returns to whitespace.
+    // Convert all line feeds and carriage returns to whitespace.
+    for(i=0;i<len;i++) {
         if(str[i]=='\n' || str[i]=='\r') {
             str[i]=' ';
         }
     }
     
-    pos=str;
+    pos=str;   // Pointer to beginning of current string (at the current point in algorithm).
     
+    // Remove all initial whitespace.
     nlen=len;
-    for(i=0;i<len;i++)    // Remove all initial whitespace.
+    for(i=0;i<len;i++)
     {
         if(state==0)
         {
-            if(str[i]==' ') 
-            {
+            if(str[i]==' ') {
                 nlen--;
                 continue;
+            } else {
+                state=1;   // Effectively stop checking for initial whitespace and start moving remainder of string.
             }
-            else
-                state=1;
         }
         *(pos++)=str[i];
     }
     
-    for(i=nlen-1;i>=0;i--)    // Remove all trailing whitespace.
+    // Remove all trailing whitespace.
+    for(i=nlen-1;i>=0;i--)
     {
-        if(str[i]==' ') 
+        if(str[i]==' ') {
             continue;
-        else
-        {
+        } else {
             str[i+1]='\0'; //Set new end of string
             break;
         }
@@ -9575,7 +9665,7 @@ int  FileStatus(FILE *fs,struct stat *sp)
 }
 
 // Accepts a string and checks if it is a real path, and returns a "resolved" path (no symbolic links, no /../ etc).
-// Makes sure there is "/" at the end.
+// MODIFIES the path string to make sure it ends with "/".
 // 
 // ARGUMENTS
 // =========
@@ -9593,7 +9683,6 @@ int SetupPath(char *info_txt,char *path)
     // returning tp is a static array of PATH_MAX chars.
     // This means we have to copy it to another array before
     // calling realpath again!!
-    
     if(realpath(path,tp)==NULL) 
     {
         fprintf(stderr,"%s\n",info_txt);
@@ -9607,6 +9696,7 @@ int SetupPath(char *info_txt,char *path)
     {
         if(path[l-1]!='/') strcat(path,"/");
     }
+    
     printf("%s: %s\n",info_txt,path);  // Dump to console
     return 0;
 }

@@ -579,58 +579,59 @@ typedef struct curr_type_def
 // Prefix c = calibration(?)
 typedef struct pds_type_def
 {
-  int  SCResetCounter;         // Number of times the spacecraft clock has been reset
-  char SCResetClock[20];       // Date and time of last spacecraft clock reset ex. 2003-01-01T00:00:00
-  char templp[PATH_MAX];       // Path to PDS archive template
-  char macrop[PATH_MAX];       // Path to LAP macro descriptions
-  int  DPLNumber;              // DPL number
-  float DataSetVersion;        // Data Set Version, first version is 1.0
-  char LabelRevNote[PATH_MAX]; // Label revision note, unlimited length in PDS, but we limit it to same as PATH_MAX characters!
-  char ReleaseDate[11];        // Release date
-  char cpath[PATH_MAX];        // Path to configuration file
-  char apath[PATH_MAX];        // Path to anomaly file
-  char bpath[PATH_MAX];        // Path to bias settings file
-  char epath[PATH_MAX];        // Path to (CALIB macro) exclude file
-  char depath[PATH_MAX];       // Path to data exclude file   // Erik P G Johansson 2015-03-25: Added
-  char mpath[PATH_MAX];        // Path to macro description file
-  char mcpath[PATH_MAX];       // Mission calendar path and file name
-  char apathpds[PATH_MAX];     // Archive path PDS (Out data)
-  char apathdds[PATH_MAX];     // Archive path DDS (In data)
-  char tpath[PATH_MAX];        // Path to time correlation packets (TCORR)
-  char lpath[PATH_MAX];        // Log path
-  char dpathse[PATH_MAX];      // Data path PDS science edited
-  char dpathsc[PATH_MAX];      // Data path PDS science calibrated
-  char cpathd[PATH_MAX];       // Root path to calibration (c) data directory (d), i.e. CALIB/.
-  char cpathf[PATH_MAX];       // Path to fine bias calibration data
-  char cpathc[PATH_MAX];       // Path to coarse bias calibration data
-  char cpathi[PATH_MAX];       // Path to current bias calibration data
-  char cpathm[PATH_MAX];       // Path and filename pattern for CALIB_MEAS calibration data files.
-  char cpathdfp1[PATH_MAX];    // Path to density (d) frequency (f) response probe 1 (p1)
-  char cpathdfp2[PATH_MAX];    // Path to density (d) frequency (f) response probe 2 (p2)
-  char cpathefp1[PATH_MAX];    // Path to E-field (e) frequency (f) response probe 1 (p1)
-  char cpathefp2[PATH_MAX];    // Path to E-field (e) frequency (f) response probe 2 (p2)
-  char cpathocel[PATH_MAX];    // Path to offset calibration exceptions (OCE) data (LBL file)
-  char cpathocet[PATH_MAX];    // Path to offset calibration exceptions (OCE) data (TAB file)
-  char spaths[PATH_MAX];       // Data subdirectory path for PDS science
-  char dpathh[PATH_MAX];       // Data path PDS HK
-  char spathh[PATH_MAX];       // Data subdirectory path for PDS HK
-  char uapath[PATH_MAX];       // Path to data that has not been accepted
-  char ipath[PATH_MAX];        // Index table file path.
-  char pathmk[PATH_MAX];       // Path to SPICE metakernel.
-  FILE *ylog_fd;               // Log file descriptor LAP PDS System log
-  FILE *plog_fd;               // S/C packet filtering log
-  FILE *clog_fd;               // Log file descriptor Science Decoding log
-  FILE *hlog_fd;               // Log file descriptor HK Decoding log
-  FILE *dlog_fd;               // Log file descriptor dds packet filter log
-  FILE *uaccpt_fd;             // File descriptor to recoverfile
-  FILE *slabel_fd;             // Science archive PDS data file descriptor
-  FILE *stable_fd;             // Science data table file descriptor
-  FILE *hlabel_fd;             // HK archive PDS data file descriptor
-  FILE *htable_fd;             // HK data table file descriptor
-  FILE *ilabel_fd;             // Index label file descriptor
-  FILE *itable_fd;             // Index table file descriptor
-  FILE *ddsr_fd;               // DDS Read file descriptor
-  FILE *ddsp_fd;               // DDS progress file descriptor
+  int  SCResetCounter;              // Number of times the spacecraft clock has been reset
+  char SCResetClock[20];            // Date and time of last spacecraft clock reset ex. 2003-01-01T00:00:00
+  char templp[PATH_MAX];            // Path to PDS archive template
+  char macrop[PATH_MAX];            // Path to LAP macro descriptions
+  int  DPLNumber;                   // DPL number
+  float DataSetVersion;             // Data Set Version, first version is 1.0
+  char LabelRevNote[PATH_MAX];      // Label revision note, unlimited length in PDS, but we limit it to same as PATH_MAX characters!
+  char ReleaseDate[11];             // Release date
+  char cpath[PATH_MAX];             // Path to configuration file
+  char apath[PATH_MAX];             // Path to anomaly file
+  char bpath[PATH_MAX];             // Path to bias settings file
+  char epath[PATH_MAX];             // Path to (CALIB macro) exclude file
+  char depath[PATH_MAX];            // Path to data exclude file   // Erik P G Johansson 2015-03-25: Added
+  char mpath[PATH_MAX];             // Path to macro description file
+  char mcpath[PATH_MAX];            // Mission calendar path and file name
+  char apathpds_parent[PATH_MAX];   // Dataset parent directory
+  char apathpds[PATH_MAX];          // Archive path PDS (Out dataset)
+  char apathdds[PATH_MAX];          // Archive path DDS (In data/TM)
+  char tpath[PATH_MAX];             // Path to time correlation packets (TCORR)
+  char lpath[PATH_MAX];             // Log path
+  char dpathse[PATH_MAX];           // Data path PDS science edited
+  char dpathsc[PATH_MAX];           // Data path PDS science calibrated
+  char cpathd[PATH_MAX];            // Root path to calibration (c) data directory (d), i.e. CALIB/.
+  char cpathf[PATH_MAX];            // Path to fine bias calibration data
+  char cpathc[PATH_MAX];            // Path to coarse bias calibration data
+  char cpathi[PATH_MAX];            // Path to current bias calibration data
+  char cpathm[PATH_MAX];            // Path and filename pattern for CALIB_MEAS calibration data files.
+  char cpathdfp1[PATH_MAX];         // Path to density (d) frequency (f) response probe 1 (p1)
+  char cpathdfp2[PATH_MAX];         // Path to density (d) frequency (f) response probe 2 (p2)
+  char cpathefp1[PATH_MAX];         // Path to E-field (e) frequency (f) response probe 1 (p1)
+  char cpathefp2[PATH_MAX];         // Path to E-field (e) frequency (f) response probe 2 (p2)
+  char cpathocel[PATH_MAX];         // Path to offset calibration exceptions (OCE) data (LBL file)
+  char cpathocet[PATH_MAX];         // Path to offset calibration exceptions (OCE) data (TAB file)
+  char spaths[PATH_MAX];            // Data subdirectory path for PDS science
+  char dpathh[PATH_MAX];            // Data path PDS HK
+  char spathh[PATH_MAX];            // Data subdirectory path for PDS HK
+  char uapath[PATH_MAX];            // Path to data that has not been accepted
+  char ipath[PATH_MAX];             // Index table file path.
+  char pathmk[PATH_MAX];            // Path to SPICE metakernel.
+  FILE *ylog_fd;                    // Log file descriptor LAP PDS System log
+  FILE *plog_fd;                    // S/C packet filtering log
+  FILE *clog_fd;                    // Log file descriptor Science Decoding log
+  FILE *hlog_fd;                    // Log file descriptor HK Decoding log
+  FILE *dlog_fd;                    // Log file descriptor dds packet filter log
+  FILE *uaccpt_fd;                  // File descriptor to recoverfile
+  FILE *slabel_fd;                  // Science archive PDS data file descriptor
+  FILE *stable_fd;                  // Science data table file descriptor
+  FILE *hlabel_fd;                  // HK archive PDS data file descriptor
+  FILE *htable_fd;                  // HK data table file descriptor
+  FILE *ilabel_fd;                  // Index label file descriptor
+  FILE *itable_fd;                  // Index table file descriptor
+  FILE *ddsr_fd;                    // DDS Read file descriptor
+  FILE *ddsp_fd;                    // DDS progress file descriptor
 } pds_type;
 
 // Argument structure type for submitting arguments to threads when launching them.
@@ -656,13 +657,13 @@ typedef struct mission_phase_struct
 {
   char data_set_id[MLEN_DSID];
   char data_set_name[MLEN_DSNA];
-  char phase_name[64];
-  char abbrev[5];
+  char mission_phase_name[64];   // From mission calendar.
+  char mission_phase_abbrev[5];  // Mission phase abbreviation in PDS keyword DATA_SET_ID. From mission calendar
 
-  char target_name_did[64];      // did = ?!  (Not DATA_SET_ID) Value is used for TARGET_NAME.
-  char target_name_dsn[32];      // dsn = DATA_SET_NAME
-  char target_id[8];             // Used in DATA_SET_ID.
-  char target_type[32];
+  char target_name[64];          // PDS keyword TARGET_NAME. 5th column in mission calendar.
+  char target_name_dsn[32];      // Target in PDS keyword DATA_SET_NAME (dsn). 8th column in mission calendar.
+  char target_name_dsi[8];       // Target in PDS keyword DATA_SET_ID   (dsi). 6th column in mission calendar.
+  char target_type[32];          // Used for PDS keyword TARGET_TYPE.          7th column in mission calendar.
   
     /*
     * Beginning and end of dataset as specified by the CALL to pds, i.e.
