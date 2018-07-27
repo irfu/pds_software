@@ -508,19 +508,19 @@ typedef struct tid_type_def
 
 typedef struct sweep_type_def
 {
-  char format[10];             // LAP_SWEEP_FORMAT           = UP:DOWN UP:DOWN:UP DOWN
-  unsigned char formatv;       // LAP_SWEEP_FORMAT           = RAW UNDECODED VALUE..same information as above string
-  char resolution[9];          // LAP_SWEEP_RESOLUTION       = COARSE:FINE
-  char p1[4];                  // LAP_SWEEPING_P1            = NO:YES
-  char p2[4];                  // LAP_SWEEPING_P2            = NO:YES
-  unsigned int p1_fine_offs;   // LAP_P1_FINE_SWEEP_OFFSET   = VALUE
-  unsigned int p2_fine_offs;   // LAP_P2_FINE_SWEEP_OFFSET   = VALUE
-  unsigned int plateau_dur;    // LAP_SWEEP_PLATEAU_DURATION = VALUE (to get seconds => plateau_dur/SAMP_FREQ_ADC16)
-  unsigned int steps;          // LAP_SWEEP_STEPS            = VALUE. Number of true sweep bias STEPS, i.e. number of times the bias CHANGES within true sweep, i.e. number of true sweep plateaus MINUS ONE.
-  unsigned int height;         // LAP_SWEEP_STEP_HEIGHT      = VALUE
-  unsigned int start_bias;     // LAP_SWEEP_START_BIAS       = VALUE
+  char format[10];                  // LAP_SWEEP_FORMAT           = UP:DOWN UP:DOWN:UP DOWN
+  unsigned char formatv;            // LAP_SWEEP_FORMAT           = RAW UNDECODED VALUE..same information as above string
+  char resolution[9];               // LAP_SWEEP_RESOLUTION       = COARSE:FINE
+  char p1[4];                       // LAP_SWEEPING_P1            = NO:YES
+  char p2[4];                       // LAP_SWEEPING_P2            = NO:YES
+  unsigned int p1_fine_offs;        // LAP_P1_FINE_SWEEP_OFFSET   = VALUE
+  unsigned int p2_fine_offs;        // LAP_P2_FINE_SWEEP_OFFSET   = VALUE
+  unsigned int N_plateau_insmp;     // LAP_SWEEP_PLATEAU_DURATION = VALUE (to get seconds => N_plateau_insmp/SAMP_FREQ_ADC16)
+  unsigned int N_tsweep_bias_steps; // LAP_SWEEP_STEPS            = VALUE. Number of true sweep bias STEPS, i.e. number of times the bias CHANGES within true sweep, i.e. number of true sweep plateaus MINUS ONE.
+  unsigned int height;              // LAP_SWEEP_STEP_HEIGHT      = VALUE
+  unsigned int start_bias;          // LAP_SWEEP_START_BIAS       = VALUE
 
-  unsigned int sweep_dur_s;    // Duration of raw sweep in internal samples.
+  unsigned int N_rsweep_insmp;      // Duration of raw sweep in internal samples.
 } sweep_type;
 
 //
@@ -541,26 +541,26 @@ typedef struct sweep_type_def
 
 typedef struct adc20_type_def
 {
-  unsigned int moving_average_length;
+  unsigned int N_MA_length_insmp;
   unsigned int adc20_control;
   unsigned int adc20_data_length;
-  unsigned int resampling_factor;
+  unsigned int insmp_per_tmsmp;
 } adc20_type;
 
 
 // Current settings for various parameters
 typedef struct curr_type_def
 {
-  unsigned int sensor;      // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
-  unsigned int transmitter; // LAP currently transmitting sensor
-  double       seq_time_TM;           // Current time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
-  double       stop_time_TM;          // Current stop time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
-  double       seq_time_corrected;    // Like seq_time_TM  (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
-  double       stop_time_corrected;   // Like stop_time_TM (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
-  double       offset_time; // Time since raw start time
-  double       old_time;    // Used to test if we have extra bias settings
-  unsigned int old_macro;   // Used to test if we have a new macro
-  double       factor;      // Time [seconds] between TM samples.
+  unsigned int sensor;              // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
+  unsigned int transmitter;         // LAP currently transmitting sensor
+  double       seq_time_TM;         // Current time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
+  double       stop_time_TM;        // Current stop time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
+  double       seq_time_corrected;  // Like seq_time_TM  (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
+  double       stop_time_corrected; // Like stop_time_TM (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
+  double       offset_time;         // Time since raw start time
+  double       old_time;            // Used to test if we have extra bias settings
+  unsigned int old_macro;           // Used to test if we have a new macro
+  double       sec_per_tmsmp;       // Time [seconds] between TM samples.
   unsigned int afilter;     // Current analog filter (if data from both sensors (i.e. correlation) we assume the same filter on both)
   int ibias1;               // Fix current bias p1
   int vbias1;               // Fix voltage bias p1

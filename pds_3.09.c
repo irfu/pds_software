@@ -158,6 +158,8 @@
  *      /Erik P G Johansson 2018-07-06
  * 
  *
+ * BUGS
+ * ====
  * "BUG": INDEX.LBL contains keywords RELEASE_ID and REVISION_ID, and INDEX.TAB and INDEX.LBL contain columns
  *        RELEASE_ID and REVISION_ID which should all be omitted for Rosetta.
  *     NOTE: Changing this will/might cause backward-compatibility issues with lapdog and write_calib_meas.
@@ -205,6 +207,8 @@
  *      /Erik P G Johansson =<2017
  * 
  * 
+ * NOTES
+ * =====
  * NOTE: Source code indentation is largely OK, but with some exceptions. Some switch cases use different indentations.
  *       This is due to dysfunctional automatic indentation in the Kate editor.
  * NOTE: Contains multiple occurrances of "0xCC" which one can suspect should really be replaced with S_HEAD.
@@ -218,18 +222,24 @@
  *      Data as such seems to be correct wrt. leap seconds though.
  * 
  * 
- * NAMING CONVENTIONS
- * ------------------
+ * NAMING CONVENTIONS, DEFINITIONS OF TERMS
+ * ========================================
  * Functions/variables for (1) interpreting time from byte streams, and (2) converting between different time formats, have been renamed to
  * make their functions easier to understand. The names use the following naming conventions:
  *      UTC   = A string on the form 2016-09-01T00:16:51.946, although the number of second decimals may vary (or be ignored on reading).
  *      Timet = Variable which value can be interpreted as time_t, although many times it is actually a double, int, or unsigned int.
  *      SCCS  = Spacecraft clock count string, e.g. 1/0431309243.15680 (false decimals).
  *      SCCD  = Spacecraft clock count double, i.e. approximately counting seconds (true decimals). Note that the reset counter has to be handled separately.
- * Miscellaneous:
- *      TM        : (1) Quantity in TM units. (2) Time derived from TM without correcting for signal delay (ADC20).
- *      corrected : Time adjusted for signal delay (ADC20).
- *      MC        : Measurement/measured calibration(?)
+ * 
+ * TM                         : Telementry. Can refer to: (1) Quantity in TM units, (2) Time derived from TM without correcting for signal delay (ADC20).
+ * corrected                  : In variable name: Time adjusted for signal delay (ADC20).
+ * MC                         : Measurement/measured calibration(?)
+ * MA                         : Moving average
+ * tsweep = true sweep        : Part of a raw sweep that contains the actual, intended science data. Samples taken on a well-defined sequence of bias plateaus. Subset of a raw sweep.
+ * rsweep = raw sweep         : True sweep plus some samples taken before the true sweep.
+ * insmp = internal sample(s) : Samples taken internally by RPCLAP and which may or may not have been later downsampled, averaged over etc.
+ * tmsmp = TM sample(s)       : Samples which are actually output from the RPCLAP instrument.
+ * 
  *
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
@@ -376,9 +386,9 @@ int  DestroyCalibMeas(char*, char *pathocel, char *pathocet, m_type*);
 
 // Write data to data product table file.
 int WritePTAB_File(
-    unsigned char *buff, char *fname, int data_type, int samples, int id_code, int length, sweep_type *sw_info, adc20_type *a20_info,
-    curr_type *curr, int param_type, int dsa16_p1, int dsa16_p2, int dop,
-    m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int ini_samples, int samp_plateau);
+    unsigned char *buff, char *fname, int data_type, int N_tmsmp, int id_code, int N_bytes, sweep_type *sw_info, adc20_type *a20_info,
+    curr_type *curr, int param_type, int ADC16_P1_insmp_per_tmsmp, int ADC16_P2_insmp_per_tmsmp, int dop,
+    m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int N_non_tsweep_tmsmp, int N_plateau_tmsmp);
 
 void set_saturation_limits(
     double* x_phys_min,
@@ -398,7 +408,7 @@ double handle_saturation(
 
 
 // Write to data product label file .lbl
-int WritePLBL_File(char *path,char *fname,curr_type *curr,int samples,int id_code,int dop,int ini_samples,int param_type);
+int WritePLBL_File(char *path,char *fname,curr_type *curr,int N_tmsmp,int id_code,int dop,int N_non_tsweep_tmsmp,int param_type);
 
 // Buffer and TM functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -1564,7 +1574,7 @@ int CheckSpiceError(char *caller_error_msg, int exit_pds, int print_to_stdout)
 void *SCDecodeTM(void *arg)
 {
     char utc[64];
-    unsigned int length;           // Length of data
+    unsigned int N_bytes;           // Length of data
     unsigned char packet_id;       // S/C packet ID, low byte
     double sccd;                   // Raw time
     buffer_struct_type *cs;        // Pointer to circular buffer structure type, for S/C TM decoding
@@ -1611,10 +1621,10 @@ void *SCDecodeTM(void *arg)
                     
                     GetBuffer(cs,buff,14); // Get 14 bytes from circular buffer ESA S/C TM packet header
                     
-                    length=((buff[2]<<8) | buff[3])-9;           // Get data length
+                    N_bytes=((buff[2]<<8) | buff[3])-9;           // Get data length
                     PPrintf("LAP HK packet found\n");
-                    PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,length);
-                    if(length!=HK_LENGTH)
+                    PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,N_bytes);
+                    if(N_bytes!=HK_LENGTH)
                     {
                         PPrintf("    Weird HK length discarding!\n");
                         continue;
@@ -1627,8 +1637,8 @@ void *SCDecodeTM(void *arg)
                     In(&cbh,HK);            // Keep packet ID low  byte
                     InB(&cbh,buff,14);      // Store full HK S/C header, because we want to keep the time code
                     
-                    GetBuffer(cs,buff,length); // Get length bytes from circular buffer 
-                    InB(&cbh,buff,length);     // Store data in cicular HK input buffer
+                    GetBuffer(cs,buff,N_bytes); // Get length bytes from circular buffer 
+                    InB(&cbh,buff,N_bytes);     // Store data in cicular HK input buffer
                     
                     PPrintf("    HK FIFO: %4.1f%\n",100.0*cbh.fill/cbh.max); 
                     
@@ -1757,22 +1767,22 @@ void *SCDecodeTM(void *arg)
                     In(&cmb,SCIENCE);    // Keep packet ID low  byte
                     InB(&cmb,buff,14);   // Store data in the mirror buffer
                     
-                    length=((buff[2]<<8) | buff[3])-9;           // Get data length
+                    N_bytes=((buff[2]<<8) | buff[3])-9;           // Get data length
                     PPrintf("LAP Science packet found\n");
                     
-                    if(length<0) {
+                    if(N_bytes<0) {
                         continue;
                     }
                     
                     sccd = DecodeSCTime2Sccd(&buff[4]);    // Decode S/C time into raw time.
                     ConvertSccd2Utc(sccd, utc, NULL);      // Decode raw time to PDS compliant date format.
-                    PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,length);
+                    PPrintf("    Packet ID: 0x0d%02x , Data length: %d\n",packet_id,N_bytes);
                     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n",utc,sccd);
-                    GetBuffer(cs,buff,length); 
+                    GetBuffer(cs,buff,N_bytes); 
                     
                     
-                    InB(&cbs,buff,length); // Store data in circular science input buffer
-                    InB(&cmb,buff,length); // Store data in circular mirror buffer
+                    InB(&cbs,buff,N_bytes); // Store data in circular science input buffer
+                    InB(&cmb,buff,N_bytes); // Store data in circular mirror buffer
                     
                     PPrintf("    Science FIFO: %4.1f% Mirror FIFO: %4.1f\n",100.0*cbs.fill/cbs.max,100.0*cmb.fill/cmb.max);
                     
@@ -2060,10 +2070,10 @@ void *DecodeScience(void *arg)
     int id_code=0;                  // Temporary ID code variable
     int params=0;                   // Parameter flag, indicates if parameters exists in science stream
     int param_type=0;               // Indicate type of parameters. Only set under S04_GET_ID_CODE.
-    unsigned int length=0;          // Length of science data,
+    unsigned int N_bytes=0;         // Length of science data,
     unsigned int hb=0;              // high
     unsigned int lb=0;              // and low byte.
-    unsigned int samples = 0;       // Number of samples in science data (Not same as length!)
+    unsigned int N_tmsmp = 0;       // Number of samples in science data (Not same as length!)
     int macro_descr_NOT_found=0;    // Indicates that we have NOT found a matching macro description for the macro ID. 0==Found, 1==Not found (!).
     
     unsigned int macro_id = 0;      // Macro ID tag.
@@ -2076,10 +2086,10 @@ void *DecodeScience(void *arg)
     int aqps_seq = 0;               // Number of aqps to the start of a sequence
     unsigned int ma=0;              // Macro number in block
     unsigned int mb=0;              // Macro block number
-    int dsa16_p1;                   // Downsampling rate ADC16 P1. Number of "internal samples" per "TM sample".
-    int dsa16_p2;                   // Downsampling rate ADC16 P2. Number of "internal samples" per "TM sample".
-    int samp_plateau=0;             // Samples on a plateau
-    int ini_samples=0;              // Number of initial plateau samples in a sweep, not the true number due to a well known bug.
+    int ADC16_P1_insmp_per_tmsmp;   // Downsampling rate ADC16 P1. Number of "internal samples" per "TM sample".
+    int ADC16_P2_insmp_per_tmsmp;   // Downsampling rate ADC16 P2. Number of "internal samples" per "TM sample".
+    int N_plateau_tmsmp=0;          // Samples on a plateau
+    int N_non_tsweep_tmsmp=0;       // Number of initial plateau samples in a sweep, not the true number due to a well known bug.
     // that we compensate for in this code.
     
     // Structure with current settings for various parameters
@@ -2214,11 +2224,11 @@ void *DecodeScience(void *arg)
         //====================
         // Write LBL+TAB file
         //====================
-        if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, dop, ini_samples,param_type)>=0)
+        if(WritePLBL_File(pds.spaths,lbl_fname,&curr,N_tmsmp,id_code, dop, N_non_tsweep_tmsmp,param_type)>=0)
         {
             WritePTAB_File(
-                buff, tab_fname, data_type, samples, id_code, length, &sw_info, &a20_info, &curr, param_type, dsa16_p1, dsa16_p2, dop,
-                &m_conv, bias, nbias, mode, nmode, ini_samples, samp_plateau);
+                buff, tab_fname, data_type, N_tmsmp, id_code, N_bytes, &sw_info, &a20_info, &curr, param_type, ADC16_P1_insmp_per_tmsmp, ADC16_P2_insmp_per_tmsmp, dop,
+                &m_conv, bias, nbias, mode, nmode, N_non_tsweep_tmsmp, N_plateau_tmsmp);
             
             strncpy(tstr10,lbl_fname,29);
             tstr10[25]='\0';   // Remove the file type ".LBL".
@@ -2831,26 +2841,26 @@ void *DecodeScience(void *arg)
                                                 strcpy(sw_info.p2,"NO");
                                             }
                                             
-                                            sw_info.p1_fine_offs = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
-                                            sw_info.p2_fine_offs = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
-                                            sw_info.plateau_dur  = 1<<(GetBitF(W1,4,0)+1); // LAP_SWEEP_PLATEAU_DURATION
-                                            sw_info.steps        = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
-                                            sw_info.height       = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
-                                            sw_info.start_bias   = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
+                                            sw_info.p1_fine_offs            = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
+                                            sw_info.p2_fine_offs            = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
+                                            sw_info.N_plateau_insmp           = 1<<(GetBitF(W1,4,0)+1); // LAP_SWEEP_PLATEAU_DURATION
+                                            sw_info.N_tsweep_bias_steps = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
+                                            sw_info.height                  = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
+                                            sw_info.start_bias              = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
 
                                             // Total duration of sweep in samples (Not same as it's length!)                                            
                                             // "+1" since number of plateaus is number of steps plus 1
                                             // "+2" since true sweep is ideally also preceeded by two "plateau lengths" of samples.
                                             // NOTE: Possible bug, since does not take into account that the number of pre-true sweep samples (INITIAL_SWEEP_SMPLS) varies in practice.
                                             // NOTE: Possible bug, since does not consider that last sample (in last plateau) is always missing.
-                                            sw_info.sweep_dur_s  = (sw_info.steps+1+2) * sw_info.plateau_dur; 
+                                            sw_info.N_rsweep_insmp  = (sw_info.N_tsweep_bias_steps+1+2) * sw_info.N_plateau_insmp; 
                                             
                                             
                                             // POPULATE PDS LAP Dictionary with sweep info.
                                             //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_START_BIAS",sw_info.start_bias);         // Removed/moved 2015-02-17, Erik P G Johansson.
                                             //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEP_HEIGHT",sw_info.height);            // Removed/moved 2015-02-23, Erik P G Johansson.
-                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEPS",sw_info.steps);                   // Removed/moved 2015-02-17, Erik P G Johansson.
-                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_PLATEAU_DURATION",sw_info.plateau_dur);  // Removed/moved 2015-02-17, Erik P G Johansson.
+                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_STEPS",sw_info.N_tsweep_bias_steps);                   // Removed/moved 2015-02-17, Erik P G Johansson.
+                                            //InsertTopQV(&dict,"ROSETTA:LAP_SWEEP_PLATEAU_DURATION",sw_info.N_plateau_insmp);  // Removed/moved 2015-02-17, Erik P G Johansson.
                                             //InsertTopQ(&dict,"ROSETTA:LAP_SWEEP_RESOLUTION",sw_info.resolution);          // Removed/moved 2015-02-23, Erik P G Johansson.
                                             //InsertTopQ(&dict,"ROSETTA:LAP_SWEEP_FORMAT",sw_info.format);                  // Removed/moved 2015-02-23, Erik P G Johansson.
                                             
@@ -2860,8 +2870,8 @@ void *DecodeScience(void *arg)
                                                 // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
                                                 InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_START_BIAS",       sw_info.start_bias);
                                                 InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEP_HEIGHT",      sw_info.height);
-                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEPS",            sw_info.steps);
-                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_STEPS",            sw_info.N_tsweep_bias_steps);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P1_SWEEP_PLATEAU_DURATION", sw_info.N_plateau_insmp);
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_RESOLUTION",       sw_info.resolution);
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P1_SWEEP_FORMAT",           sw_info.format);
                                                 
@@ -2877,8 +2887,8 @@ void *DecodeScience(void *arg)
                                                 // Changing keyword names to be probe-specific. This replaces lines of code a few lines up.
                                                 InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_START_BIAS",       sw_info.start_bias);
                                                 InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEP_HEIGHT",      sw_info.height);
-                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEPS",            sw_info.steps);
-                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_PLATEAU_DURATION", sw_info.plateau_dur);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_STEPS",            sw_info.N_tsweep_bias_steps);
+                                                InsertTopQV(&dict, "ROSETTA:LAP_P2_SWEEP_PLATEAU_DURATION", sw_info.N_plateau_insmp);
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_RESOLUTION",       sw_info.resolution);
                                                 InsertTopQ (&dict, "ROSETTA:LAP_P2_SWEEP_FORMAT",           sw_info.format);
                                                 
@@ -2895,13 +2905,13 @@ void *DecodeScience(void *arg)
                                             // I use  getbitf everywhere for consistency! (could have done
                                             // things like: (buff[0] & 0xf0)>>4
                                             
-                                            a20_info.moving_average_length = (1<<GetBitF(buff[0],4,4)); // Length of moving average filter
-                                            a20_info.adc20_control         = GetBitF(buff[0],4,0);      // Indicate full, truncated, and so on
-                                            a20_info.resampling_factor     = (1<<GetBitF(buff[1],4,0)); // Downsampling factor (Thus keep every n:th samp)
+                                            a20_info.N_MA_length_insmp = (1<<GetBitF(buff[0],4,4)); // Length of moving average filter
+                                            a20_info.adc20_control     = GetBitF(buff[0],4,0);      // Indicate full, truncated, and so on
+                                            a20_info.insmp_per_tmsmp   = (1<<GetBitF(buff[1],4,0)); // Downsampling factor (Thus keep every n:th samp)
                                             
                                             // POPULATE PDS LAP Dictionary with 20 bit ADC info.
-                                            InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_DOWNSAMPLE",a20_info.resampling_factor);
-                                            InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH", a20_info.moving_average_length);
+                                            InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_DOWNSAMPLE",a20_info.insmp_per_tmsmp);
+                                            InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH", a20_info.N_MA_length_insmp);
                                             InsertTopQ( &dict,"ROSETTA:LAP_P1P2_ADC20_STATUS",    a20status[a20_info.adc20_control & 0xf]);
                                             
                                             if((a20_info.adc20_control & 0x3)==0x02) { curr.sensor=SENS_P1; }// Modify current sensor from both P1 and P2 to P1 only
@@ -2909,7 +2919,7 @@ void *DecodeScience(void *arg)
                                             // Above: I don't treat the combination where only the lowest bits are used for the 20 bit ADC:s
                                             //        because we will never use it. It's not scientific!
                                         }
-                                        //CPrintf("  sw_info.plateau_dur=%i\n", sw_info.plateau_dur);
+                                        //CPrintf("  sw_info.N_plateau_insmp=%i\n", sw_info.N_plateau_insmp);
                                         state=S11_GET_LENGTH; // Error unknown parameter type, continue to get length
                                         break;
                                         
@@ -2986,10 +2996,10 @@ void *DecodeScience(void *arg)
                                                 
                                                 hb=buff[0]<<8;
                                                 lb=buff[1];
-                                                length=(hb | lb)*2;
-                                                CPrintf("    Data length: %d Bytes\n",length);
+                                                N_bytes=(hb | lb)*2;
+                                                CPrintf("    Data length: %d Bytes\n",N_bytes);
                                                 
-                                                if(length>RIDICULUS) // If length is ridiculously long
+                                                if(N_bytes>RIDICULUS) // If length is ridiculously long
                                                 {
                                                     CPrintf("    Ridiculously long length in science data, trying to resync\n");
                                                     in_sync=0; // Indicate not in sync
@@ -2997,7 +3007,7 @@ void *DecodeScience(void *arg)
                                                 }
                                                 else
                                                 {
-                                                    if(SyncAhead(cb,length)) // Extra sync test added 2004-04-13.
+                                                    if(SyncAhead(cb,N_bytes)) // Extra sync test added 2004-04-13.
                                                     {
                                                         state=S12_GET_DATA;
                                                     }
@@ -3013,7 +3023,7 @@ void *DecodeScience(void *arg)
                                             case S12_GET_DATA:
                                                 DispState(state,"STATE = S12_GET_DATA\n");
                                                 // Get length bytes from circular science buffer 
-                                                GetBuffer(cb,buff,length); 
+                                                GetBuffer(cb,buff,N_bytes); 
                                                 
                                                 if(param_type==NO_PARAMS)
                                                 {
@@ -3048,7 +3058,7 @@ void *DecodeScience(void *arg)
                                                 {
                                                     CPrintf("    WARNING: Fingerprinting macro ID.\n");
                                                     finger_printing=1;
-                                                    if(length==40 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
+                                                    if(N_bytes==40 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
                                                     {
                                                         // Brute force macro settings!
                                                         macro_id=0x201; // Set macro ID
@@ -3056,7 +3066,7 @@ void *DecodeScience(void *arg)
                                                         break;
                                                     }
                                                     
-                                                    if(400<=length && length<=512 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
+                                                    if(400<=N_bytes && N_bytes<=512 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
                                                     {
                                                         LookBuffer(cb,tbuff,2);     // Look ahead two bytes
                                                         
@@ -3077,7 +3087,7 @@ void *DecodeScience(void *arg)
                                                         break;
                                                     }
                                                     
-                                                    if(1930<=length && length<=1950 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
+                                                    if(1930<=N_bytes && N_bytes<=1950 && id_code==D_SWEEP_P1_RAW_16BIT_BIP)
                                                     {
                                                         LookBuffer(cb,tbuff,2);     // Look ahead two bytes
                                                         
@@ -3092,7 +3102,7 @@ void *DecodeScience(void *arg)
                                                         }
                                                     }
                                                     
-                                                    if(length==8950 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
+                                                    if(N_bytes==8950 && id_code==D_P1P2INTRL_TRNC_20BIT_RAW_BIP)
                                                     {
                                                         // Brute force macro settings!
                                                         macro_id=0x205; // Set macro ID
@@ -3100,7 +3110,7 @@ void *DecodeScience(void *arg)
                                                         break;
                                                     }
                                                     
-                                                    if(length==1024 && id_code==E_P1_RAW_16BIT_D4)
+                                                    if(N_bytes==1024 && id_code==E_P1_RAW_16BIT_D4)
                                                     {
                                                         // Brute force macro settings!
                                                         macro_id=0x207; // Set macro ID
@@ -3138,30 +3148,30 @@ void *DecodeScience(void *arg)
                                                 // NOTE: The ID strings are at this moment fixed (permanent) and will not change.
                                                 //       The number of ID strings may however increase!
                                                 
-                                                dsa16_p1 = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
-                                                dsa16_p2 = -1;   // Indicate that "down sampl 16 bit sensor 2" value is not resolved
+                                                ADC16_P1_insmp_per_tmsmp = -1;   // Indicate that "down sampl 16 bit sensor 1" value is not resolved
+                                                ADC16_P2_insmp_per_tmsmp = -1;   // Indicate that "down sampl 16 bit sensor 2" value is not resolved
 
                                                 // strstr : Return pointer to the first occurrence of a given string within another string.
                                                 if((tp=strstr(IDList[id_code],"16BIT_D"))!=NULL)
                                                 {
                                                     if(curr.sensor==SENS_P1) {
-                                                        if(!sscanf(&tp[7],"%d",&dsa16_p1)) {
-                                                            dsa16_p1=-1; // Error in conversion
-                                                            CPrintf("WARNING: Sets default value dsa16_p1=%i since can not parse substring tp=\"\%s\" of IDList[id_code]=\"%s\".\n", dsa16_p1, tp, IDList[id_code]);
+                                                        if(!sscanf(&tp[7],"%d",&ADC16_P1_insmp_per_tmsmp)) {
+                                                            ADC16_P1_insmp_per_tmsmp=-1; // Error in conversion
+                                                            CPrintf("WARNING: Sets default value ADC16_P1_insmp_per_tmsmp=%i since can not parse substring tp=\"\%s\" of IDList[id_code]=\"%s\".\n", ADC16_P1_insmp_per_tmsmp, tp, IDList[id_code]);
                                                         }
                                                     }
                                                     
                                                     if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2)
                                                     {
-                                                        if(!sscanf(&tp[7],"%d",&dsa16_p2)) {
-                                                            dsa16_p2=-1; // Error in conversion
-                                                            CPrintf("WARNING: Sets default value dsa16_p2=%i since can not parse substring tp=\"\%s\" of IDList[id_code]=\"%s\".\n", dsa16_p2, tp, IDList[id_code]);
+                                                        if(!sscanf(&tp[7],"%d",&ADC16_P2_insmp_per_tmsmp)) {
+                                                            ADC16_P2_insmp_per_tmsmp=-1; // Error in conversion
+                                                            CPrintf("WARNING: Sets default value ADC16_P2_insmp_per_tmsmp=%i since can not parse substring tp=\"\%s\" of IDList[id_code]=\"%s\".\n", ADC16_P2_insmp_per_tmsmp, tp, IDList[id_code]);
                                                         }
                                                     }
                                                 }
-                                                //CPrintf("5 dsa16_p1=%i\n", dsa16_p1);
-                                                //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
-                                                //CPrintf("  sw_info.plateau_dur=%i\n", sw_info.plateau_dur);
+                                                //CPrintf("5 ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
+                                                //CPrintf("  ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
+                                                //CPrintf("  sw_info.N_plateau_insmp=%i\n", sw_info.N_plateau_insmp);
 
                                                 curr.bias_mode1=DENSITY;   // Assume density mode unless there is a reason not to.
                                                 curr.bias_mode2=DENSITY;
@@ -3220,40 +3230,40 @@ void *DecodeScience(void *arg)
                                                         case SENS_P1:
                                                             if(a20_info.adc20_control & 0x08)
                                                             {
-                                                                samples=length*2/5; // Sensor P1 only full 20 Bit ADC
+                                                                N_tmsmp=N_bytes*2/5; // Sensor P1 only full 20 Bit ADC
                                                                 data_type=D201;
                                                             }
                                                             else
                                                             {
                                                                 // Sensor P1 only truncated 20 Bit ADC
                                                                 data_type=D201T;
-                                                                samples=length/2;   
+                                                                N_tmsmp=N_bytes/2;   
                                                             }
                                                             break;
                                                         case SENS_P2:
                                                             if(a20_info.adc20_control & 0x04) 
                                                             {
-                                                                samples=length*2/5; // Sensor P2 only full 20 Bit ADC
+                                                                N_tmsmp=N_bytes*2/5; // Sensor P2 only full 20 Bit ADC
                                                                 data_type=D202;
                                                             }
                                                             else
                                                             {
                                                                 // Sensor P2 only truncated 20 Bit ADC
                                                                 data_type=D202T;
-                                                                samples=length/2;   
+                                                                N_tmsmp=N_bytes/2;   
                                                             }
                                                             break;
                                                         case SENS_P1P2:
                                                             if((a20_info.adc20_control & 0x0C)==0x0C) 
                                                             {
-                                                                samples=length/5; // Full 20 Bit ADC:s P1 and P2
+                                                                N_tmsmp=N_bytes/5; // Full 20 Bit ADC:s P1 and P2
                                                                 data_type=D20;
                                                             }
                                                             else
                                                             {
                                                                 // Truncated 20 Bit ADC:s P1 and P2
                                                                 data_type=D20T; 
-                                                                samples=length/4; 
+                                                                N_tmsmp=N_bytes/4; 
                                                             }
                                                             break;
                                                         default:
@@ -3262,17 +3272,17 @@ void *DecodeScience(void *arg)
                                                 }
                                                 else
                                                 {
-                                                    samples=length/2; // Number of samples then 20 Bit ADC:s are not used and no compression. 
+                                                    N_tmsmp=N_bytes/2; // Number of samples then 20 Bit ADC:s are not used and no compression. 
                                                     if(id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) // If log compression is used
                                                     {
-                                                        samples=length; // Log compression used
+                                                        N_tmsmp=N_bytes; // Log compression used
                                                     }
                                                 }
                                                 
-                                                sprintf(tstr1,"%d",samples);
+                                                sprintf(tstr1,"%d",N_tmsmp);
                                                 SetP(&comm,"FILE_RECORDS",tstr1,1); // Set number of records (in data table file) in common PDS parameters
                                                 
-                                                CPrintf("    Number of samples current record: %d\n",samples);
+                                                CPrintf("    Number of samples current record: %d\n",N_tmsmp);
                                                 strcpy(tstr1,IDList[id_code]);      // Get ID code name
                                                 TrimWN(tstr1);                      // Remove trailing whitespace
                                                 sprintf(tstr2,"\"%s\"",tstr1);      // Add PDS quotes ".." 
@@ -3287,46 +3297,46 @@ void *DecodeScience(void *arg)
                                                     //Find subheader for measurement sequence meas_seq
                                                     if(FindP(&macros[mb][ma],&property1,"ROSETTA:LAP_SET_SUBHEADER",meas_seq,DNTCARE)>0)   // Set property1. Read many times afterwards with FindB(..).
                                                     {
-                                                        //CPrintf("6 dsa16_p1=%i\n", dsa16_p1);
-                                                        //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+                                                        //CPrintf("6 ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
+                                                        //CPrintf("  ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
                                                         if (debug>0) {
                                                             printf("    Uses ROSETTA:LAP_SET_SUBHEADER = %s, meas_seq=%i in macro (.mds file).\n", property1->value, meas_seq);
                                                         }
 
-                                                        //CPrintf("4 dsa16_p1=%i\n", dsa16_p1);
-                                                        //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+                                                        //CPrintf("4 ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
+                                                        //CPrintf("  ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
                                                         //DumpPrp(&macros[mb][ma]);   // DEBUG
                                                         // Find downsampling value probe 1 in macro and if no ID value exists use macro desc. value
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",DNTCARE)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
-                                                            if(dsa16_p1==-1 || macro_priority) { // Value not resolved from ID or macro has high priority use macro value instead
-                                                                dsa16_p1=val;
-                                                                //CPrintf("    Using .mds value: ROSETTA:LAP_P1_ADC16_DOWNSAMPLE=dsa16_p1=%i\n", dsa16_p1);
+                                                            if(ADC16_P1_insmp_per_tmsmp==-1 || macro_priority) { // Value not resolved from ID or macro has high priority use macro value instead
+                                                                ADC16_P1_insmp_per_tmsmp=val;
+                                                                //CPrintf("    Using .mds value: ROSETTA:LAP_P1_ADC16_DOWNSAMPLE=ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
                                                             }
                                                             
-                                                            if(dsa16_p1!=val) {
+                                                            if(ADC16_P1_insmp_per_tmsmp!=val) {
                                                                 CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");
                                                             }
-                                                            //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p1);
+                                                            //CPrintf("%s = 0x%04x\n",property2->name,ADC16_P1_insmp_per_tmsmp);
                                                         }
 
                                                         // Find downsampling value probe 2 in macro and if no ID value exists use macro desc. value
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",DNTCARE)>0)
                                                         {
                                                             sscanf(property2->value,"\"%x\"",&val);
-                                                            if(dsa16_p2==-1 || macro_priority)  { // Value not resolved from ID  or macro has high priority use macro value instead
-                                                                dsa16_p2=val;
-                                                                //CPrintf("    Using .mds value: ROSETTA:LAP_P2_ADC16_DOWNSAMPLE=dsa16_p2=%i\n", dsa16_p2);
+                                                            if(ADC16_P2_insmp_per_tmsmp==-1 || macro_priority)  { // Value not resolved from ID  or macro has high priority use macro value instead
+                                                                ADC16_P2_insmp_per_tmsmp=val;
+                                                                //CPrintf("    Using .mds value: ROSETTA:LAP_P2_ADC16_DOWNSAMPLE=ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
                                                             }
                                                             
-                                                            if(dsa16_p2!=val && !macro_priority)  { // Print mismatch warning. Only if macro desc. has low priority
+                                                            if(ADC16_P2_insmp_per_tmsmp!=val && !macro_priority)  { // Print mismatch warning. Only if macro desc. has low priority
                                                                 CPrintf("    Warning mismatch between data ID code info. and macro description info.\n");
                                                             }
-                                                            //CPrintf("%s = 0x%04x\n",property2->name,dsa16_p2);
+                                                            //CPrintf("%s = 0x%04x\n",property2->name,ADC16_P2_insmp_per_tmsmp);
                                                         }
-                                                        //CPrintf("3 dsa16_p1=%i\n", dsa16_p1);
-                                                        //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+                                                        //CPrintf("3 ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
+                                                        //CPrintf("  ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
 
                                                         // Test if digital filter was turned on for probe 1, if so add information to dictionary
                                                         if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_DIG_FILT_STATUS",DNTCARE)>0)
@@ -3809,63 +3819,63 @@ void *DecodeScience(void *arg)
                                                             //SetP(&comm,"^TABLE",tstr1,1);         // Set link to table in common PDS parameters
 
 
-                                                            curr.factor=0.0; // Init
+                                                            curr.sec_per_tmsmp=0.0; // Init
                                                             // Compute stop time of current sequence
                                                             if(param_type==SWEEP_PARAMS)
                                                             {
                                                                 // (una sensore at one time for swiping you sii!)
                                                                 // BUG: Only aproximately correct. Varies with INITIAL_SWEEP_SMPLS and more.
-                                                                curr.factor = sw_info.sweep_dur_s / (SAMP_FREQ_ADC16 * samples); // Factor for sweeps! 
+                                                                curr.sec_per_tmsmp = sw_info.N_rsweep_insmp / (SAMP_FREQ_ADC16 * N_tmsmp); // Factor for sweeps! 
                                                                 
-                                                                //curr.factor = sw_info.sweep_dur_s/SAMP_FREQ_ADC16/((sw_info.steps+1)*samp_plateau - 1);   // Attempt att bugfix. FAILED                                                                
+                                                                //curr.sec_per_tmsmp = sw_info.N_rsweep_insmp/SAMP_FREQ_ADC16/((sw_info.N_tsweep_bias_steps+1)*N_plateau_tmsmp - 1);   // Attempt att bugfix. FAILED                                                                
                                                                 // Attempt att bugfix. INCORRECT, but does work for some sweeps (some combinations of parameters).
-                                                                //curr.factor = sw_info.sweep_dur_s/SAMP_FREQ_ADC16/(samples - ini_samples + 2*samp_plateau+1);
+                                                                //curr.sec_per_tmsmp = sw_info.N_rsweep_insmp/SAMP_FREQ_ADC16/(N_tmsmp - N_non_tsweep_tmsmp + 2*N_plateau_tmsmp+1);
                                                             }
                                                             else
                                                             {
                                                                 
                                                                 if(param_type!=ADC20_PARAMS)
                                                                 {
-                                                                    if(dsa16_p1==-1) // -1 here => Probably generic macro
+                                                                    if(ADC16_P1_insmp_per_tmsmp==-1) // -1 here => Probably generic macro
                                                                     {
-                                                                        dsa16_p1=1;
+                                                                        ADC16_P1_insmp_per_tmsmp=1;
                                                                         CPrintf("    Warning, parameter not resolved probably generic macro, using default no resampling on ADC16 P1\n");
                                                                     }
                                                                     
-                                                                    if(dsa16_p2==-1) // -1 here => Probably generic macro
+                                                                    if(ADC16_P2_insmp_per_tmsmp==-1) // -1 here => Probably generic macro
                                                                     {
-                                                                        dsa16_p2=1;
+                                                                        ADC16_P2_insmp_per_tmsmp=1;
                                                                         CPrintf("    Warning, parameter not resolved probably generic macro, using default no resampling on ADC16 P2\n");
                                                                     }
                                                                 }
                                                                 
-                                                                //=================
-                                                                // Set curr.factor
-                                                                //=================
+                                                                //========================
+                                                                // Set curr.sec_per_tmsmp
+                                                                //========================
                                                                 switch(curr.sensor)
                                                                 {
                                                                     case SENS_P1:
                                                                         if(param_type==ADC20_PARAMS)
-                                                                            curr.factor = a20_info.resampling_factor/SAMP_FREQ_ADC20; 
+                                                                            curr.sec_per_tmsmp = a20_info.insmp_per_tmsmp/SAMP_FREQ_ADC20; // s/tmsmp = (insmp / tmsmp) / (insmp/s)
                                                                         else
-                                                                            curr.factor = dsa16_p1/SAMP_FREQ_ADC16;
+                                                                            curr.sec_per_tmsmp = ADC16_P1_insmp_per_tmsmp/SAMP_FREQ_ADC16;
                                                                         break;
                                                                     case SENS_P2:
-                                                                    case SENS_P1P2: // In this case dsa16_p1==dsa16_p2
+                                                                    case SENS_P1P2: // In this case ADC16_P1_insmp_per_tmsmp==ADC16_P2_insmp_per_tmsmp
                                                                         if(param_type==ADC20_PARAMS)
-                                                                            curr.factor = a20_info.resampling_factor/SAMP_FREQ_ADC20; 
+                                                                            curr.sec_per_tmsmp = a20_info.insmp_per_tmsmp/SAMP_FREQ_ADC20; 
                                                                         else
-                                                                            curr.factor = dsa16_p2/SAMP_FREQ_ADC16; 
+                                                                            curr.sec_per_tmsmp = ADC16_P2_insmp_per_tmsmp/SAMP_FREQ_ADC16; 
                                                                         break;
                                                                     default:
-                                                                        curr.factor = 1/SAMP_FREQ_ADC16;
+                                                                        curr.sec_per_tmsmp = 1/SAMP_FREQ_ADC16;
                                                                         break;
                                                                 }
                                                             }
                                                             
                                                             // Calculate current STOP time.
-                                                            curr.stop_time_corrected = curr.seq_time_corrected + (samples-1)*curr.factor;   
-                                                            curr.stop_time_TM        = curr.seq_time_TM        + (samples-1)*curr.factor;
+                                                            curr.stop_time_corrected = curr.seq_time_corrected + (N_tmsmp-1)*curr.sec_per_tmsmp;   
+                                                            curr.stop_time_TM        = curr.seq_time_TM        + (N_tmsmp-1)*curr.sec_per_tmsmp;
                                                             
                                                             ConvertSccd2Sccs(curr.stop_time_corrected, pds.SCResetCounter, tstr5, TRUE);
                                                             SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT", tstr5, 1);
@@ -3888,15 +3898,15 @@ void *DecodeScience(void *arg)
                                                     CPrintf("    No macro description fits, data will be stored in the UnAccepted_Data directory\n");
                                                     if(param_type==NO_PARAMS)
                                                     {
-                                                        if(dsa16_p1==-1) 
+                                                        if(ADC16_P1_insmp_per_tmsmp==-1) 
                                                         {
-                                                            dsa16_p1=1; // Conversion errors use default 1
+                                                            ADC16_P1_insmp_per_tmsmp=1; // Conversion errors use default 1
                                                             CPrintf("    Warning, parameter not resolved, using default no resampling on ADC16 P1\n");
                                                         }
                                                         
-                                                        if(dsa16_p2==-1) 
+                                                        if(ADC16_P2_insmp_per_tmsmp==-1) 
                                                         {
-                                                            dsa16_p2=1; // Conversion errors use default 1 
+                                                            ADC16_P2_insmp_per_tmsmp=1; // Conversion errors use default 1 
                                                             CPrintf("    Warning, parameter not resolved, using default no resampling on ADC16 P2\n");
                                                         }
                                                     }
@@ -3909,33 +3919,33 @@ void *DecodeScience(void *arg)
                                                     if(param_type==NO_PARAMS) 
                                                     {
                                                         if(curr.sensor==SENS_P1) {
-                                                            CPrintf("    Duration P1 %d/[samples]\n",dsa16_p1*samples);
+                                                            CPrintf("    Duration P1 %d/[samples]\n",ADC16_P1_insmp_per_tmsmp*N_tmsmp);
                                                         }
                                                         if(curr.sensor==SENS_P2) {
-                                                            CPrintf("    Duration P2 %d/[samples]\n",dsa16_p2*samples);
+                                                            CPrintf("    Duration P2 %d/[samples]\n",ADC16_P2_insmp_per_tmsmp*N_tmsmp);
                                                         }
                                                     }
                                                     
                                                     if(param_type==SWEEP_PARAMS)
                                                     {                                                            
                                                         if(curr.sensor==SENS_P1) {
-                                                            CPrintf("    Duration P1 %d (sweep)\n",sw_info.sweep_dur_s);
+                                                            CPrintf("    Duration P1 %d (sweep)\n",sw_info.N_rsweep_insmp);
                                                         }                                                            
                                                         if(curr.sensor==SENS_P2) {
-                                                            CPrintf("    Duration P2 %d (sweep)\n",sw_info.sweep_dur_s);
+                                                            CPrintf("    Duration P2 %d (sweep)\n",sw_info.N_rsweep_insmp);
                                                         }
                                                     }
                                                     
                                                     if(param_type==ADC20_PARAMS)
                                                     { 
                                                         if(curr.sensor==SENS_P1) {
-                                                            CPrintf("    Duration P1\n",samples*a20_info.resampling_factor);
+                                                            CPrintf("    Duration P1\n",N_tmsmp*a20_info.insmp_per_tmsmp);
                                                         }                                                            
                                                         if(curr.sensor==SENS_P1) {
-                                                            CPrintf("    Duration P2\n",samples*a20_info.resampling_factor);
+                                                            CPrintf("    Duration P2\n",N_tmsmp*a20_info.insmp_per_tmsmp);
                                                         }                                                            
                                                         if(curr.sensor==SENS_P1P2) {
-                                                            CPrintf("    Duration P1 & P2\n",samples*a20_info.resampling_factor);
+                                                            CPrintf("    Duration P1 & P2\n",N_tmsmp*a20_info.insmp_per_tmsmp);
                                                         }
                                                     }
                                                 }   // if(!macro_descr_NOT_found) ... else ...
@@ -3945,10 +3955,10 @@ void *DecodeScience(void *arg)
                                                 if(param_type==NO_PARAMS || param_type==SWEEP_PARAMS)
                                                 {
                                                     if(curr.sensor==SENS_P1 || curr.sensor==SENS_P1P2) {
-                                                        InsertTopQV(&dict,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",dsa16_p1);
+                                                        InsertTopQV(&dict,"ROSETTA:LAP_P1_ADC16_DOWNSAMPLE",ADC16_P1_insmp_per_tmsmp);
                                                     }                                                        
                                                     if(curr.sensor==SENS_P2 || curr.sensor==SENS_P1P2) {
-                                                        InsertTopQV(&dict,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",dsa16_p2);
+                                                        InsertTopQV(&dict,"ROSETTA:LAP_P2_ADC16_DOWNSAMPLE",ADC16_P2_insmp_per_tmsmp);
                                                     }
                                                 }
                                                 state = S15_WRITE_PDS_FILES;   // Change state
@@ -3960,8 +3970,8 @@ void *DecodeScience(void *arg)
                                                 //#######################
                                                 //#######################
                                                     DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
-                                                    //CPrintf("1 dsa16_p1=%i\n", dsa16_p1);
-                                                    //CPrintf("  dsa16_p2=%i\n", dsa16_p2);
+                                                    //CPrintf("1 ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
+                                                    //CPrintf("  ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
                                                     
                                                     // -------------------------------------------------------------------------------------
                                                     // Look for the existence of a macro ID before checking for macros to exclude in CALIB.
@@ -4019,19 +4029,19 @@ void *DecodeScience(void *arg)
                                                             // Furthermore, one sample is always missing at the end of a sweep!
                                                             
                                                             if(curr.sensor==SENS_P1) {
-                                                                samp_plateau = sw_info.plateau_dur / dsa16_p1;   // TM samples per plateau.
+                                                                N_plateau_tmsmp = sw_info.N_plateau_insmp / ADC16_P1_insmp_per_tmsmp;   // TM samples per plateau.
                                                             } else {
-                                                                samp_plateau = sw_info.plateau_dur / dsa16_p2;   // TM samples per plateau.
+                                                                N_plateau_tmsmp = sw_info.N_plateau_insmp / ADC16_P2_insmp_per_tmsmp;   // TM samples per plateau.
                                                             }
 
-                                                            ini_samples = samples + 1 - (sw_info.steps+1)*samp_plateau;   // Initial TM samples before true sweep starts.
-                                                            if ((ini_samples<0) || (32<ini_samples)) {   // NOTE: Positive warning threshold is arbitrary.
+                                                            N_non_tsweep_tmsmp = N_tmsmp + 1 - (sw_info.N_tsweep_bias_steps+1)*N_plateau_tmsmp;   // Initial TM samples before true sweep starts.
+                                                            if ((N_non_tsweep_tmsmp<0) || (32<N_non_tsweep_tmsmp)) {   // NOTE: Positive warning threshold is arbitrary.
                                                                 // Have seen many cases of suspicious values. Therefore extra error message.
                                                                 // Likely due to misconfigured .mds file(s).
-                                                                CPrintf("WARNING: Suspicious number of initial sweep samples, ini_samples=%i=0x%x\n", ini_samples, ini_samples);
-                                                                //CPrintf("         samples=%i; sw_info.steps=%i; samp_plateau=%i; sw_info.plateau_dur=%i\n", samples, sw_info.steps, samp_plateau, sw_info.plateau_dur);
-                                                                //CPrintf("         ROSETTA:LAP_P1_ADC16_DOWNSAMPLE=dsa16_p1=%i=0x%x\n", dsa16_p1, dsa16_p1);
-                                                                //CPrintf("         ROSETTA:LAP_P2_ADC16_DOWNSAMPLE=dsa16_p2=%i=0x%x\n", dsa16_p2, dsa16_p2);
+                                                                CPrintf("WARNING: Suspicious number of initial sweep samples, N_non_tsweep_tmsmp=%i=0x%x\n", N_non_tsweep_tmsmp, N_non_tsweep_tmsmp);
+                                                                //CPrintf("         N_tmsmp=%i; sw_info.N_tsweep_bias_steps=%i; N_plateau_tmsmp=%i; sw_info.N_plateau_insmp=%i\n", N_tmsmp, sw_info.N_tsweep_bias_steps, N_plateau_tmsmp, sw_info.N_plateau_insmp);
+                                                                //CPrintf("         ROSETTA:LAP_P1_ADC16_DOWNSAMPLE=ADC16_P1_insmp_per_tmsmp=%i=0x%x\n", ADC16_P1_insmp_per_tmsmp, ADC16_P1_insmp_per_tmsmp);
+                                                                //CPrintf("         ROSETTA:LAP_P2_ADC16_DOWNSAMPLE=ADC16_P2_insmp_per_tmsmp=%i=0x%x\n", ADC16_P2_insmp_per_tmsmp, ADC16_P2_insmp_per_tmsmp);
 
                                                             }
 
@@ -5706,7 +5716,7 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
     char *base_n;
     char *dir_n;
     unsigned char buff[TIME_CORR_PTOT_SIZE];
-    int length;
+    int N_bytes;
     DIR           *dir;         // Directory
     struct dirent *dentry;      // Directory entry
     char l_tok[80];  // Left of token
@@ -5825,11 +5835,11 @@ int  LoadTimeCorr(pds_type *pds,tc_type *tcp)
         
         tcp->SCET[n]=DecodeDDSTime2Timet(buff); // Get time of DDS packet
         
-        length=(buff[8]<<24 | buff[9]<<16 | buff[10]<<8 | buff[11]);
+        N_bytes=(buff[8]<<24 | buff[9]<<16 | buff[10]<<8 | buff[11]);
         
-        if(length!=TIME_CORR_P_SIZE)
+        if(N_bytes!=TIME_CORR_P_SIZE)
         {
-            YPrintf("Corrupted time packet length: %d\n",length);
+            YPrintf("Corrupted time packet length: %d\n",N_bytes);
             return -3;
         }
         
@@ -7262,23 +7272,23 @@ int WritePTAB_File(
     unsigned char *buff,
     char *fname,
     int data_type,
-    int samples,
+    int N_tmsmp,
     int id_code,
-    int length,
+    int N_bytes,
     sweep_type *sw_info,
     adc20_type *a20_info,
     curr_type *curr,
     int param_type,
-    int dsa16_p1,
-    int dsa16_p2,
+    int ADC16_P1_insmp_per_tmsmp,
+    int ADC16_P2_insmp_per_tmsmp,
     int dop,
     m_type *mc,
     unsigned int **bias,
     int nbias,
     unsigned int **mode,
     int nmode,
-    int ini_samples,
-    int samp_plateau)
+    int N_non_tsweep_tmsmp,
+    int N_plateau_tmsmp)
 {
     char file_path[PATH_MAX];        // Temporary string
 
@@ -7292,7 +7302,7 @@ int WritePTAB_File(
 
     int i_sample;                    // Sample number.
     int j,l,m;
-    int k_proper_sweep_sample;       // Sample number during the actual sweep steps (not the initial samples, which number may vary).
+    int k_tsweep_tmsmp;              // Sample number during the true sweep plateaus (not the initial samples, which number may vary). Used for setting/deriving sweep bias.
 
     int meas_value_TM;               // Measured value (i.e. not bias value) in TM units. NOTE: Integer.
     int sw_bias_voltage_TM = 0;      // Bias voltage during a sweep (sw) in TM units.
@@ -7394,9 +7404,9 @@ int WritePTAB_File(
      * NOTE: This should not be confused with another flight software bug that randomizes the last four bits in
      * non-truncated ADC20 data when the moving average is used.
      ===================================================================================================================*/
-    if ((param_type==ADC20_PARAMS) && (a20_info->moving_average_length != 1)) {
+    if ((param_type==ADC20_PARAMS) && (a20_info->N_MA_length_insmp != 1)) {
         ADC20_moving_average_enabled = TRUE;
-        ADC20_moving_average_bug_TM_factor = (a20_info->moving_average_length) / (a20_info->moving_average_length + 1.0);   // NOTE: Force floating-point division.
+        ADC20_moving_average_bug_TM_factor = (a20_info->N_MA_length_insmp) / (a20_info->N_MA_length_insmp + 1.0);   // NOTE: Force floating-point division.
     } else {
         ADC20_moving_average_enabled = FALSE;
         ADC20_moving_average_bug_TM_factor = 1.0;
@@ -7641,7 +7651,7 @@ int WritePTAB_File(
     }
     
     if (id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) { // Log compression used
-        LogDeComp(buff,length,ilogtab); // Decompress log data in buff result returned in buff
+        LogDeComp(buff,N_bytes,ilogtab); // Decompress log data in buff result returned in buff
     }
         
     if(param_type==SWEEP_PARAMS)
@@ -7693,7 +7703,7 @@ int WritePTAB_File(
     // ITERATE OVER ALL SAMPLES (I.E. OVER ROWS IN TAB FILE)
     //#######################################################
     //#######################################################
-    for(k_proper_sweep_sample=0,i_sample=0,j=0; i_sample<samples; i_sample++)   // NOTE: ONLY increments i_sample.
+    for(k_tsweep_tmsmp=0,i_sample=0,j=0; i_sample<N_tmsmp; i_sample++)   // NOTE: ONLY increments i_sample.
     {
         // Convert data from signed 16 bit and signed 20 bit to native signed integer
         // In case of alternating 20 bit P1 and P2, this will be split into two label
@@ -7708,7 +7718,7 @@ int WritePTAB_File(
                 // EDIT FKJN 2015-02-12. Error in LAP flight software implementation of moving average of
                 // non-truncated ADC20 data makes the lowest 4 bits garbage (~random). ==> Set those bits to zero.
                 //==================================================================================================
-                meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
+                meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[N_tmsmp*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
                 SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                 if(ADC20_moving_average_enabled) {
                     meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
@@ -7726,7 +7736,7 @@ int WritePTAB_File(
                 // EDIT FKJN 2015-02-12. Error in LAP flight software implementation of moving average of
                 // non-truncated ADC20 data makes the lowest 4 bits garbage (~random). ==> Set those bits to zero.
                 //==================================================================================================
-                meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[samples*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
+                meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[N_tmsmp*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
                 SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                 if(ADC20_moving_average_enabled) {
                     // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless (~random).
@@ -7756,7 +7766,7 @@ int WritePTAB_File(
         //==========================================================
         // Derive different measures of time for the current sample.
         //==========================================================
-        t_delta_s = i_sample * curr->factor;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
+        t_delta_s = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
         current_sample_sccd_corrected = curr->seq_time_corrected + t_delta_s;              // Calculate SCCD.
         ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);   // Decode raw time to UTC.
         
@@ -7881,7 +7891,8 @@ int WritePTAB_File(
         
         /*============================================================================================================
         * Set variables "current_TM" and "voltage_TM" to bias and measured values
-        * -----------------------------------------------------------------
+        * (Update variable "k_tsweep_tmsmp" for the above purpose)
+        * -----------------------------------------------------------------------
         * NOTE: This is the only place where "current_TM" and "voltage_TM" are set.
         * Always measured current in density mode. Current bias in E field mode for P1, P2 data (undefined for P3).
         * Always measured voltage in E field mode. Voltage bias in density mode for P1, P2 data (undefined for P3).
@@ -7894,22 +7905,29 @@ int WritePTAB_File(
             current_TM = meas_value_TM; // Set sampled current value in TM units
             if(param_type==SWEEP_PARAMS)
             {   
+                //=============
                 // CASE: Sweep
+                //=============
                 // Handle sweep stepping, and changing sweep direction.
-                if (i_sample<ini_samples) {
-                    // CASE: Current sample is not part of an actual, formal, "official" sweep step.
+                if (i_sample<N_non_tsweep_tmsmp) {
+                    //==========================================================
+                    // CASE: Current sample is not part of a true sweep plateau
+                    //==========================================================
                     voltage_TM = vbias;   // Set initial voltage bias before sweep starts. Not defined for P3.
                 }
                 else
                 { 
+                    //======================================================
+                    // CASE: Current sample is part of a true sweep plateau
+                    //======================================================
                     voltage_TM = sw_bias_voltage_TM;   // Set value used before changing the bias, prevents start bias value to be modified before used.
-                    k_proper_sweep_sample++;
-                    if (!(k_proper_sweep_sample%samp_plateau)) {   // Every new step set a new bias voltage
+                    k_tsweep_tmsmp++;
+                    if (!(k_tsweep_tmsmp%N_plateau_tmsmp)) {   // Every new step set a new bias voltage
                         sw_bias_voltage_TM += curr_step;     // Change bias
                     }
                     if (sw_info->formatv & 0x1)   // If up-down or down-up sweep, check if direction shall change
                     {
-                        if(k_proper_sweep_sample==(sw_info->steps*samp_plateau/2)) {   // Time to change direction ? 
+                        if(k_tsweep_tmsmp==(sw_info->N_tsweep_bias_steps*N_plateau_tmsmp/2)) {   // Time to change direction ? 
                             curr_step = -curr_step;         // Change direction
                         }
                     }
@@ -8097,7 +8115,7 @@ int WritePTAB_File(
                         current_TM,   voltage_TM); // Write time, current and voltage
             }
         }   // if(calib) ... else ...
-    }   // for(k_proper_sweep_sample=0,i_sample=0,j=0;i_sample<samples;i_sample++)    // Iterate over all samples
+    }   // for(k_tsweep_tmsmp=0,i_sample=0,j=0;i_sample<N_tmsmp;i_sample++)    // Iterate over all samples
     
     fclose(pds.stable_fd);
     pthread_testcancel();
@@ -8221,10 +8239,10 @@ int WritePLBL_File(
     char *path,
     char *fname,
     curr_type *curr,
-    int samples,
+    int N_tmsmp,
     int id_code,
     int dop,
-    int ini_samples,
+    int N_non_tsweep_tmsmp,
     int param_type)
 {
     char fullname[PATH_MAX];
@@ -8340,8 +8358,8 @@ int WritePLBL_File(
                 {
                     // Edit, Erik P G Johansson 2015-02-17: Change of keyword name to be probe-specific.
                     sprintf(tstr2, "ROSETTA:LAP_%s_INITIAL_SWEEP_SMPLS", tstr1);
-                    InsertTopQV(&dict, tstr2, ini_samples); 
-                    // InsertTopQV(&dict,"ROSETTA:LAP_INITIAL_SWEEP_SMPLS",ini_samples);   // Original line.
+                    InsertTopQV(&dict, tstr2, N_non_tsweep_tmsmp); 
+                    // InsertTopQV(&dict,"ROSETTA:LAP_INITIAL_SWEEP_SMPLS",N_non_tsweep_tmsmp);   // Original line.
                 }
                 
                 
@@ -8359,7 +8377,7 @@ int WritePLBL_File(
                 // 2004-03-18T00:00:09.394193,038188809.394193, 32767,-32768<CR><LF>  EXAMPLE ROW
                 fprintf(pds.slabel_fd,"OBJECT     = TABLE\r\n");
                 fprintf(pds.slabel_fd,"INTERCHANGE_FORMAT = ASCII\r\n");
-                fprintf(pds.slabel_fd,"ROWS               = %d\r\n",samples);
+                fprintf(pds.slabel_fd,"ROWS               = %d\r\n",N_tmsmp);
                 fprintf(pds.slabel_fd,"COLUMNS            = %d\r\n",columns);
                 
                 
@@ -8628,23 +8646,23 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
 // NOTE: Some buffer data is thrown away.
 int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *sccd)
 {
-    unsigned int length; // Length variable
+    unsigned int N_bytes; // Length variable
     
     // Get data
     GetBuffer(ch,buff,16);
     
-    length=((buff[4]<<8) | buff[5])-9-2;     // Get LAP HK data length
-    HPrintf("HK packet, length: %d\n",length);
+    N_bytes=((buff[4]<<8) | buff[5])-9-2;     // Get LAP HK data length
+    HPrintf("HK packet, length: %d\n",N_bytes);
     
-    if(length>LAP_HK_LEN) {
-        length=LAP_HK_LEN; // Packet to long, force standard length. Add warning in the future...
+    if(N_bytes>LAP_HK_LEN) {
+        N_bytes=LAP_HK_LEN; // Packet to long, force standard length. Add warning in the future...
     }
     
     *sccd = DecodeSCTime2Sccd(&buff[6]);            // Decode S/C time into raw time
     
     GetBuffer(ch,buff,2);                    // Skip 2 bytes
     
-    GetBuffer(ch,buff,length);  // Get data from circular HK buffer
+    GetBuffer(ch,buff,N_bytes);  // Get data from circular HK buffer
     
     return 0;
 }     
@@ -8655,19 +8673,19 @@ int GetHKPacket(buffer_struct_type *ch, unsigned char *buff, double *sccd)
 //
 void DumpTMPacket(buffer_struct_type *cs,unsigned char packet_id)
 {
-    unsigned int length;
+    unsigned int N_bytes;
     char utc[32];
     double sccd;
     unsigned char buff[14];
     
     GetBuffer(cs,buff,14); // Get 14 bytes from circular buffer
     
-    length=((buff[2]<<8) | buff[3])-9;           // Get "data" length
-    PPrintf("    Packet ID: 0x0d%02x , Data length: %d Discarding\n",packet_id,length);
+    N_bytes=((buff[2]<<8) | buff[3])-9;           // Get "data" length
+    PPrintf("    Packet ID: 0x0d%02x , Data length: %d Discarding\n",packet_id,N_bytes);
     sccd = DecodeSCTime2Sccd(&buff[4]);       // Decode S/C time into raw time
     ConvertSccd2Utc(sccd, utc, NULL);        // Decode raw time to PDS compliant date format
     PPrintf("    SCET Time: %s OBT Raw Time: %014.3f\n", utc, sccd);
-    Forward(cs,length);// Move forward, thus skip packet
+    Forward(cs,N_bytes);// Move forward, thus skip packet
 }
 
 
@@ -11257,7 +11275,7 @@ int Compare(const FTSENT **af, const FTSENT **bf)
 void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
 {
     char tmp_str[32];
-    unsigned int length;
+    unsigned int N_bytes;
     unsigned short int gsid; // Ground station ID
     unsigned short int vch;  // Virtual channel
     unsigned char SLE;
@@ -11276,9 +11294,9 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
     endp=ibuff+len;
     do
     {
-        length=(ibuff[8]<<24 | ibuff[9]<<16 | ibuff[10]<<8 | ibuff[11]);
+        N_bytes=(ibuff[8]<<24 | ibuff[9]<<16 | ibuff[10]<<8 | ibuff[11]);
         
-        if(length>len)
+        if(N_bytes>len)
         {
             DPrintf("Corrupted length\n");
             break;
@@ -11296,7 +11314,7 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
         if(mp.t_start>0)
             if(scet<mp.t_start || scet>mp.t_stop)
             {
-                ibuff+=(18+length); // Skip DDS packet
+                ibuff+=(18+N_bytes); // Skip DDS packet
                 continue;
             }
             
@@ -11311,14 +11329,14 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
                     DPrintf("Found likely DDS packet duplicate, skipping\n");
                     toggle=0;
                 }
-                ibuff+=(18+length); // Skip DDS packet, most probably done this one before!
+                ibuff+=(18+N_bytes); // Skip DDS packet, most probably done this one before!
                 continue;
             }      
             
             ConvertTimet2Utc(scet,tmp_str,0);
             DPrintf("SCET: %s\n",tmp_str);
             
-            DPrintf("Length: %d\n",length);
+            DPrintf("Length: %d\n",N_bytes);
             
             gsid=(ibuff[12]<<8 | ibuff[13]);        // Ground station ID
             DDSGroundSN(gsid,tmp_str);              // Get Ground station name from global variable gstations
@@ -11335,12 +11353,12 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
             
             ibuff+=18;                              // Skip DDS packet header
             
-            // CRC=crc16(ibuff,length);
+            // CRC=crc16(ibuff,N_bytes);
             // DPrintf("Data CRC: 0x%x\n",CRC);
             
-            InB(&cbtm,ibuff,length);                // Store data in cicular S/C TM buffer
+            InB(&cbtm,ibuff,N_bytes);                // Store data in cicular S/C TM buffer
             
-            ibuff+=length;                          // Go forward
+            ibuff+=N_bytes;                          // Go forward
             
             // If the circular S/C TM buffer is filled to more than 85% then relinquish cpu until its not
             while(FullBuffer(&cbtm,0.85)) 
