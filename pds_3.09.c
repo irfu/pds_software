@@ -220,12 +220,16 @@
  * 
  * NAMING CONVENTIONS
  * ------------------
- * Functions for (1) interpreting time from byte streams, and (2) converting between different time formats, have been renamed to
+ * Functions/variables for (1) interpreting time from byte streams, and (2) converting between different time formats, have been renamed to
  * make their functions easier to understand. The names use the following naming conventions:
- *  UTC   = A string on the form 2016-09-01T00:16:51.946, although the number of second decimals may vary (or be ignored on reading).
- *  Timet = Variable which value can be interpreted as time_t, although many times it is actually a double, int, or unsigned int.
- *  SCCS  = Spacecraft clock count string, e.g. 1/0431309243.15680 (false decimals).
- *  SCCD  = Spacecraft clock count double, i.e. approximately counting seconds (true decimals). Note that the reset counter has to be handled separately.
+ *      UTC   = A string on the form 2016-09-01T00:16:51.946, although the number of second decimals may vary (or be ignored on reading).
+ *      Timet = Variable which value can be interpreted as time_t, although many times it is actually a double, int, or unsigned int.
+ *      SCCS  = Spacecraft clock count string, e.g. 1/0431309243.15680 (false decimals).
+ *      SCCD  = Spacecraft clock count double, i.e. approximately counting seconds (true decimals). Note that the reset counter has to be handled separately.
+ * Miscellaneous:
+ *      TM        : (1) Quantity in TM units. (2) Time derived from TM without correcting for signal delay (ADC20).
+ *      corrected : Time adjusted for signal delay (ADC20).
+ *      MC        : Measurement/measured calibration(?)
  *
  *====================================================================================================================
  * PROPOSAL: Add check for mistakenly using quotes in MISSION_PHASE_NAME (CLI argument).
@@ -2072,8 +2076,8 @@ void *DecodeScience(void *arg)
     int aqps_seq = 0;               // Number of aqps to the start of a sequence
     unsigned int ma=0;              // Macro number in block
     unsigned int mb=0;              // Macro block number
-    int dsa16_p1;                   // Down sample p1 adc 16
-    int dsa16_p2;                   // Down sample p2 adc 16
+    int dsa16_p1;                   // Downsampling rate ADC16 P1. Number of "internal samples" per "TM sample".
+    int dsa16_p2;                   // Downsampling rate ADC16 P2. Number of "internal samples" per "TM sample".
     int samp_plateau=0;             // Samples on a plateau
     int ini_samples=0;              // Number of initial plateau samples in a sweep, not the true number due to a well known bug.
     // that we compensate for in this code.
@@ -2213,7 +2217,7 @@ void *DecodeScience(void *arg)
         if(WritePLBL_File(pds.spaths,lbl_fname,&curr,samples,id_code, dop, ini_samples,param_type)>=0)
         {
             WritePTAB_File(
-                buff, tab_fname, data_type, samples, id_code, length, &sw_info, &a20_info ,&curr, param_type, dsa16_p1, dsa16_p2, dop,
+                buff, tab_fname, data_type, samples, id_code, length, &sw_info, &a20_info, &curr, param_type, dsa16_p1, dsa16_p2, dop,
                 &m_conv, bias, nbias, mode, nmode, ini_samples, samp_plateau);
             
             strncpy(tstr10,lbl_fname,29);
@@ -2833,8 +2837,13 @@ void *DecodeScience(void *arg)
                                             sw_info.steps        = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
                                             sw_info.height       = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
                                             sw_info.start_bias   = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
-                                            
-                                            sw_info.sweep_dur_s  = (sw_info.steps+3)* sw_info.plateau_dur; // Total duration of sweep in samples (Not same as it's length!)
+
+                                            // Total duration of sweep in samples (Not same as it's length!)                                            
+                                            // "+1" since number of plateaus is number of steps plus 1
+                                            // "+2" since true sweep is ideally also preceeded by two "plateau lengths" of samples.
+                                            // NOTE: Possible bug, since does not take into account that the number of pre-true sweep samples (INITIAL_SWEEP_SMPLS) varies in practice.
+                                            // NOTE: Possible bug, since does not consider that last sample (in last plateau) is always missing.
+                                            sw_info.sweep_dur_s  = (sw_info.steps+1+2) * sw_info.plateau_dur; 
                                             
                                             
                                             // POPULATE PDS LAP Dictionary with sweep info.
@@ -3805,7 +3814,12 @@ void *DecodeScience(void *arg)
                                                             if(param_type==SWEEP_PARAMS)
                                                             {
                                                                 // (una sensore at one time for swiping you sii!)
-                                                                curr.factor=sw_info.sweep_dur_s/SAMP_FREQ_ADC16/samples; // Factor for sweeps!
+                                                                // BUG: Only aproximately correct. Varies with INITIAL_SWEEP_SMPLS and more.
+                                                                curr.factor = sw_info.sweep_dur_s / (SAMP_FREQ_ADC16 * samples); // Factor for sweeps! 
+                                                                
+                                                                //curr.factor = sw_info.sweep_dur_s/SAMP_FREQ_ADC16/((sw_info.steps+1)*samp_plateau - 1);   // Attempt att bugfix. FAILED                                                                
+                                                                // Attempt att bugfix. INCORRECT, but does work for some sweeps (some combinations of parameters).
+                                                                //curr.factor = sw_info.sweep_dur_s/SAMP_FREQ_ADC16/(samples - ini_samples + 2*samp_plateau+1);
                                                             }
                                                             else
                                                             {
@@ -4005,12 +4019,12 @@ void *DecodeScience(void *arg)
                                                             // Furthermore, one sample is always missing at the end of a sweep!
                                                             
                                                             if(curr.sensor==SENS_P1) {
-                                                                samp_plateau=sw_info.plateau_dur/dsa16_p1;   // Samples on one plateau
+                                                                samp_plateau = sw_info.plateau_dur / dsa16_p1;   // TM samples per plateau.
                                                             } else {
-                                                                samp_plateau=sw_info.plateau_dur/dsa16_p2;   // Samples on one plateau
+                                                                samp_plateau = sw_info.plateau_dur / dsa16_p2;   // TM samples per plateau.
                                                             }
 
-                                                            ini_samples=samples+1-(sw_info.steps+1)*samp_plateau;   // Initial samples before sweep starts
+                                                            ini_samples = samples + 1 - (sw_info.steps+1)*samp_plateau;   // Initial TM samples before true sweep starts.
                                                             if ((ini_samples<0) || (32<ini_samples)) {   // NOTE: Positive warning threshold is arbitrary.
                                                                 // Have seen many cases of suspicious values. Therefore extra error message.
                                                                 // Likely due to misconfigured .mds file(s).
@@ -6007,7 +6021,7 @@ int FilenameMatchesCalibMeas(char *calib_meas_filename_pattern, char *filename)
  * m        : Structure in which the calibration data is to be stored.
  *
  * 
- * NOTE: Variable naming convention: MC = Measurement/measured calibration(?)
+ * NOTE: See naming conventions.
  * NOTE: Does not update the CALIB_MEAS LBL keywords.
  * NOTE: This code does not decide on which algorithm to use for selecting a calibration. It only constructs and fills
  *       the data structure used by that algorithm.
@@ -7266,10 +7280,6 @@ int WritePTAB_File(
     int ini_samples,
     int samp_plateau)
 {
-    // Variable naming convention:
-    // *_TM        : (1) Quantity in TM units. (2) Time derived from TM without correcting for signal delay (ADC20).
-    // *_corrected : Time adjusted for signal delay (ADC20).
-
     char file_path[PATH_MAX];        // Temporary string
 
     char current_sample_utc_corrected[MAX_STR];

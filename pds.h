@@ -516,15 +516,15 @@ typedef struct sweep_type_def
   unsigned int p1_fine_offs;   // LAP_P1_FINE_SWEEP_OFFSET   = VALUE
   unsigned int p2_fine_offs;   // LAP_P2_FINE_SWEEP_OFFSET   = VALUE
   unsigned int plateau_dur;    // LAP_SWEEP_PLATEAU_DURATION = VALUE (to get seconds => plateau_dur/SAMP_FREQ_ADC16)
-  unsigned int steps;          // LAP_SWEEP_STEPS            = VALUE
+  unsigned int steps;          // LAP_SWEEP_STEPS            = VALUE. Number of true sweep bias STEPS, i.e. number of times the bias CHANGES within true sweep, i.e. number of true sweep plateaus MINUS ONE.
   unsigned int height;         // LAP_SWEEP_STEP_HEIGHT      = VALUE
   unsigned int start_bias;     // LAP_SWEEP_START_BIAS       = VALUE
 
-  unsigned int sweep_dur_s;    // Derived duration of sweep in samples. Using plateu_dur*(steps+3), plateaues = steps+1+2
+  unsigned int sweep_dur_s;    // Duration of raw sweep in internal samples.
 } sweep_type;
 
 //
-// Ex: sweep below has thus:
+// Ex: Sweep below has thus:
 //
 // 4 steps (not counting intial and final edges)
 // 5 plateaues
@@ -534,9 +534,8 @@ typedef struct sweep_type_def
 //
 //
 //   |-|     |-|
-//   |  �   -  |
+//   |  -   -  |
 // --|   |_|   |
-//
 //
 //
 
@@ -561,7 +560,7 @@ typedef struct curr_type_def
   double       offset_time; // Time since raw start time
   double       old_time;    // Used to test if we have extra bias settings
   unsigned int old_macro;   // Used to test if we have a new macro
-  double       factor;      // Current conversion factor (Not physical current..but the factor currently used for time computations)
+  double       factor;      // Time [seconds] between TM samples.
   unsigned int afilter;     // Current analog filter (if data from both sensors (i.e. correlation) we assume the same filter on both)
   int ibias1;               // Fix current bias p1
   int vbias1;               // Fix voltage bias p1
