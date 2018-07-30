@@ -3823,13 +3823,15 @@ void *DecodeScience(void *arg)
                                                             // Compute stop time of current sequence
                                                             if(param_type==SWEEP_PARAMS)
                                                             {
-                                                                // (una sensore at one time for swiping you sii!)
+                                                                // Old implementation containing bug:
                                                                 // BUG: Only aproximately correct. Varies with INITIAL_SWEEP_SMPLS and more.
-                                                                curr.sec_per_tmsmp = sw_info.N_rsweep_insmp / (SAMP_FREQ_ADC16 * N_tmsmp); // Factor for sweeps! 
-                                                                
-                                                                //curr.sec_per_tmsmp = sw_info.N_rsweep_insmp/SAMP_FREQ_ADC16/((sw_info.N_tsweep_bias_steps+1)*N_plateau_tmsmp - 1);   // Attempt att bugfix. FAILED                                                                
-                                                                // Attempt att bugfix. INCORRECT, but does work for some sweeps (some combinations of parameters).
-                                                                //curr.sec_per_tmsmp = sw_info.N_rsweep_insmp/SAMP_FREQ_ADC16/(N_tmsmp - N_non_tsweep_tmsmp + 2*N_plateau_tmsmp+1);
+                                                                //curr.sec_per_tmsmp = sw_info.N_rsweep_insmp / (SAMP_FREQ_ADC16 * N_tmsmp);
+
+                                                                if(curr.sensor==SENS_P1) {
+                                                                    curr.sec_per_tmsmp = ADC16_P1_insmp_per_tmsmp / SAMP_FREQ_ADC16;
+                                                                } else {
+                                                                    curr.sec_per_tmsmp = ADC16_P2_insmp_per_tmsmp / SAMP_FREQ_ADC16;
+                                                                }
                                                             }
                                                             else
                                                             {
