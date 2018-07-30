@@ -236,6 +236,7 @@
  * MC                         : Measurement/measured calibration(?)
  * MA                         : Moving average
  * tsweep = true sweep        : Part of a raw sweep that contains the actual, intended science data. Samples taken on a well-defined sequence of bias plateaus. Subset of a raw sweep.
+ *                              This excludes the last sample on the last plateau, which according to pds source code comments (by Reine Gill) does not exist.
  * rsweep = raw sweep         : True sweep plus some samples taken before the true sweep.
  * insmp = internal sample(s) : Samples taken internally by RPCLAP and which may or may not have been later downsampled, averaged over etc.
  * tmsmp = TM sample(s)       : Samples which are actually output from the RPCLAP instrument.
@@ -2153,11 +2154,12 @@ void *DecodeScience(void *arg)
      * It represents the writing of one LBL/TAB file pair for one probe (P1,P2,P3).
      * 
      * IMPORTANT NOTE: The function uses MANY variables defined in the enclosing outer function
-     * (DecodeScience) to avoid a very long and awkward argument list, but none of these are temporary variables.
+     * (DecodeScience), to avoid a very long and awkward argument list, but none of these are temporary variables.
      * 
-     * NOTE: Will modify lbl_fname, tab_fname, and prod_id.
+     * NOTE: Function will modify lbl_fname, tab_fname, and prod_id.
      * lbl_fname, tab_fname: Sets byte 19 (E=E-field/D=Density) and 21 (probe number) 
      * prod_id:              Same as for lbl_fname, tab_fname but for byte 20 and 22, presumably because the first byte/character is a quote.
+     *
      * 
      * ARGUMENTS
      * =========
@@ -2841,18 +2843,21 @@ void *DecodeScience(void *arg)
                                                 strcpy(sw_info.p2,"NO");
                                             }
                                             
-                                            sw_info.p1_fine_offs            = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
-                                            sw_info.p2_fine_offs            = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
-                                            sw_info.N_plateau_insmp           = 1<<(GetBitF(W1,4,0)+1); // LAP_SWEEP_PLATEAU_DURATION
+                                            sw_info.p1_fine_offs        = GetBitF(W2,4,12);       // LAP_P1_FINE_SWEEP_OFFSET
+                                            sw_info.p2_fine_offs        = GetBitF(W2,4,8);        // LAP_P2_FINE_SWEEP_OFFSET
+                                            sw_info.N_plateau_insmp     = 1<<(GetBitF(W1,4,0)+1); // LAP_SWEEP_PLATEAU_DURATION
                                             sw_info.N_tsweep_bias_steps = (GetBitF(W1,4,4)<<4);   // LAP_SWEEP_STEPS 
-                                            sw_info.height                  = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
-                                            sw_info.start_bias              = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
+                                            sw_info.height              = GetBitF(W1,4,8)+1;      // LAP_SWEEP_STEP_HEIGHT Range is from 1 to 16
+                                            sw_info.start_bias          = GetBitF(W0,8,0);        // LAP_SWEEP_START_BIAS
 
                                             // Total duration of sweep in samples (Not same as it's length!)                                            
                                             // "+1" since number of plateaus is number of steps plus 1
                                             // "+2" since true sweep is ideally also preceeded by two "plateau lengths" of samples.
-                                            // NOTE: Possible bug, since does not take into account that the number of pre-true sweep samples (INITIAL_SWEEP_SMPLS) varies in practice.
-                                            // NOTE: Possible bug, since does not consider that last sample (in last plateau) is always missing.
+                                            // 
+                                            // ~BUG: Does not take into account that the number of pre-true sweep samples (INITIAL_SWEEP_SMPLS) varies in practice.
+                                            // ~BUG: Does not consider that the last sample (in last plateau) is always/sometimes(?) missing according to implementation and
+                                            // other pds source code comment by Reine Gill.
+                                            // However, due to how sw_info.N_rsweep_insmp is used, this does not matter more than for log printouts.
                                             sw_info.N_rsweep_insmp  = (sw_info.N_tsweep_bias_steps+1+2) * sw_info.N_plateau_insmp; 
                                             
                                             
@@ -3833,7 +3838,7 @@ void *DecodeScience(void *arg)
                                                                     curr.sec_per_tmsmp = ADC16_P2_insmp_per_tmsmp / SAMP_FREQ_ADC16;
                                                                 }
                                                             }
-                                                            else
+                                                            else    // if(param_type==SWEEP_PARAMS)
                                                             {
                                                                 
                                                                 if(param_type!=ADC20_PARAMS)
@@ -3858,7 +3863,7 @@ void *DecodeScience(void *arg)
                                                                 {
                                                                     case SENS_P1:
                                                                         if(param_type==ADC20_PARAMS)
-                                                                            curr.sec_per_tmsmp = a20_info.insmp_per_tmsmp/SAMP_FREQ_ADC20; // s/tmsmp = (insmp / tmsmp) / (insmp/s)
+                                                                            curr.sec_per_tmsmp = a20_info.insmp_per_tmsmp/SAMP_FREQ_ADC20;
                                                                         else
                                                                             curr.sec_per_tmsmp = ADC16_P1_insmp_per_tmsmp/SAMP_FREQ_ADC16;
                                                                         break;
@@ -3873,7 +3878,7 @@ void *DecodeScience(void *arg)
                                                                         curr.sec_per_tmsmp = 1/SAMP_FREQ_ADC16;
                                                                         break;
                                                                 }
-                                                            }
+                                                            }    // (param_type==SWEEP_PARAMS) ... else
                                                             
                                                             // Calculate current STOP time.
                                                             curr.stop_time_corrected = curr.seq_time_corrected + (N_tmsmp-1)*curr.sec_per_tmsmp;   
@@ -3971,6 +3976,11 @@ void *DecodeScience(void *arg)
                                                 case S15_WRITE_PDS_FILES:
                                                 //#######################
                                                 //#######################
+                                                    /* NOTE: case S14_RESOLVE_MACRO_PARAMETERS is ALWAYS followed by case S15_WRITE_PDS_FILES
+                                                     * and case S15_WRITE_PDS_FILES is always preceeded by case S14_RESOLVE_MACRO_PARAMETERS.
+                                                     * They could thus really be merged into one if one really wanted to, or be thought of as the same case.
+                                                     **/
+                                                    
                                                     DispState(state,"STATE = S15_WRITE_PDS_FILES\n");
                                                     //CPrintf("1 ADC16_P1_insmp_per_tmsmp=%i\n", ADC16_P1_insmp_per_tmsmp);
                                                     //CPrintf("  ADC16_P2_insmp_per_tmsmp=%i\n", ADC16_P2_insmp_per_tmsmp);
@@ -4035,9 +4045,16 @@ void *DecodeScience(void *arg)
                                                             } else {
                                                                 N_plateau_tmsmp = sw_info.N_plateau_insmp / ADC16_P2_insmp_per_tmsmp;   // TM samples per plateau.
                                                             }
-
-                                                            N_non_tsweep_tmsmp = N_tmsmp + 1 - (sw_info.N_tsweep_bias_steps+1)*N_plateau_tmsmp;   // Initial TM samples before true sweep starts.
-                                                            if ((N_non_tsweep_tmsmp<0) || (32<N_non_tsweep_tmsmp)) {   // NOTE: Positive warning threshold is arbitrary.
+                                                            // Initial TM samples before true sweep starts.
+                                                            // IMPLEMENTATION NOTE: Assumes that the last TM sample of the last plateau does not exist.
+                                                            // Compare with how the bias values are derived/set.
+                                                            // This values is used for
+                                                            // (1) Setting ROSETTA:LAP_Px_INITIAL_SWEEP_SMPLS
+                                                            // (2) Determining how to pair measured samples with sweep bias voltages, including whether or not the last 
+                                                            // sweep plateau lacks its last sample.
+                                                            N_non_tsweep_tmsmp = N_tmsmp - ((sw_info.N_tsweep_bias_steps+1)*N_plateau_tmsmp - 1);   
+                                                            
+                                                            if ((N_non_tsweep_tmsmp<0) || (16<N_non_tsweep_tmsmp)) {   // NOTE: Positive warning threshold is documented max INITIAL_SWEEP_SMPLS value.
                                                                 // Have seen many cases of suspicious values. Therefore extra error message.
                                                                 // Likely due to misconfigured .mds file(s).
                                                                 CPrintf("WARNING: Suspicious number of initial sweep samples, N_non_tsweep_tmsmp=%i=0x%x\n", N_non_tsweep_tmsmp, N_non_tsweep_tmsmp);
@@ -4047,7 +4064,7 @@ void *DecodeScience(void *arg)
 
                                                             }
 
-                                                        }
+                                                        }    // if(param_type==SWEEP_PARAMS)
                                                         
                                                         //##########################################################################
                                                         // WRITE TO DATA LABEL FILE (.LBL), TABLE FILE (.TAB), and add to INDEX.TAB
@@ -4152,7 +4169,7 @@ void *DecodeScience(void *arg)
                                                 //#######################
                                                     DispState(state,"STATE = UNKNOWN\n");
                                                     break;
-        }
+        }   // switch
     }   // while
     return 0;
     
@@ -7297,7 +7314,7 @@ int WritePTAB_File(
     char current_sample_utc_corrected[MAX_STR];
     char first_sample_utc_TM[MAX_STR];   // TM=Time according to TM (no group delay).
 
-    int curr_step = 3;               // Current sweep step, default value just there to get rid of compilation warning.
+    int sw_bias_step_size_TM = 3;               // Current sweep step, default value just there to get rid of compilation warning.
 
     double t_delta_s;                // Time since first sample. Unit: seconds
     double current_sample_sccd_corrected;   // Time of current sample (current row) as SCCD.
@@ -7659,9 +7676,9 @@ int WritePTAB_File(
     if(param_type==SWEEP_PARAMS)
     {
         if((sw_info->formatv ^(sw_info->formatv<<1)) & 0x2) {   // Decode the four sweep types
-            curr_step = -sw_info->height;    // Store height of step and set sign to a down sweep 
+            sw_bias_step_size_TM = -sw_info->height;    // Store height of step and set sign to a down sweep 
         } else {
-            curr_step =  sw_info->height;   // Store height of step and set sign to a up sweep
+            sw_bias_step_size_TM =  sw_info->height;   // Store height of step and set sign to a up sweep
         }
         sw_bias_voltage_TM = sw_info->start_bias;         // Get start bias
     }
@@ -7911,6 +7928,8 @@ int WritePTAB_File(
                 // CASE: Sweep
                 //=============
                 // Handle sweep stepping, and changing sweep direction.
+                // IMPLEMENTATION NOTE: Note that N_non_tsweep_tmsmp is set such that the last bias value of the last bias plateau is omitted.
+                // This is due to bug in RPCLAP according to pds source code comment (by Reine Gill). /Erik P G Johansson 2018-07-30.
                 if (i_sample<N_non_tsweep_tmsmp) {
                     //==========================================================
                     // CASE: Current sample is not part of a true sweep plateau
@@ -7918,25 +7937,27 @@ int WritePTAB_File(
                     voltage_TM = vbias;   // Set initial voltage bias before sweep starts. Not defined for P3.
                 }
                 else
-                { 
+                {
                     //======================================================
                     // CASE: Current sample is part of a true sweep plateau
                     //======================================================
                     voltage_TM = sw_bias_voltage_TM;   // Set value used before changing the bias, prevents start bias value to be modified before used.
                     k_tsweep_tmsmp++;
                     if (!(k_tsweep_tmsmp%N_plateau_tmsmp)) {   // Every new step set a new bias voltage
-                        sw_bias_voltage_TM += curr_step;     // Change bias
+                        sw_bias_voltage_TM += sw_bias_step_size_TM;     // Change bias
                     }
                     if (sw_info->formatv & 0x1)   // If up-down or down-up sweep, check if direction shall change
                     {
                         if(k_tsweep_tmsmp==(sw_info->N_tsweep_bias_steps*N_plateau_tmsmp/2)) {   // Time to change direction ? 
-                            curr_step = -curr_step;         // Change direction
+                            sw_bias_step_size_TM = -sw_bias_step_size_TM;         // Change direction
                         }
                     }
                 }
             }
             else {
+                //=================
                 // CASE: Not sweep
+                //=================
                 voltage_TM = vbias; // Set FIX Density bias in TM unit. Not defined for P3.
             }
         }
