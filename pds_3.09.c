@@ -158,6 +158,10 @@
  *      /Erik P G Johansson 2018-07-06
  * * Bugfix: Corrected the sweep timestamp increment.
  *      /Erik P G Johansson 2018-07-30
+ * * Bugfix: HK files used to NOT break at midnight, and the following HK files began where
+ *   the last HK file ended, i.e. not at the beginning of the day if previous HK file
+ *   stretched over midnight.
+ *      /Erik P G Johansson 2018-08-01
  * 
  *
  * BUGS
@@ -1838,27 +1842,30 @@ void *SCDecodeTM(void *arg)
 // /Erik P G Johansson 2016-03-21
 void *DecodeHK(void *arg)
 {   
-    char alphanum_h[4]="000";       // Default starting alpha numeric value for unique HK file name
-    unsigned char buff[16];         // Temporary in buffer
+    // PROPOSAL: Rewrite function to iterate over HK packets/rows (instead of over files, and then rows-in-file).
+
+    char alphanum_h[4]="000";           // Default starting alpha numeric value for unique HK file name
+    unsigned char buff[16];             // Temporary in buffer
     
-    char lbl_fname[256];            // Data HK label file name and path (complies to 27.3 file name standard)
-    char stub_fname[256];           // Stub file name and path
-    char tab_fname[256];            // Data HK table file name and path (complies to 27.3 file name standard)
+    char lbl_fname[MAX_STR];            // Data HK label file name and path (complies to 27.3 file name standard)
+    char stub_fname[MAX_STR];           // Stub file name and path
+    char tab_fname[MAX_STR];            // Data HK table file name and path (complies to 27.3 file name standard)
     
     unsigned int macro_id;
-    char prod_creat_time[32];       // Product Creation time
-    char line[256];                 // HK line in PDS file    
+    char prod_creat_time[MAX_STR];      // Product Creation time
+    char line[MAX_STR];                 // HK line in PDS file    
     
-    char tstr1[256];                // Temporary string
-    char tstr2[256];                // Temporary string
-    char tstr3[256];                // Temporary string
+    char tstr1[MAX_STR];                // Temporary string
+    char tstr2[MAX_STR];                // Temporary string
+    char tstr3[MAX_STR];                // Temporary string
+    char utc_time_str_next[MAX_STR];    // UTC time string for next HK packet/row in HK TAB file(s).
     
-    property_type *property1;       // Temporary property pointer
+    property_type *property1;           // Temporary property pointer
     
-    double sccd;                    // Raw time
+    double sccd;                        // Raw time
     
-    unsigned ti;                    // Temporary integer
-    buffer_struct_type *ch;         // Pointer to circular buffer structure type, for HK decoding
+    unsigned ti;                        // Temporary integer
+    buffer_struct_type *ch;             // Pointer to circular buffer structure type, for HK decoding
     
     int oldstate;
     int oldtype;
@@ -1899,54 +1906,45 @@ void *DecodeHK(void *arg)
     
     ch=(buffer_struct_type *)((arg_type *)arg)->arg1;   // Get circular house keeping buffer pointer
     
+
+    
+    pthread_testcancel();                             // Test if we are to cancel
+
+    //==============================================
+    // Derive first row of first HK TAB file + time
+    //==============================================
+    GetHKPacket(ch,buff,&sccd);    // Get first HK packet data and raw time.
+    AssembleHKLine(buff, line, sccd, utc_time_str_next, &macro_id);    // Assemble the very first HK line in a TAB file. Sets hk_info.utc_time_str.
+
+
+
+    //===========================================================================================================
+    // Loop over HK LBL & TAB file pairs
+    // ---------------------------------
+    // PRECONDITION at beginning of every loop:
+    //  - One HK packet/row + time has been read but written to any HK TAB file.
+    //  - Variables line, sccd, utc_time_str_next have been correctly set.
+    //===========================================================================================================
     while(1)
     {
-        pthread_testcancel();                             // Test if we are to cancel
-        
-        //=======================================================================
-        // Assemble first line of TAB file, and gather information for LBL file.
-        //=======================================================================
-        
-        // Get first HK packet data and raw time (HK_NUM_LINES per TAB file)
-        GetHKPacket(ch,buff,&sccd);
-        
-        sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
-        SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
-
-        AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble the very first HK line (out of HK_NUM_LINES per TAB file).
-        
-        //ConvertSccd2Utc( sccd,                     hk_info.utc_time_str, NULL);    // First convert spacecraft time to UTC to get time calibration right
+        // Set hk_info to match the most recently read HK packet/row (which is meant to eventually be written to HK TAB file).
+        // IMPLEMENTATION NOTE: It is (marginally) useful to set "hk_info.hk_cnt" here in case the function is cancelled and ExitPDS needs
+        // hk_info to finish writing the HK LBL file (0 ==> ROWS=0).
+        strcpy(hk_info.utc_time_str, utc_time_str_next);
         ConvertSccd2Sccs(sccd, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock
-        
-        SetP(&hkl, "SPACECRAFT_CLOCK_START_COUNT", hk_info.obt_time_str, 1);    // Set OBT start time
-        SetP(&hkl, "START_TIME",                   hk_info.utc_time_str, 1);    // Update START_TIME in common PDS parameters
-        
+        hk_info.hk_cnt = 0;
+
         HPrintf("S/C time PDS Format: %s, Raw Time: %014.3f\n", hk_info.utc_time_str, sccd);
         HPrintf("Mission ID: %s, Phase: %s\n", mp.mission_phase_abbrev, mp.mission_phase_name);
 
-        sprintf(tstr1, "MCID0X%04x", macro_id);
-        SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
-//         HPrintf("2: tstr1 = %s\n", tstr1);                              // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-//         HPrintf("3: macro_id = (base 10) %i\n",   macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-//         HPrintf("4: macro_id = (base 16) %04x\n", macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-//         HPrintf("5: INSTRUMENT_MODE_ID = %s\n", tstr1);     // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-        
-        // Find human description of macro in macro mode descriptions
-        sprintf(tstr1, "0x%04x", macro_id);                     // Create search variable to search for in linked list of property name value pairs.
-        if(FindP(&mdesc, &property1, tstr1, 1, DNTCARE)>0)
-        {
-            SetP(&hkl, "INSTRUMENT_MODE_DESC", property1->value, 1);   // Set human description of mode
-//             HPrintf("6: tstr1 = %s\n", tstr1);                             // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-//             HPrintf("7: INSTRUMENT_MODE_DESC = %s\n", property1->value);   // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-        }
-
-        //HPrintf("LINE=%s",line);
-
+        //===============================================================
+        // Prepare for writing LBL & TAB file
+        // ----------------------------------
+        // Make sure TAB & LBL parent directory exist, create filenames.
+        //===============================================================
         // Create data path for current day
-        StrucDir(hk_info.utc_time_str, pds.dpathh, pds.spathh);   // Test if RPCLAPCCYY/MONTH exists for current time, if not it creates them.
-        
-        strncpy(tstr2, hk_info.utc_time_str, 20);   // Truncate raw time and store fractions of a seconds  
-
+        StrucDir(hk_info.utc_time_str, pds.dpathh, pds.spathh);   // Test if RPCLAPCCYY/MONTH exists for current time, if not it creates them.        
+        strncpy(tstr2, hk_info.utc_time_str, 20);   // Truncate raw time and store fractions of a seconds
         // Replace - in CCYY-MM-DD by null terminations so we can convert date from CCYY-MM-DD into YYMMDD
         tstr2[4]='\0'; 
         tstr2[7]='\0';
@@ -1955,54 +1953,82 @@ void *DecodeHK(void *arg)
         // Get highest alphanumeric value in filenames in dpathh matching pattern "RPCLAPYYMM*_*_H.LBL",
         // This causes the alphanum value to restart at zero every new day.
         // (Any matching days from previous runs are not overwritten until alphanum wraps.)
-        //
+        // NOTE: Does not make use of the day-of-month string. Not sure why.
         sprintf(tstr3,"RPCLAP%s%s*_*_*H.LBL",&tstr2[2],&tstr2[5]);
         GetAlphaNum(alphanum_h,pds.spathh,tstr3);
         IncAlphaNum(alphanum_h); // Increment alphanumeric value (HK)
         
-        sprintf(stub_fname,"RPCLAP%s%s%s_%s_H",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);
-        //sprintf(stub_fname,"\"RPCLAP%s%s%s_%s_H\"",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);   // Add quotes - Untested.
+        sprintf(stub_fname,"RPCLAP%s%s%s_%s_H",&tstr2[2],&tstr2[5],&tstr2[8],alphanum_h);       // Set filename without suffix.
         
         sprintf(tab_fname,"%s.TAB",stub_fname);                     // Compile HK data TAB path+filename
         sprintf(lbl_fname,"%s.LBL",stub_fname);                     // Compile HK data LBL path+filename
+
+        
+        
+        //========================
+        // Add to LBL data struct
+        //========================
+        sprintf(tstr2, "\"%s\"", pds.LabelRevNote);             // Assemble label revison note    // Modified 2015-04-10 /Erik P G Johansson
+        SetP(&hkl,"LABEL_REVISION_NOTE",tstr2,1);               // Set LABEL Revision note        // Removed 2015-02-27 /Erik P G Johansson
+
+        SetP(&hkl, "SPACECRAFT_CLOCK_START_COUNT", hk_info.obt_time_str, 1);    // Set OBT start time
+        SetP(&hkl, "START_TIME",                   hk_info.utc_time_str, 1);    // Update START_TIME in common PDS parameters
+        
+        sprintf(tstr1, "MCID0X%04x", macro_id);
+        SetP(&hkl, "INSTRUMENT_MODE_ID", tstr1, 1);
+        
+        // Find human description of macro in macro mode descriptions
+        sprintf(tstr1, "0x%04x", macro_id);                     // Create search variable to search for in linked list of property name value pairs.
+        if(FindP(&mdesc, &property1, tstr1, 1, DNTCARE)>0)
+        {
+            SetP(&hkl, "INSTRUMENT_MODE_DESC", property1->value, 1);   // Set human description of mode
+        }
         
         SetP(&hkl,"PRODUCT_ID",stub_fname,1);                       // Add PRODUCT_ID HK LBL
         
         GetCurrentUtc0(prod_creat_time);                                  // Get current UTC time     
         HPrintf("    UTC Creation Time: %s\n",prod_creat_time,1);
-        SetP(&hkl,"PRODUCT_CREATION_TIME",prod_creat_time,1);       // Set creation time in common PDS parameters, no quotes!
+        SetP(&hkl,"PRODUCT_CREATION_TIME",    prod_creat_time,1);       // Set creation time in common PDS parameters, no quotes!
         
         sprintf(tstr3,"\"%s\"",lbl_fname);          // Add PDS quotes ".."
         SetP(&hkl,"FILE_NAME",tstr3,1);             // Add file name to HK LBL
         sprintf(tstr3,"\"%s\"",tab_fname);          // Add PDS quotes ".." 
         SetP(&hkl,"^TABLE",tstr3,1);                // Add pointer to HK TAB file
         
-        // Write to the index file (We have at least one HK line otherwise GetHKPacket would not have returned.
-        //----------------------------------------------------------------------------------------------------------------------------------------------------
+        
+        
+        //===============================================================================
+        // Write to the index file
+        // (We have at least one HK line otherwise GetHKPacket would not have returned.)
+        //===============================================================================
         ti=strlen(pds.apathpds);                            // Find position where the root of the PDS archive starts
         sprintf(tstr2,"%s%s",&pds.spathh[ti],lbl_fname);    // Set path and file name together
         ExtendStr(tstr3,tstr2,58,' ');                      // Make a new string extended with whitespace to 58 characters
         ExtendStr(tstr2,stub_fname,25,' ');                 // Make a new string extended with whitespace to 25 characters
         WriteToIndexTAB(tstr3, tstr2, prod_creat_time);
         
-        // Open label file and tab file for writing
-        //----------------------------------------------------------------------------------------------------------------------------------------------------
+        // Construct LBL file path.
         strcpy(tstr2,pds.spathh);                       // Copy data path
         strcat(tstr2,lbl_fname);                        // Add lbl filename to data path 
         
+        
+        
         //===============================================================================================
-        // Write all lines of TAB file, and gather remaining information for LBL file and write LBL file.
+        // (1) Write all rows of TAB file (one row has already been generated).
+        // (2) Gather remaining information for LBL file.
+        // (3) Write LBL file.
         //===============================================================================================
-        if ((pds.hlabel_fd=fopen(tstr2,"w"))==NULL)     // Open HK label file
+        if ((pds.hlabel_fd=fopen(tstr2,"w"))==NULL)     // Open HK LBL file for writing (overwrite any pre-existing one).
         {
             HPrintf("Couldn't open PDS HK LBL data file: %s!!\n",tstr2);
         }
         else
         {
+            // Construct TAB file path.
             strcpy(tstr2,pds.spathh);               // Copy data path
             strcat(tstr2,tab_fname);                // Add tab filename to data path 
             
-            if((pds.htable_fd=fopen(tstr2,"w"))==NULL)          // Open HK table file
+            if((pds.htable_fd=fopen(tstr2,"w"))==NULL)          // Open HK TAB file (overwrite any pre-existing one).
             {
                 HPrintf("Couldn't open PDS HK TAB data file: %s!!\n",tab_fname);
             }
@@ -2010,51 +2036,73 @@ void *DecodeHK(void *arg)
             {
                 // CASE: Successfully opened both LBL and TAB file. First TAB line (variable "line") has already been assembled.
                 
-                fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);      // Add first HK line from above into the present table file
-                
-                //===========================================
-                // Iterate over remaining lines in TAB file.                
-                //===========================================
-                // (Start at hk_cnt = 1 to skip counting the line already written above.)
-                for (hk_info.hk_cnt=1; hk_info.hk_cnt<HK_NUM_LINES; hk_info.hk_cnt++)
+                //===========================================================================================================
+                // Derive HK TAB rows + time, and write them to TAB file
+                // -----------------------------------------------------
+                // PRECONDITION & POSTCONDITION for while loop:
+                //  - One HK TAB file row string has already been derived but not been written to any HK TAB file.
+                //  - Variables line, sccd, utc_time_str_next have been correctly set.
+                //===========================================================================================================
+                while(1)
                 {
-                    GetHKPacket(ch,buff,&sccd);
-                    
-                    AssembleHKLine(buff, line, sccd, hk_info.utc_time_str, &macro_id);        // Assemble a HK TAB file line
-//                     HPrintf("8: macro_id = (base 10) %i\n",   macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-//                     HPrintf("9: macro_id = (base 16) %04x\n", macro_id);            // DEBUG. Debugging INSTRUMENT_MODE_ID bug.
-                    
-                    // NOTE: It is necessary to derive/set both "hk_info.utc_time_str" and "hk_info.obt_time_str" here
-                    // in case pds exits (and calls ExitPDS) while GetHKPacket is waiting, so that they are
-                    // available in ExitPDS which needs them to finish writing the last LBL file in the data set.
-                    //ConvertSccd2Utc( sccd,                     hk_info.utc_time_str, NULL);    // Decode raw time to PDS compliant date format.
-                    ConvertSccd2Sccs(sccd, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock.
-                    HPrintf("S/C time PDS Format: %s Raw Time: %014.3f\n", hk_info.utc_time_str, sccd);                    
-
                     HPrintf("%s", line);                                    // Print HK TAB file content to log(!)
                     fwrite(line,HK_LINE_SIZE,1,pds.htable_fd);              // Write line to HK TAB file.
                     fflush(pds.htable_fd);
+
+                    // Set hk_info to match the most recently written HK packet/row.
+                    // IMPLEMENTATION NOTE: It is useful to set hk_info here so that it corresponds to the last HK row actually written so that,
+                    // in case the function is abrutly interrupted by ExitPDS, then ExitPDS can use it for finishing the LBL file.
+                    // Consider that the function could be interrupted/cancelled in the call to GetHKPacket by ExitPDS.
+                    strcpy(hk_info.utc_time_str, utc_time_str_next);
+                    ConvertSccd2Sccs(sccd, pds.SCResetCounter, hk_info.obt_time_str, TRUE);    // Compile OBT string and add reset number of S/C clock.
+                    hk_info.hk_cnt++;   // NOTE: hk_info.hk_cnt represents the number of HK packets/rows already written to TAB file; NOT the number of HK packets read.
+                    HPrintf("S/C time PDS Format: %s Raw Time: %014.3f\n", hk_info.utc_time_str, sccd);
+
+                    //==============================================
+                    // Derive next row to put in a TAB file + time
+                    // (not necessarily in the current HK TAB file)
+                    //==============================================
+                    GetHKPacket(ch,buff,&sccd);
+                    AssembleHKLine(buff, line, sccd, utc_time_str_next, &macro_id);    // Sets hk_info.utc_time_str. Return value "macro_id" not used.
+
+
+
+                    // IMPLEMENTATION NOTE: Check if new HK data UTC string represents a different day compared to the previous one ==> strncmp(..., 10).
+                    if ((hk_info.hk_cnt > HK_NUM_LINES) || (strncmp(utc_time_str_next, hk_info.utc_time_str, 10))) {                        
+                        // CASE: The HK row that was constructed, should NOT be written to the currently open HK TAB file. Save it for next HK TAB file.
+                        break;
+                    }
+                    // CASE: The HK row that was constructed, should/will also be written to the TAB file that is currently open.
                 }
-                fclose(pds.htable_fd);
+                
+                fclose(pds.htable_fd);    // Close HK TAB file.
             }
 
-            // NOTE: The function "ExitPDS" will execute the following commands too if it thinks the file has not been closed.
+            // IMPLEMENTATION NOTE: The function "ExitPDS" will execute the following commands to complete the HK LBL file too,
+            // if it thinks the file has not been closed. Note that this requires "hk_info" to have the correct values.
+            
+            //===============================
+            // Add to the HK LBL data struct
+            //===============================
             SetP(&hkl, "SPACECRAFT_CLOCK_STOP_COUNT", hk_info.obt_time_str, 1);     // Set OBT stop time
             SetP(&hkl, "STOP_TIME",                   hk_info.utc_time_str, 1);     // Update STOP_TIME in common PDS parameters
             sprintf(tstr1,"%d",hk_info.hk_cnt);
             SetP(&hkl, "FILE_RECORDS", tstr1, 1);               // Set number of records
             SetP(&hkl, "ROWS",         tstr1, 1);               // Set number of rows
             
-            // Write to the HK Label file
-            //------------------------------------------------------------------------------------------------------------------------------------------------
+            //====================================
+            // Write to and close the HK LBL file
+            //====================================
             FDumpPrp(&hkl, pds.hlabel_fd);   // Dump hkl to HK label file
             fprintf(pds.hlabel_fd,"END\r\n");
             fclose(pds.hlabel_fd);
             pds.hlabel_fd=NULL;
             
-            //HPrintf("(DecodeHK:) Closed HK LBL file.");   // Useful for determining whether the above code closed the LBL file, or if ExitPDS did.
-        }   // if ((pds.hlabel_fd=fopen(tstr2,"w"))==NULL) ... else ...
-    }
+            HPrintf("(DecodeHK:) Closed HK LBL file.");   // Useful for determining whether the above code closed the LBL file, or if ExitPDS did.
+        }   // if ((pds.hlabel_fd=fopen(tstr2,"w"))==NULL) ... else ...   (If can open HK LBL+TAB file...)
+        
+        pthread_testcancel();                             // Test if we are to cancel
+    }    // while(1)
 }   // DecodeHK
 
 
