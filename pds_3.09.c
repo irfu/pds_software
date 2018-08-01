@@ -156,6 +156,8 @@
  *      - Setting end of time interval (an alternative to setting duration).
  *      - Overriding the remaining values in the mission calendar.
  *      /Erik P G Johansson 2018-07-06
+ * * Bugfix: Corrected the sweep timestamp increment.
+ *      /Erik P G Johansson 2018-07-30
  * 
  *
  * BUGS
@@ -1338,6 +1340,9 @@ int main(int argc, char *argv[])
     sarg.arg1 = &cbs; // Pass circular science buffer pointer as an argument.
     sarg.arg2 = &cmb; // Pass circular mirror  buffer pointer as an argument.
     
+    //======================
+    // DecodeScience thread
+    //======================
     if(pthread_create(&scithread,NULL,DecodeScience,(void *)&sarg)!=0)
     { 
         YPrintf("Error starting science thread");   
@@ -1348,6 +1353,9 @@ int main(int argc, char *argv[])
     // For real time version of PDS, (not needed)
     //SetPRandSched(scithread,minp+1,SCHEDULING); // Set priority and scheduling
     
+    //=================
+    // DecodeHK thread
+    //=================
     if(!calib) // If not a calibrated archive then HK exists.
     {
         harg.arg1=&cbh; // Pass circular house keeping buffer pointer as an argument
@@ -1856,6 +1864,13 @@ void *DecodeHK(void *arg)
     int oldtype;
     int status;
     
+    // Set thread to only be able to be canceled at cancellation points points.
+    // NOTE: pthread_testcancel() is a cancellation point, but certain other system functions may also be, e.g. fwrite, fclose, fflush, fopen, mkdir.
+    // One can thus not be certain where/when the function is ended. hk_info is used by ExitPDS to finish the HK LBL file and therefore needs to be accurate
+    // when the function is exited. It is therefore updated carefully to be most likely to be consistent with what has been written to the HK TAB file
+    // at that time.
+    // 
+    // http://man7.org/linux/man-pages/man7/pthreads.7.html
     status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,&oldstate);
     status+= pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED,&oldtype);
     
@@ -4306,12 +4321,18 @@ void ExitPDS(int status)
     {
         HPrintf("Finish last HK LBL file after HK thread has been canceled.\n");
         
+        //===============================
+        // Add to the HK LBL data struct
+        //===============================
         SetP(&hkl, "SPACECRAFT_CLOCK_STOP_COUNT", hk_info.obt_time_str,1);  // Set OBT stop time. NOTE: hk_info is a global variable.
         SetP(&hkl, "STOP_TIME",                   hk_info.utc_time_str,1);  // Update STOP_TIME in common PDS parameters
         sprintf(tstr1, "%d", hk_info.hk_cnt);
         SetP(&hkl, "FILE_RECORDS", tstr1, 1);                               // Set number of records
         SetP(&hkl, "ROWS",         tstr1, 1);                               // Set number of rows
 
+        //====================================
+        // Write to and close the HK LBL file
+        //====================================
         FDumpPrp(&hkl,pds.hlabel_fd);                                       // Dump hkl to HK label file
         fprintf(pds.hlabel_fd,"END\r\n");
         fclose(pds.hlabel_fd);
@@ -8661,8 +8682,11 @@ int LookBuffer(buffer_struct_type *bs,unsigned char *buff,int len)
 
 // Return data for one HK packet.
 //
+// ARGUMENTS
+// =========
 // ch   : Circular buffer, source of data
 // buff : Destination buffer for (some) packet data.
+// Return values:
 // sccd : Time derived from HK packet. Raw, spacecraft clock count (double; true decimals)
 // 
 // NOTE: Does NOT RETURN until it has all the requested data.
@@ -9966,17 +9990,21 @@ int Match(char *stra, char *strb)
 
 /* Construct a string of HK data that can be written as row/line to a HK TAB file.
  *
+ *
  * ARGUMENTS
  * =========
- * line       : must be a pointer to a buffer of at least 165 characters
- * utc_return : UTC that is derived from sccd and that is RETURNED to the caller. The content of the string is thus overwritten.
- *              This value is returned so that the caller does need to derive the value, which can then be used to minimize
- *              the number of calls to SPICE, which speeds up pds.
- * OUTPUT: macro_id   : Will be set to macro ID number.
+ * b                    : ?? Bitstream buffer? HK packet?
+ * line                 : Must be a pointer to a buffer of at least 165 characters.
+ * sccd                 : Spacecraft clock double.
+ * OUTPUT:
+ * utc_3decimals_return : UTC that is derived from sccd and that is RETURNED to the caller. The content of the string is thus overwritten.
+ *                        This value is returned so that the caller does need to derive the value, which can then be used to minimize
+ *                        the number of calls to SPICE, which speeds up pds.
+ * macro_id             : Will be set to macro ID number, as returned from the HK bit stream. Return value only included for debugging reasons(?).
  *
  *
  * HOUSE KEEPING EXAMPLE ROW
- * -------------------------
+ * =========================
  * NOTE 1: Longest strings used, thus DISABLED is 8 characters
  *         and ENABLED is 7 so if enabled we put in " ENABLED"
  *         with an initial white space.
