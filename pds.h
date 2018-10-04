@@ -129,7 +129,7 @@
 
 
 // Values that are used for the corresponding PDS keywords.
-// NOTE: The string value of PRODUCER_FULL_NAME must be quoted. In addition to that, C requires quotes around the string.
+// NOTE: The string value of PRODUCER_FULL_NAME must be quoted. In addition to that, C syntax requires quotes around the string.
 #define PDS_PRODUCER_ID          "EJ"
 #define PDS_PRODUCER_FULL_NAME   "\"ERIK P G JOHANSSON\""
 
@@ -374,6 +374,9 @@
  * NOTE: This functionality is unlikely to detect saturation for diffs since diffs are calculate (onboard) from
  * digital values. If, for example, both probes are saturated, then the diff will still appear to be
  * non-saturated.
+ * 
+ * NOTE: Lapdog uses the special value to represent the absence of data for many types of causes, whereas in pds
+ * this special value ONLY REPRESENTS SATURATION.
  ===============================================================================================================*/
 #define USE_SATURATION_LIMITS                   TRUE   // Enable/disable saturation
 //#define USE_SATURATION_LIMITS                   FALSE

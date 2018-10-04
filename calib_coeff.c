@@ -4,6 +4,7 @@
  * and deallocate a "CALIB_COEFF data struct" of type calib_coeff_data_type. No other code should need to work with the actual insides of
  * that struct type.
  * 
+ * 
  * IMPLEMENTATION NOTE: Uses specified (hard-coded) mission beginning and end to guess which CALIB_COEFF files that might exist
  * and then creates a data stucture with one "slot" (index value in arrays) per such hypothetical file. The advantage with this
  * is that the code can then (and does) construct an array of (sorted) time boundaries between files and can (and does) quickly
@@ -17,6 +18,7 @@
  * 
  * NOTE: The module does include some generic functions which were needed for the implementation.
  * These generic functions could be moved to some other module.
+ * 
  * 
  * Created 2017-08-17 by Erik P G Johansson, IRF Uppsala, Sweden.
  */

@@ -745,7 +745,7 @@ int main(int argc, char *argv[])
     // Basic check on number of input arguments.
     if (argc>1+(2*21+1) || argc<1+6)
     {
-        fprintf(stderr, "Called with too few or too many arguments.\n\n");
+        fprintf(stderr, "ERROR: pds called with too few or too many arguments.\n\n");
         PrintUserHelpInfo(stdout, argv[0]);    // NOTE: Prints to stderr.
         exit(1);
     }
@@ -1019,7 +1019,6 @@ int main(int argc, char *argv[])
     if (GetOption("-dpd", argc, argv, tstr1))
     {
         strncpy(pds.apathpds_parent, tstr1, PATH_MAX);
-        fprintf(stdout, "Reading from CLI option: apathpds_parent\n");   // DEBUG
     }
         
         
@@ -12011,14 +12010,7 @@ int main_TEST(int argc, char* argv[]) {
     
 //     FindNearestInSortedArray_TEST();
 //     TimeConversion_TEST();
-//     CalibCoeff_TEST();
-
-//     char tstr[MAX_STR];
-//     double et;
-//     char *utc = "2010-07-12T00:00:00.000";
-//     printf("utc = %s\n", utc);   // DEBUG
-//     utc2et_c(utc, &et);
-//     CheckSpiceError(tstr, TRUE, TRUE);
+//     CalibCoeff_TEST();    
     
     ExitPDS(255);
 
