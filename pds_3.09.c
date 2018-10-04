@@ -162,6 +162,10 @@
  *   the last HK file ended, i.e. not at the beginning of the day if previous HK file
  *   stretched over midnight.
  *      /Erik P G Johansson 2018-08-01
+ * * ~Bugfix: Convert ROSETTA:LAP_P1/P2_ADC16_FILTER value to upper case (required by PSA/PDS). (Slightly ugly implementation.)
+ *   NOTE: The original value is read from *.mds file which contains the wrong case.
+ *      /Erik P G Johansson 2018-10-04
+ *
  * 
  *
  * BUGS
@@ -458,7 +462,7 @@ int  GetAlphaNum(char *n,char *path,char *pattern);		// Get largest alphanumeric
 int  Alpha2Num(char *n);								// Convert a positive alpha numeric value to a number 
 // returns negative value on error
 int  IsNumber(char *str);								// Check if string is a number
-
+void convertToUpperCase(char *str);
 
 // File handling functions
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -3537,6 +3541,9 @@ void *DecodeScience(void *arg)
                                                             // Find LAP_P1_ADC16_FILTER
                                                             if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P1_ADC16_FILTER",DNTCARE)>0) 
                                                             {
+                                                                // Convert to upper case. Value is read from .mds file and may contain lower case ("KHz").
+                                                                // IMPLEMENTATION NOTE: ~Ugly, since changes value in SOURCE.
+                                                                convertToUpperCase(property2->value);
                                                                 InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
                                                                 sscanf(property2->value,"\"%d\"",&curr.afilter);
                                                             }
@@ -3683,6 +3690,9 @@ void *DecodeScience(void *arg)
                                                             // Find LAP_P2_ADC16_FILTER
                                                             if(FindB(&macros[mb][ma],&property1,&property2,"ROSETTA:LAP_P2_ADC16_FILTER",DNTCARE)>0) 
                                                             {
+                                                                // Convert to upper case. Value is read from .mds file and may contain lower case ("KHz")
+                                                                // IMPLEMENTATION NOTE: ~Ugly, since changes value in SOURCE.
+                                                                convertToUpperCase(property2->value);
                                                                 InsertTopK(&dict,property2->name,property2->value); // Set it in dictionary
                                                                 sscanf(property2->value,"\"%d\"",&curr.afilter);
                                                             }
@@ -9746,8 +9756,21 @@ int IsNumber(char *str)
             return 0;
         }
     }
-        
-        return 1; // String only contain numbers return true
+
+    return 1; // String only contain numbers return true
+}
+
+// Convert string to upper case.
+// NOTE: There does not appear to be a (standard) library function for achieving this.
+void convertToUpperCase(char *str)
+{
+    while (*str != '\0')
+    {
+        // Convert one character to upper case.
+        // int toupper ( int c );
+        *str = toupper((unsigned char) *str);
+        str++;
+    }
 }
 
 
