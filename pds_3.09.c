@@ -8493,7 +8493,7 @@ int WritePLBL_File(
                 fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_REAL\r\n");
                 fprintf(pds.slabel_fd,"UNIT        = SECONDS\r\n");
                 fprintf(pds.slabel_fd,"FORMAT      = \"F16.6\"\r\n");
-                fprintf(pds.slabel_fd,"DESCRIPTION = \"SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)\"\r\n");
+                fprintf(pds.slabel_fd,"DESCRIPTION = \"SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMAL POINT)\"\r\n");
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                 
                 fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN
@@ -8893,7 +8893,7 @@ int SetupHK(prp_type *p)
         Append(p,"DATA_TYPE","ASCII_REAL");
         Append(p,"UNIT","SECONDS");
         Append(p,"FORMAT","\"F16.6\"");
-        Append(p,"DESCRIPTION","\"SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)\"");
+        Append(p,"DESCRIPTION","\"SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMAL POINT)\"");
         Append(p,"END_OBJECT","COLUMN");
         Append(p,"OBJECT","COLUMN");		  
         Append(p,"NAME","PMAC");  
@@ -10444,7 +10444,7 @@ int ConvertSccd2Utc(double sccd, char *utc_3decimals, char *utc_6decimals)
  * 
  * NOTE: The function and its input value is used by WritePTAB_File to produce the first two columns in (science data) TAB files:
  *      utc:  UTC_TIME (DESCRIPTION = "UTC TIME")
- *      sccd: OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMALPOINT)")
+ *      sccd: OBT_TIME (DESCRIPTION = "SPACECRAFT ONBOARD TIME SSSSSSSSS.FFFFFF (TRUE DECIMAL POINT)")
  *     
  * NOTE: Implementation uses TCORR, not SPICE kernels.
  * 
