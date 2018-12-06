@@ -165,6 +165,8 @@
  * * ~Bugfix: Convert ROSETTA:LAP_P1/P2_ADC16_FILTER value to upper case (required by PSA/PDS). (Slightly ugly implementation.)
  *   NOTE: The original value is read from *.mds file which contains the wrong case.
  *      /Erik P G Johansson 2018-10-04
+ * * Bugfix: Completed the list of macros for which manually commanded bias should be ignored: Added all missing macros (macros which do not have LF).
+ *      /Erik P G Johansson 2018-12-06
  *
  * 
  *
@@ -7918,8 +7920,25 @@ int WritePTAB_File(
                 char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
                 sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
                 free(tempstr);
-                
-                if( macro_id == 0x505 || macro_id == 0x506 || macro_id == 0x604 || macro_id == 0x515 || macro_id == 0x807 )
+
+                // BUGFIX (incomplete):
+                // "if" statement for entirely ignoring manually commanded bias for certain macros.
+                // This is intended for macros which re-set the bias (LF, HF) during the macro cycle
+                // and for which bias was manually commanded by mistake during the mission.
+                // NOTE: For the moment (2018-12-06) this means that pds' reported bias is still
+                // wrong for the short time period (at most one macro cycle) between the time when
+                // (1) the bias is manually commanded, and (2) the macro re-sets the bias.
+                // Of these macros, only these had LF: 505, 506, 515, 604, 807. /AE
+                if (   macro_id == 0x204
+                    || macro_id == 0x304
+                    || macro_id == 0x305
+                    || macro_id == 0x306
+                    || macro_id == 0x307
+                    || macro_id == 0x505
+                    || macro_id == 0x506
+                    || macro_id == 0x515
+                    || macro_id == 0x604
+                    || macro_id == 0x807)
                 {
                     extra_bias_setting = 0;
                     YPrintf("Forbidden bias setting found at %s (not corrected for delay). Macro %x\n", first_sample_utc_TM, macro_id);
