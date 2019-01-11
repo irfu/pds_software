@@ -7819,7 +7819,13 @@ int WritePTAB_File(
                 meas_value_TM=buff[j]<<12 | buff[j+1]<<4 | (((buff[N_tmsmp*2+(i_sample>>1)])>>(4*((i_sample+1)%2))) & 0x0F);
                 SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                 if(ADC20_moving_average_enabled) {
-                    meas_value_TM = meas_value_TM & 0xFFFF0;  // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
+                    /* Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless.
+                        IMPLEMENTATION NOTE: Tries to use 0xFFF...FFF value that scales with the number of bits in the variable.
+                        NOTE: This functionality does not really conflict with ADC20 saturation (of internal samples)
+                        since (1) that information has (likely) already been destroyed by the moving average, and
+                        (2) saturation is represented by the lowest ADC20 value, which is divisble by 16 (four last bits already
+                        (set to zero).*/
+                    meas_value_TM = meas_value_TM & ~(0xFUL);
                 }
                 j+=2;
                 if(dop==1) { // Doing probe 1, skip probe 2
@@ -7838,7 +7844,8 @@ int WritePTAB_File(
                 SignExt20(&meas_value_TM); // Convert 20 bit signed to native signed
                 if(ADC20_moving_average_enabled) {
                     // Clear the last 4 bits (in 20-bit TM data) since a moving-average bug in the flight software renders them useless (~random).
-                    meas_value_TM = meas_value_TM & 0xFFFF0;
+                    // NOTE: See other comment section for comments.
+                    meas_value_TM = meas_value_TM & ~(0xFUL);
                 }
                 j+=2;
                 break;
