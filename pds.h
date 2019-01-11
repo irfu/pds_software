@@ -383,8 +383,8 @@
 
 // Special ADC values that are interpreted as saturation.
 // 20-bit data: ADC20 non-truncated data (2^19=524288)
-#define SATURATION_ADC20_NONTRUNC_TM_VALUE_1      -524288   
-#define SATURATION_ADC20_NONTRUNC_TM_VALUE_2       524287   
+#define SATURATION_ADC20_NONTRUNC_TM_VALUE_1      -524288
+#define SATURATION_ADC20_NONTRUNC_TM_VALUE_2       524287
 // 16-bit data: (1) ADC16 data and (2) truncated ADC20 data (2^15=32768)
 #define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE_1    -32768
 #define SATURATION_ADC16_ADC20_TRUNC_TM_VALUE_2     32767

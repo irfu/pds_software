@@ -4968,7 +4968,6 @@ int  LoadConfig1(pds_type *p) // Loads configuration information
     fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
     strncpy(p->SCResetClock,l_str,20);       printf("ResetClock                  : %s\n",p->SCResetClock);
     
-    
     fgets(line,PATH_MAX,fd);   Separate(line,l_str,r_str,'%',1);   TrimWN(l_str);
     strncpy(p->templp,l_str,PATH_MAX);
     if(SetupPath("Path to PDS archive template",p->templp)<0)  return -2;  // Test if path exists
@@ -7493,7 +7492,7 @@ int WritePTAB_File(
     ConvertUtc2Timet(first_sample_utc_TM, &t_first_sample_TM);    // Convert back to seconds.
 
     /*===================================================================================================================
-     * (1) Determine whether ADC20 moving average is enabled, and
+     * (1) Determine whether ADC20 moving average is enabled (needed later), and
      * (2) set the ADC20 flight software moving average bug compensation factor.
      * 
      * Not certain how the moving average length variable is set for non-ADC20 data. Therefore require both 
@@ -8004,7 +8003,7 @@ int WritePTAB_File(
                 }
             }
         }
-        
+
         /*============================================================================================================
         * Set variables "current_TM" and "voltage_TM" to bias and measured values
         * (Update variable "k_tsweep_tmsmp" for the above purpose)
@@ -8260,10 +8259,10 @@ int WritePTAB_File(
  * 
  * ARGUMENTS
  * =========
- * Return value: x_phys_min
- * Return value: x_phys_max
- * Return value: x_TM_saturation_1
- * Return value: x_TM_saturation_2
+ * Return value: x_phys_min         : Lowest  value (physical units) that counts as non-saturated.
+ * Return value: x_phys_max         : Highest value (physical units) that counts as non-saturated.
+ * Return value: x_TM_saturation_1  : Special ADC value (TM units) which should be interpreted as saturation.
+ * Return value: x_TM_saturation_2  : Special ADC value (TM units) which should be interpreted as saturation.
  * is_ADC20_nontrunc : True if-and-only-if data type is non-truncated ADC20 data.
  */
 void set_saturation_limits(
@@ -8272,9 +8271,11 @@ void set_saturation_limits(
     int* x_TM_saturation_1,
     int* x_TM_saturation_2,
     int is_ADC20_nontrunc, int is_high_gain, int is_Efield)
-{    
+{
+    // PROPOSAL: Use struct containing the four saturation constants as return value instead. Use similarily with handle_saturation.
+    // 
     // TODO-NEED-INFO: How specify argument value/expression that signifies NON-truncated ADC20 data?!
-
+    //
     // NOTE: High/low gain only exists for density mode.
     //  PROPOSAL: ADC20 saturation value truncated.
 
@@ -8321,6 +8322,8 @@ double handle_saturation(
     int x_TM_saturation_1,
     int x_TM_saturation_2)
 {
+    // PROPOSAL: Use struct containing the four saturation constants as argument instead.
+    
     // IMPLEMENTATION NOTE:
     // Uses regular if-then-else, not #ifdef-#else-#endif, to
     // (1) make USE_SPICE easier to convert to a C variable (e.g. for CLI argument flag),
