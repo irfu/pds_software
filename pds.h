@@ -418,6 +418,18 @@
 // #define EXCLUDE_FINE_SWEEPS_FROM_CALIB     FALSE
 #define EXCLUDE_FINE_SWEEPS_FROM_CALIB     TRUE
 
+/*==========================================================================================================
+ * Enable/disable old bugfix which disables manually commanded bias for a selected list of macros.
+ * This bugfix is/was meant as a mitigation for the problem that bias was manually commanded for macros
+ * which set the bias as part of its macro loop, and therefore re-set (restored) the bias. Unfortunately,
+ * pds does not similarily re-set the bias as part of the macro loop.
+ * TRUE = Use old bugfix
+ * 
+ * 2019-01-23: Experiments are underway with replacing this bugfix with fake manually commanded bias
+ * commands which restore the bias the same way the macros do (in the flight s/w).
+ ==========================================================================================================*/
+#define IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS   TRUE
+
 
 
 // Time correlation data structure (for non-SPICE time conversion)

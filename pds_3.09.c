@@ -1446,7 +1446,7 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "   USE_SATURATION_LIMITS                              = %i\n", USE_SATURATION_LIMITS);
     fprintf(stream, "   SATURATION_TAB_CONSTANT                            = %i\n", SATURATION_TAB_CONSTANT);
     fprintf(stream, "   USE_SPICE                                          = %i\n", USE_SPICE);
-    //fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
+    fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
     fprintf(stream, "\n");
     //fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -7935,28 +7935,30 @@ int WritePTAB_File(
                 sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
                 free(tempstr);
 
-                // BUGFIX (incomplete):
-                // "if" statement for entirely ignoring manually commanded bias for certain macros.
-                // This is intended for macros which re-set the bias (LF, HF) during the macro cycle
-                // and for which bias was manually commanded by mistake during the mission.
-                // NOTE: For the moment (2018-12-06) this means that pds' reported bias is still
-                // wrong for the short time period (at most one macro cycle) between the time when
-                // (1) the bias is manually commanded, and (2) the macro re-sets the bias.
-                // Of these macros, only these had LF: 505, 506, 515, 604, 807. /AE
-                if (   macro_id == 0x204
-                    || macro_id == 0x304
-                    || macro_id == 0x305
-                    || macro_id == 0x306
-                    || macro_id == 0x307
-                    || macro_id == 0x505
-                    || macro_id == 0x506
-                    || macro_id == 0x515
-                    || macro_id == 0x604
-                    || macro_id == 0x807)
-                {
-                    extra_bias_setting = 0;
-                    YPrintf("Forbidden bias setting found at %s (not corrected for delay). Macro %x\n", first_sample_utc_TM, macro_id);
-                    // Add some way of detecting that this is the first macro loop with extra_bias_settings?
+                if (IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS) {
+                    // BUGFIX (incomplete):
+                    // "if" statement for entirely ignoring manually commanded bias for certain macros.
+                    // This is intended for macros which re-set the bias (LF, HF) during the macro cycle
+                    // and for which bias was manually commanded by mistake during the mission.
+                    // NOTE: For the moment (2018-12-06) this means that pds' reported bias is still
+                    // wrong for the short time period (at most one macro cycle) between the time when
+                    // (1) the bias is manually commanded, and (2) the macro re-sets the bias.
+                    // Of these macros, only these had LF: 505, 506, 515, 604, 807. /AE
+                    if (   macro_id == 0x204
+                        || macro_id == 0x304
+                        || macro_id == 0x305
+                        || macro_id == 0x306
+                        || macro_id == 0x307
+                        || macro_id == 0x505
+                        || macro_id == 0x506
+                        || macro_id == 0x515
+                        || macro_id == 0x604
+                        || macro_id == 0x807)
+                    {
+                        extra_bias_setting = 0;
+                        YPrintf("Forbidden bias setting found at %s (not corrected for delay). Macro %x\n", first_sample_utc_TM, macro_id);
+                        // Add some way of detecting that this is the first macro loop with extra_bias_settings?
+                    }
                 }
             }
             
