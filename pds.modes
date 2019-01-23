@@ -137,13 +137,13 @@
 0x0926:"Density P1P2 Burst Mode, Fix Bias +30/-30V, Cont. truncated no down, Sweeps P1 & P2 +-30V up-down"
 
 0x0A00:"Empty"
-0x0A01:"Empty"
+0x0A01:"BM NN, Vb +30/+30V, hi/hi, cont A20 trunc, every 160s P1 & P2 swp +-30V & A16"
 0x0A02:"Empty"
 0x0A12:"As MCID0X212, Density, normal mode alternating sweeps and time series."
 0x0A03:"Empty"
 0x0A04:"Empty"
 0x0A05:"Empty"
 0x0A06:"Burst TM,Normal LDL or mixed LDL"
-0x0A07:"Empty"
+0x0A07:"NM cal A20/A16: NN, Vb 0/0 V, cont A20 down 64, A16 every 160s, no swp"
 
 0xFFFF:"Instrument mode stopped"
