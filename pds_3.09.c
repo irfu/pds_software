@@ -1440,6 +1440,14 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "             needs to contain the mission phase abbreviation used.\n");
     fprintf(stream, "       NOTE: Options must not contain quotes, including PDS keywords which are quoted in LBL/CAT files.\n");
     fprintf(stream, "\n");
+    fprintf(stream, "Hardcoded internal constants\n");
+    fprintf(stream, "   CALIB_COEFF_ENABLED                                = %i\n", CALIB_COEFF_ENABLED);
+    fprintf(stream, "   EXCLUDE_FINE_SWEEPS_FROM_CALIB                     = %i\n", EXCLUDE_FINE_SWEEPS_FROM_CALIB);
+    fprintf(stream, "   USE_SATURATION_LIMITS                              = %i\n", USE_SATURATION_LIMITS);
+    fprintf(stream, "   SATURATION_TAB_CONSTANT                            = %i\n", SATURATION_TAB_CONSTANT);
+    fprintf(stream, "   USE_SPICE                                          = %i\n", USE_SPICE);
+    //fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
+    fprintf(stream, "\n");
     //fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
 
