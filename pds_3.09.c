@@ -7945,10 +7945,6 @@ int WritePTAB_File(
                     // (1) the bias is manually commanded, and (2) the macro re-sets the bias.
                     // Of these macros, only these had LF: 505, 506, 515, 604, 807. /AE
                     if (   macro_id == 0x204
-                        || macro_id == 0x304
-                        || macro_id == 0x305
-                        || macro_id == 0x306
-                        || macro_id == 0x307
                         || macro_id == 0x505
                         || macro_id == 0x506
                         || macro_id == 0x515
