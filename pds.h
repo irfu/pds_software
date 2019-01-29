@@ -427,8 +427,10 @@
  * 
  * 2019-01-23: Experiments are underway with replacing this bugfix with fake manually commanded bias
  * commands which restore the bias the same way the macros do (in the flight s/w).
+ * 2019-01-29: Change to default FALSE since fake manually commanded bias commands have been added to
+ * pds.bias to solve the original problem.
  ==========================================================================================================*/
-#define IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS   TRUE
+#define IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS   FALSE
 
 
 
