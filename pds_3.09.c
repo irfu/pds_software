@@ -7944,8 +7944,7 @@ int WritePTAB_File(
                     // wrong for the short time period (at most one macro cycle) between the time when
                     // (1) the bias is manually commanded, and (2) the macro re-sets the bias.
                     // Of these macros, only these had LF: 505, 506, 515, 604, 807. /AE
-                    if (   macro_id == 0x204
-                        || macro_id == 0x505
+                    if (   macro_id == 0x505
                         || macro_id == 0x506
                         || macro_id == 0x515
                         || macro_id == 0x604
