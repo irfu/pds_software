@@ -336,7 +336,7 @@
  * Approximate begin and end of Rosetta mission.
  * Indirectly defines the range of time for which pds will assume that there MIGHT be CALIB_COEFF files
  * which it needs to have to create a data structure with "slots"/array indices for every potential
- * CALIB_COEFF file.
+ * CALIB_COEFF file. Should therefore contain some extra margins.
  * 
  * NOTE: Approximately these times will be converted to SCCS, and they can therefore only be set to
  * times for which there are valid SCCS times.

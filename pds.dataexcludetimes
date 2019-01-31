@@ -3,20 +3,24 @@
 # ------------------------------------------
 # Column 1-2: Beginning & end of time interval as "spacecraft clock count strings" (SCCS),
 #             without being compensated for ADC20 group delay. E.g. 1/0376707707.15680.
-# Column 3:   ALL_PROBES, P1, P2, P3, 
-# Column 4:   ALL_DATA_TYPES, SWEEPS, LF, HF
+# Column 3:   One of the following: ALL_PROBES, P1, P2, P3, 
+# Column 4:   One of the following: ALL_DATA_TYPES, SWEEPS, LF, HF
 # 
 # See functions LoadDataExcludeTimes, DecideWhetherToExcludeData for syntax and implementation.
+#
 #
 # NOTE: Times have to be given
 # (1) as "spacecraft clock count strings" (SCCS), i.e. using reset counter and false decimals representing a 16-bit number,
 # i.e. the same as SPACECRAFT_CLOCK_START/STOP_COUNT in the LBL files, AND
-# (2) without considering the ADC20 group delay.
+# (2) WITHOUT CONSIDERING THE ADC20 GROUP DELAY.
 # This is necessary to make the time designations independent of 
 # (1) time conversions (SCCS<->UTC; SPICE kernels), and
-# (2) the compensation for group delay.
+# (2) the compensation for group delay which depends on archiving level(!) and therefore has to be ignored so that a data
+#     exclusion time interval refers to the same data in both EDITED1 and CALIB1 datasets.
 # 
 # NOTE: This does not exclude anything from HK, e.g. when excluding an entire macro.
+# NOTE: This functionality excludes data from both EDITED1 and CALIB1 datasets.
+
 
 
 # Saturated P3, HF/snapshot data

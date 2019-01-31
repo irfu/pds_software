@@ -5620,7 +5620,7 @@ int LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depat
  * 
  * Checks whether a SCI LBL/TAB file pair should be created at all depending on the time
  * covered by the files, and other parameters.
- * NOTE: Function uses (and should use) TM times, i.e. not corrected for ADC20 group delay.
+ * NOTE: Function uses (and should use) TM times, i.e. NOT corrected for ADC20 group delay.
  * NOTE: Not intended for HK.
  * 
  * 
@@ -5654,8 +5654,8 @@ int DecideWhetherToExcludeData(
 {
     int i = -1;
 
-    const double sccd_file_begin = curr.seq_time_TM;
-    const double sccd_file_end   = curr.stop_time_TM;
+    const double sccd_file_begin = curr.seq_time_TM;    // NOTE: Time deliberately NOT corrected for ADC20 group delay.
+    const double sccd_file_end   = curr.stop_time_TM;   // NOTE: Time deliberately NOT corrected for ADC20 group delay.
     const int writing_P1_data = (curr.sensor==SENS_P1   || dop==1);
     const int writing_P2_data = (curr.sensor==SENS_P2   || dop==2);
     const int writing_P3_data = (curr.sensor==SENS_P1P2 && dop==0);
