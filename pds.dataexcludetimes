@@ -30,6 +30,28 @@
 
 
 
+# Strange values associated with manually commanded bias applied to macro which re-sets the bias
+# Time interval between genuine and fake manually commanded bias (pds.bias).
+# pds.bias
+#   2014-10-13T22:35:33.000 0xf8f8  0x0000    # Includes ADC20 group delay?
+#   2014-10-13T22:36:49.000 0xa8a8  0x0000    # Includes ADC20 group delay?
+# Added 2019-01-31.
+# 2014-10-13T22:35:33.480012, 371860463.170054 -- 2014-10-13T22:36:46.338160, 371860536.028185   # Actual EDITED2 samples. Should end at EDITED1 file boundary.
+1/371860463.11145, 1/371860536.1847, P1, LF
+
+
+
+# Strange values associated with manually commanded bias applied to macro which re-sets the bias
+# Time interval between genuine and fake manually commanded bias (pds.bias).
+# pds.bias
+#   2014-10-15T22:05:33.000 0xf8f8  0x0000
+#   2014-10-15T22:06:57.000 0xa8a8  0x0000
+# Added 2019-01-31.
+# 2014-10-15T22:05:32.678467, 372031462.311922 -- 2014-10-15T22:06:54.394757, 372031544.028185   # Actual EDITED2 samples. Should end at EDITED1 file boundary.
+1/372031462.20442, 1/372031544.1847, P1, LF
+
+
+
 # Timestamps appear to be 32 s too early.
 # 2014-11-09T00:46:58.295 - 2014-11-09T00:49:34.029
 1/0374114747.15680, 1/0374114902.63740, ALL_PROBES, ALL_DATA_TYPES
@@ -106,7 +128,15 @@
 
 # RPCLAP140810_004T_RDB18NS.LBL   2014-08-10T00:08:31.673   2014-08-10T00:09:27.037
 # RPCLAP140810_004T_RDB28NS.LBL   2014-08-10T00:08:31.673   2014-08-10T00:09:27.037
-1/0366250043.15680, 1/0366250098.39491, ALL_PROBES, LF
+# 1/0366250043.15680, 1/0366250098.39491, ALL_PROBES, LF
+# 
+# 
+# 2019-01-31: Extending time interval forward in time to cover time until unexplained data gap, despite
+# that data between nonsensical samples and data gap are not obviously bad (timestamps are suspect?)
+# Data gap:
+#   2014-08-10T00:13:16.462185, 366250328.028185,            -56,            168   # End of EDITED1 file.
+#   2014-08-10T00:13:51.673272, 366250363.239258,             31,            168   # Beginning of EDITED1 file.
+1/0366250043.15680, 1/366250328.1847, ALL_PROBES, LF
 
 # RPCLAP140901_0ODT_RDB18NS.LBL   2014-09-01T03:24:16.320   2014-09-01T03:25:16.113
 # RPCLAP140901_0ODT_RDB28NS.LBL   2014-09-01T03:24:16.320   2014-09-01T03:25:16.113
