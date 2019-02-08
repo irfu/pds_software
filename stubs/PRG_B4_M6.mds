@@ -61,8 +61,10 @@
 08	LAP_SWEEP_STEPS                = "0x0030"
 08	LAP_SWEEP_STEP_HEIGHT          = "0x0002"
 08	LAP_SWEEP_START_BIAS           = "0x00b0"
-09	LAP_VBIAS2                     = "0x007f"
-09	LAP_VBIAS1                     = "0x007f"
+# Bias commands deactivated since they seem to be generated due to MEDS bug.
+# /Erik P G Johansson 2019-02-07
+#09	LAP_VBIAS2                     = "0x007f"
+#09	LAP_VBIAS1                     = "0x007f"
 09	LAP_P1_DENSITY_FIX_DURATION    = "0x0001"
 09	LAP_P2_DENSITY_FIX_DURATION    = "0x0001"
 10	LAP_HOLD_N_AQPS                = "0x0001"
