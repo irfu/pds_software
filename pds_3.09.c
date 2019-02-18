@@ -167,6 +167,10 @@
  *      /Erik P G Johansson 2018-10-04
  * * Bugfix: Completed the list of macros for which manually commanded bias should be ignored: Added all missing macros (macros which do not have LF).
  *      /Erik P G Johansson 2018-12-06
+ * * Bugfix: Fix clearing of last four bits in 20-bit data. (Bugfix on old bugfix.)
+ *      /Erik P G Johansson 2019-01-11
+ * * Bugfix: Ignore manually commanded bias: Removed 304,305,306,307 + 204 from list.
+ *      /Erik P G Johansson 2019-01-24, 2019-01-29
  * * Bugfix: Moving average (ADC20, LF) timestamps are centered between first and last internal sample averaged over.
  *      /Erik P G Johansson 2019-02-18
  *
