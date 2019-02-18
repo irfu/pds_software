@@ -432,6 +432,18 @@
  ==========================================================================================================*/
 #define IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS   FALSE
 
+/*====================================================================================================================
+ * How to set the timestamp for ADC20 moving average TM samples
+ * 
+ * FALSE: (The original implementation) Use the timestamp of the first internal sample of all the internal samples
+ *        averaged over.
+ * TRUE:  (Bugfix) Uses the middle point between the first and the last internal sample averaged over.
+ * 
+ * NOTE: This bugfix does not consider the known (2019-02-15) flight s/w bug which means that moving
+ *       average also averages over one additional internal sample.
+ ====================================================================================================================*/
+#define ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES   TRUE
+
 
 
 // Time correlation data structure (for non-SPICE time conversion)

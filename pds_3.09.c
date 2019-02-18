@@ -167,6 +167,8 @@
  *      /Erik P G Johansson 2018-10-04
  * * Bugfix: Completed the list of macros for which manually commanded bias should be ignored: Added all missing macros (macros which do not have LF).
  *      /Erik P G Johansson 2018-12-06
+ * * Bugfix: Moving average (ADC20, LF) timestamps are centered between first and last internal sample averaged over.
+ *      /Erik P G Johansson 2019-02-18
  *
  * 
  *
@@ -1441,12 +1443,13 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "       NOTE: Options must not contain quotes, including PDS keywords which are quoted in LBL/CAT files.\n");
     fprintf(stream, "\n");
     fprintf(stream, "Hardcoded internal constants\n");
-    fprintf(stream, "   CALIB_COEFF_ENABLED                                = %i\n", CALIB_COEFF_ENABLED);
-    fprintf(stream, "   EXCLUDE_FINE_SWEEPS_FROM_CALIB                     = %i\n", EXCLUDE_FINE_SWEEPS_FROM_CALIB);
-    fprintf(stream, "   USE_SATURATION_LIMITS                              = %i\n", USE_SATURATION_LIMITS);
-    fprintf(stream, "   SATURATION_TAB_CONSTANT                            = %i\n", SATURATION_TAB_CONSTANT);
-    fprintf(stream, "   USE_SPICE                                          = %i\n", USE_SPICE);
-    fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
+    fprintf(stream, "   CALIB_COEFF_ENABLED                                 = %i\n", CALIB_COEFF_ENABLED);
+    fprintf(stream, "   EXCLUDE_FINE_SWEEPS_FROM_CALIB                      = %i\n", EXCLUDE_FINE_SWEEPS_FROM_CALIB);
+    fprintf(stream, "   USE_SATURATION_LIMITS                               = %i\n", USE_SATURATION_LIMITS);
+    fprintf(stream, "   SATURATION_TAB_CONSTANT                             = %i\n", SATURATION_TAB_CONSTANT);
+    fprintf(stream, "   USE_SPICE                                           = %i\n", USE_SPICE);
+    fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS  = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
+    fprintf(stream, "   ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES       = %i\n", ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES);
     fprintf(stream, "\n");
     //fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -3810,6 +3813,17 @@ void *DecodeScience(void *arg)
                                                             CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
                                                             curr.offset_time = aqps_seq*32.0;
                                                             curr.seq_time_TM = sccd + curr.offset_time;   // Calculate time of current sequence.
+
+                                                            /*======================================================
+                                                             * Adjust the timestamps when moving average is enabled
+                                                             ======================================================*/
+                                                            if ((ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES)
+                                                                && ((param_type==ADC20_PARAMS) && (a20_info.N_MA_length_insmp != 1))) {
+                                                                // Put timestamp in the middle between the first and the last internal sample averaged over.
+                                                                // NOTE: Does not consider the additional internal sample that is also averaged over due to a bug in flight s/w.
+                                                                curr.seq_time_TM = curr.seq_time_TM + 0.5*(a20_info.N_MA_length_insmp-1)/(SAMP_FREQ_ADC20);
+                                                            }
+                                                            
                                                             
                                                             /*==================================================
                                                              * Adjust the timing of calibrated-level ADC20 data.
