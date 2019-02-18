@@ -60,6 +60,11 @@
 #define SAMP_FREQ_ADC16   18750.0
 #define SAMP_FREQ_ADC20      57.8
 
+// Length of AQP (Acquisition Period) in seconds.
+// NOTE: Constant introduced late and might thus not be used everywhere where it should, although it seems to actaully be the case,
+// except for some log messages(?), comments, and in the calculation (assignment) of HK_NUM_LINES.
+#define AQP_LENGTH_S         32.0
+
 #define DENSITY 1
 #define E_FIELD 2
 
@@ -254,7 +259,7 @@
 
 
 /*===========================================================================================================================
- * ADC20 data is timestamped by the RPCLAP electronics some time after the actual measurement. Therefore, the below number
+ * ADC20 data is timestamped by the RPCLAP electronics some time AFTER the actual measurement. Therefore, the below number
  * is SUBTRACTED from the TM timestamp for CALIB datasets.
  * NOTE: The subtraction takes place in SCCD/spacecraft clock for performance reasons, not e.g. "et" (ephemeris time;
  * proper second counter), and is therefore slightly approximate (effectively: the actually subtracted value varies
@@ -570,7 +575,7 @@ typedef struct sweep_type_def
 
 typedef struct adc20_type_def
 {
-  unsigned int N_MA_length_insmp;
+  unsigned int N_MA_length_insmp;   // Number of internal samples averaged over. NOTE: This does not include the one unknown internal sample which is also averaged over (flight s/w bug).
   unsigned int adc20_control;
   unsigned int adc20_data_length;
   unsigned int insmp_per_tmsmp;

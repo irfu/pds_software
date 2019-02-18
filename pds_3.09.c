@@ -2992,16 +2992,16 @@ void *DecodeScience(void *arg)
                                             // ADD ADC20 parameter decoding |MALEN|DA20CTRL|.....|MARESFAC|
                                             // I use  getbitf everywhere for consistency! (could have done
                                             // things like: (buff[0] & 0xf0)>>4
-                                            
+
                                             a20_info.N_MA_length_insmp = (1<<GetBitF(buff[0],4,4)); // Length of moving average filter
-                                            a20_info.adc20_control     = GetBitF(buff[0],4,0);      // Indicate full, truncated, and so on
-                                            a20_info.insmp_per_tmsmp   = (1<<GetBitF(buff[1],4,0)); // Downsampling factor (Thus keep every n:th samp)
-                                            
+                                            a20_info.adc20_control     =     GetBitF(buff[0],4,0);  // Indicate full, truncated, and so on
+                                            a20_info.insmp_per_tmsmp   = (1<<GetBitF(buff[1],4,0)); // Downsampling factor (Thus keep every n:th sample)
+
                                             // POPULATE PDS LAP Dictionary with 20 bit ADC info.
                                             InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_DOWNSAMPLE",a20_info.insmp_per_tmsmp);
                                             InsertTopQV(&dict,"ROSETTA:LAP_P1P2_ADC20_MA_LENGTH", a20_info.N_MA_length_insmp);
                                             InsertTopQ( &dict,"ROSETTA:LAP_P1P2_ADC20_STATUS",    a20status[a20_info.adc20_control & 0xf]);
-                                            
+
                                             if((a20_info.adc20_control & 0x3)==0x02) { curr.sensor=SENS_P1; }// Modify current sensor from both P1 and P2 to P1 only
                                             if((a20_info.adc20_control & 0x3)==0x01) { curr.sensor=SENS_P2; }// Modify current sensor from both P1 and P2 to P2 only
                                             // Above: I don't treat the combination where only the lowest bits are used for the 20 bit ADC:s
@@ -3108,7 +3108,12 @@ void *DecodeScience(void *arg)
                                                 }
                                                 break;
                                                 
+                                            //################
+                                            //################
                                             case S12_GET_DATA:
+                                            //################
+                                            //################
+                                                
                                                 DispState(state,"STATE = S12_GET_DATA\n");
                                                 // Get length bytes from circular science buffer 
                                                 GetBuffer(cb,buff,N_bytes); 
@@ -3123,11 +3128,11 @@ void *DecodeScience(void *arg)
                                                 }
                                                 break;
 
-                                            //#######################
-                                            //#######################
+                                            //#################
+                                            //#################
                                             case S13_RECONNECT:
-                                            //#######################
-                                            //#######################
+                                            //#################
+                                            //#################
                                                 DispState(state,"STATE = S13_RECONNECT\n");
                                                 break;
 
@@ -3801,7 +3806,7 @@ void *DecodeScience(void *arg)
                                                         
                                                         /**
                                                          * NOTE: DECEIVING IF STATEMENT.
-                                                         * The "if" condition is an assignment and only returns false in case of error.
+                                                         * The "if" condition is an assignmnet and only returns false in case of error.
                                                          * Therefore the if statement will basically always be executed.
                                                          * NOTE: This is the only location where "aqps_seq" is assigned.
                                                          * NOTE: This entire section could basically be moved to S15_WRITE_PDS_FILES, since it fits with creating files there.
@@ -3815,7 +3820,7 @@ void *DecodeScience(void *arg)
                                                         if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
                                                         {
                                                             CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
-                                                            curr.offset_time = aqps_seq*32.0;
+                                                            curr.offset_time = aqps_seq*AQP_LENGTH_S;
                                                             curr.seq_time_TM = sccd + curr.offset_time;   // Calculate time of current sequence.
 
                                                             /*======================================================
@@ -3829,35 +3834,40 @@ void *DecodeScience(void *arg)
                                                             }
                                                             
                                                             
-                                                            /*==================================================
-                                                             * Adjust the timing of calibrated-level ADC20 data.
-                                                             *==================================================
+                                                            
+                                                            /*======================================================
+                                                             * Adjust the timestamps of calibrated-level ADC20 data
+                                                             *======================================================
                                                              * NOTE: This change should affect
                                                              * (1) TAB files (timestamp columns),
                                                              * (2) LBL files: SPACECRAFT_CLOCK_START/STOP_COUNT,
                                                              * (3) LBL files: START/STOP_TIME
                                                              *
-                                                             * NOTE: On the one hand, the time is also used for other purposes and care has to be taken to make sure that these
-                                                             * use the desired time. On the other hand, the actual effect on these is very, very small, given the size of the
-                                                             * time delay, but still, in principle, the delay MIGHT affect all of these.
+                                                             * NOTE: Timestamps are also used for other purposes than writing LBL and TAB files directly
+                                                             * and care has to be taken to make sure that other features use the correct timestamps. The
+                                                             * actual effect on these feautures is very, very small, given the size of the time delay,
+                                                             * but still, in principle, the delay MIGHT affect all of the following which may or may not
+                                                             * be desired:
                                                              * (1) When commanded bias (pds.bias) is interpreted as having been set.
                                                              * (2) How anomaly timestamps (pds.anomalies) are interpreted.
                                                              *     NOTE: This requires exact matching of timestamps. Approximate does not give approximate result (?).
-                                                             * (3) Which bias-dependent current offset to use (CALIB_MEAS).
-                                                             * (4) In which day directory a data file ends up.
-                                                             * Therefore, both the original TM value and the adjusted ("corrected") value are kept.
+                                                             * (3) What time intervals should be excluded (pds.dataexcludetimes).
+                                                             * (4) Which bias-dependent current offset to use (CALIB_MEAS/CALIB_COEFF).
+                                                             * (5) In which day directory a data file ends up.
+                                                             * Therefore, both the original TM value and the adjusted ("corrected") value are kept so that various
+                                                             * features of pds can choose which timestamp to use.
                                                              */
                                                             if (calib && (param_type==ADC20_PARAMS)) {
                                                                 curr.seq_time_corrected = curr.seq_time_TM - ADC20_DELAY_S;
                                                             } else {
                                                                 curr.seq_time_corrected = curr.seq_time_TM;
                                                             }
-                                                            
+
                                                             ConvertSccd2Sccs(curr.seq_time_corrected, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.                                                            
                                                             SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
                                                             ConvertSccd2Utc(curr.seq_time_corrected, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
-                                                            CPrintf("    Current sequence start time (possibly corrected for delay) is: %s\n", tstr1);
+                                                            CPrintf("    Current sequence start time (ADC20: corrected for group delay) is: %s\n", tstr1);
                                                             SetP(&comm, "START_TIME", tstr1, 1);
                                                             
                                                             
