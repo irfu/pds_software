@@ -362,7 +362,7 @@ int  LoadConfig2(pds_type *p, char *data_set_id);       // Loads configuration i
 
 int  LoadAnomalies(prp_type *p,char *path);             // Load anomaly file
 int  LoadModeDesc(prp_type *p,char *path);              // Load human description of macro modes into a linked list of properties.
-int  LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt,char *path);		// Load bias settings file
+int  LoadBias(unsigned int ***commanded_bias_table, unsigned int ***commanded_mode_table, int *bias_cnt_s, int *mode_cnt, char *path);      // Load bias settings file
 int  LoadExclude(unsigned int **exclude,char *path);                                   // Load exclude file
 int  LoadDataExcludeTimes(data_exclude_times_type **dataExcludeTimes, char *depath);   // Load data exclude times file.
 int DecideWhetherToExcludeData(
@@ -407,7 +407,7 @@ int  DestroyCalibMeas(char*, char *pathocel, char *pathocet, m_type*);
 int WritePTAB_File(
     unsigned char *buff, char *fname, int data_type, int N_tmsmp, int id_code, int N_bytes, sweep_type *sw_info, adc20_type *a20_info,
     curr_type *curr, int param_type, int ADC16_P1_insmp_per_tmsmp, int ADC16_P2_insmp_per_tmsmp, int dop,
-    m_type *m_conv, unsigned int **bias, int nbias, unsigned int **mode, int nmode, int N_non_tsweep_tmsmp, int N_plateau_tmsmp);
+    m_type *m_conv, unsigned int **commanded_bias_table, int nbias, unsigned int **commanded_mode_table, int nmode, int N_non_tsweep_tmsmp, int N_plateau_tmsmp);
 
 void set_saturation_limits(
     double* x_phys_min,
@@ -2204,8 +2204,8 @@ void *DecodeScience(void *arg)
     // Status string for 20 Bit ADC:s
     char a20status[16][10]={"EMPTY","P2T","P1T","P1T & P2T","","P2F","","P1T P2F","","","P1F","P1F P2T","","","","P1F & P2F"};
     
-    unsigned int **bias=NULL;       // Extra bias settings
-    unsigned int **mode=NULL;       // Mode changes from command files
+    unsigned int **commanded_bias_table=NULL;   // Table of manually commanded bias (not in macros) over time.
+    unsigned int **commanded_mode_table=NULL;   // Table of mode/macro changes over time.
     
     unsigned int *exclude=NULL;     // List of macros that should be present in EDITED but not CALIB.
     int nbias=0;                    // Number of extra bias settings
@@ -2313,7 +2313,7 @@ void *DecodeScience(void *arg)
         {
             WritePTAB_File(
                 buff, tab_fname, data_type, N_tmsmp, id_code, N_bytes, &sw_info, &a20_info, &curr, param_type, ADC16_P1_insmp_per_tmsmp, ADC16_P2_insmp_per_tmsmp, dop,
-                &m_conv, bias, nbias, mode, nmode, N_non_tsweep_tmsmp, N_plateau_tmsmp);
+                &m_conv, commanded_bias_table, nbias, commanded_mode_table, nmode, N_non_tsweep_tmsmp, N_plateau_tmsmp);
             
             strncpy(tstr10,lbl_fname,29);
             tstr10[25]='\0';   // Remove the file type ".LBL".
@@ -2353,21 +2353,26 @@ void *DecodeScience(void *arg)
     }
     
     // Load bias settings from bias file
-    if((LoadBias(&bias,&mode,&nbias,&nmode,pds.bpath))<0) 
+    if((LoadBias(&commanded_bias_table, &commanded_mode_table, &nbias, &nmode, pds.bpath))<0) 
     {
         YPrintf("Warning: Extra bias settings can not be done\n");
         printf( "Warning: Extra bias settings can not be done\n");
     }
     
-    if(nbias>0 && bias!=NULL && debug>1) {
+    if(nbias>0 && commanded_bias_table!=NULL && debug>1) {
         for(i=0;i<nbias;i++) {
-            printf("Time %d DBIAS %x EBIAS %x\n",bias[i][0],bias[i][1],bias[i][2]);
+            printf("Time %d DBIAS %x EBIAS %x\n",
+                   commanded_bias_table[i][0],
+                   commanded_bias_table[i][1],
+                   commanded_bias_table[i][2]);
         }
     }
     
-    if(nmode>0 && mode!=NULL && debug>1) {
+    if(nmode>0 && commanded_mode_table!=NULL && debug>1) {
         for(i=0;i<nmode;i++) {
-            printf("Time %d Mode 0x%02x\n",mode[i][0],mode[i][1]);
+            printf("Time %d Mode 0x%02x\n",
+                   commanded_mode_table[i][0],
+                   commanded_mode_table[i][1]);
         }
     }
     
@@ -5320,7 +5325,7 @@ int  LoadModeDesc(prp_type *p,char *path)
 // Output : bias_cnt_s
 // Output : mode_cnt_s
 // 
-int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *mode_cnt_s,char *path)
+int LoadBias(unsigned int ***commanded_bias_table, unsigned int ***commanded_mode_table, int *bias_cnt_s, int *mode_cnt_s, char *path)
 {
 // Excerpt from pds.bias:
 // ----------------------
@@ -5416,8 +5421,8 @@ int LoadBias(unsigned int ***bias_s,unsigned int ***mode_s,int *bias_cnt_s,int *
     fclose(fd);
     
     
-    *bias_s=bias;
-    *mode_s=mode;
+    *commanded_bias_table = bias;
+    *commanded_mode_table = mode;
     
     *bias_cnt_s=bias_cnt;
     *mode_cnt_s=mode_cnt;
@@ -7417,9 +7422,9 @@ int WritePTAB_File(
     int ADC16_P2_insmp_per_tmsmp,
     int dop,
     m_type *mc,
-    unsigned int **bias,
+    unsigned int **commanded_bias_table,
     int nbias,
-    unsigned int **mode,
+    unsigned int **commanded_mode_table,
     int nmode,
     int N_non_tsweep_tmsmp,
     int N_plateau_tmsmp)
@@ -7914,7 +7919,7 @@ int WritePTAB_File(
         //==============================================================================
         // Check for commanded bias (outside of macro lopp). If found, then set biases.
         //==============================================================================
-        if(nbias>0 && bias!=NULL)
+        if(nbias>0 && commanded_bias_table!=NULL)
         {
             // Figure out if any extra bias settings have been done outside of macros.
             utime = (unsigned int)t_first_sample_TM + t_delta_s;   // Current time in raw UTC format
@@ -7922,7 +7927,7 @@ int WritePTAB_File(
             extra_bias_setting=0;
             for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
             {
-                if(bias[l][0]<=utime && bias[l][0]>utime_old)   // Find any bias setting before current time.
+                if(commanded_bias_table[l][0]<=utime && commanded_bias_table[l][0]>utime_old)   // Find any bias setting before current time.
                 {
                     extra_bias_setting=1;
                     
@@ -7930,7 +7935,7 @@ int WritePTAB_File(
                     for(m=0;m<nmode;m++)
                     {
                         utime_old=utime;
-                        if(mode[m][0]>bias[l][0] && mode[m][0]<=utime)
+                        if(commanded_mode_table[m][0]>commanded_bias_table[l][0] && commanded_mode_table[m][0]<=utime)
                         {
                             // CASE: A mode change happened (1) after the found bias setting, and (2) before current data (utime).
                             extra_bias_setting=0;
@@ -7987,10 +7992,10 @@ int WritePTAB_File(
             
             if(extra_bias_setting)
             {
-                vbias1 = ((bias[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1.
-                vbias2 =  (bias[l][1] & 0xff);        // Override macro present voltage bias p2.
-                ibias2 = ((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
-                ibias1 =  (bias[l][2] & 0xff);        // Override macro present current bias p2.
+                vbias1 = ((commanded_bias_table[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1.
+                vbias2 =  (commanded_bias_table[l][1] & 0xff);        // Override macro present voltage bias p2.
+                ibias2 = ((commanded_bias_table[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
+                ibias1 =  (commanded_bias_table[l][2] & 0xff);        // Override macro present current bias p2.
                 /* The above lines were corrected by aie@irfu.se 2012-08-22 as the current bias is permuted 
                  * in the bias command. Original code:
                  *      curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
