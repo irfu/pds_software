@@ -7436,7 +7436,7 @@ int WritePTAB_File(
 
     int sw_bias_step_size_TM = 3;               // Current sweep step, default value just there to get rid of compilation warning.
 
-    double t_delta_s;                // Time since first sample. Unit: seconds
+    double sample_delta_s;                  // Time since first sample. Unit: seconds
     double current_sample_sccd_corrected;   // Time of current sample (current row) as SCCD.
 
     int i_sample;                    // Sample number.
@@ -7469,10 +7469,10 @@ int WritePTAB_File(
     double vcalf_ADC16 = 0.0/0.0;    // Voltage calibration factor for ADC16.
     double ccalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
 
-    double utime;                   // Current time in UTC for test of extra bias settings. Interpreted as time_t.
-    time_t utime_old;               // Previous value of utime in algorithm for detecting commanded bias.
-    // Time of current data. Used for selecting calibration and commanded bias, not the samples. TM=Time according to TM (no group delay) NOTE: No subseconds since time_t.
-    time_t t_first_sample_TM;       
+    double current_sample_timet_TM;        // Current time in UTC for test of extra bias settings. Interpreted as time_t.
+    time_t old_current_sample_timet_TM;    // Previous value of utime in algorithm for detecting commanded bias. NOTE: No subseconds since time_t.
+    // Time of current data. Used for selecting calibration and commanded bias, not the samples. TM=Time according to TM (no group delay). NOTE: No subseconds since time_t.
+    time_t first_sample_timet_TM;
 
     int i_calib=0;                  // Valid index into structure with calibration data.
 
@@ -7529,8 +7529,8 @@ int WritePTAB_File(
 
 
 
-    ConvertSccd2Utc(curr->seq_time_TM, first_sample_utc_TM, NULL);   // First convert spacecraft time to UTC to get time calibration right.
-    ConvertUtc2Timet(first_sample_utc_TM, &t_first_sample_TM);    // Convert back to seconds.
+    ConvertSccd2Utc(curr->seq_time_TM, first_sample_utc_TM, NULL);    // First convert spacecraft time to UTC to get time calibration right.
+    ConvertUtc2Timet(first_sample_utc_TM, &first_sample_timet_TM);    // Convert back to seconds.
 
     /*===================================================================================================================
      * (1) Determine whether ADC20 moving average is enabled (needed later), and
@@ -7612,7 +7612,7 @@ int WritePTAB_File(
         }
         else
         {
-            i_calib = SelectCalibrationData(t_first_sample_TM, first_sample_utc_TM, mc);
+            i_calib = SelectCalibrationData(first_sample_timet_TM, first_sample_utc_TM, mc);
             if (debug >= 1) {
                 CPrintf("    Using calibration file %i: %s\n", i_calib, mc->calib_meas_data[i_calib].LBL_filename);
             }
@@ -7833,7 +7833,7 @@ int WritePTAB_File(
         vbias2 = curr->vbias2;
     }
 
-    utime_old=0;
+    old_current_sample_timet_TM = 0;
 
 
 
@@ -7912,9 +7912,9 @@ int WritePTAB_File(
         //==========================================================
         // Derive different measures of time for the current sample.
         //==========================================================
-        t_delta_s = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
-        current_sample_sccd_corrected = curr->seq_time_corrected + t_delta_s;              // Calculate SCCD.
-        ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);   // Decode raw time to UTC.
+        sample_delta_s = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
+        current_sample_sccd_corrected = curr->seq_time_corrected + sample_delta_s;             // Calculate SCCD.
+        ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);    // Decode raw time to UTC.
         
         //==============================================================================
         // Check for commanded bias (outside of macro lopp). If found, then set biases.
@@ -7922,20 +7922,22 @@ int WritePTAB_File(
         if(nbias>0 && commanded_bias_table!=NULL)
         {
             // Figure out if any extra bias settings have been done outside of macros.
-            utime = (unsigned int)t_first_sample_TM + t_delta_s;   // Current time in raw UTC format
+            current_sample_timet_TM = (unsigned int)first_sample_timet_TM + sample_delta_s;   // Current time in raw UTC format
             
             extra_bias_setting=0;
             for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
             {
-                if(commanded_bias_table[l][0]<=utime && commanded_bias_table[l][0]>utime_old)   // Find any bias setting before current time.
+                if(    commanded_bias_table[l][0] <=     current_sample_timet_TM
+                    && commanded_bias_table[l][0] >  old_current_sample_timet_TM)   // Find any bias setting before current time.
                 {
                     extra_bias_setting=1;
                     
                     // Check if any mode change happened after the found bias setting, but before the current time.
                     for(m=0;m<nmode;m++)
                     {
-                        utime_old=utime;
-                        if(commanded_mode_table[m][0]>commanded_bias_table[l][0] && commanded_mode_table[m][0]<=utime)
+                        old_current_sample_timet_TM = current_sample_timet_TM;
+                        if(    commanded_mode_table[m][0] >  commanded_bias_table[l][0]
+                            && commanded_mode_table[m][0] <= current_sample_timet_TM)
                         {
                             // CASE: A mode change happened (1) after the found bias setting, and (2) before current data (utime).
                             extra_bias_setting=0;
