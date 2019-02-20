@@ -901,6 +901,15 @@ int main(int argc, char *argv[])
     }
 
 
+    //==================
+    // Get debug option
+    //==================
+    if(GetOption("-mc", argc, argv, pds.mcpath))
+    {
+        printf("Mission calendar file      : %s (command-line override)\n", pds.mcpath);
+    }
+
+
     if(calib) {
         pds.DPLNumber=3;			// Calibrated data has DPL number 3
     } else {
@@ -1404,12 +1413,14 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "Usage: %s\n", executable_name);
     fprintf(stream, "           [-debug <Level>]                  Set debugging level.\n");
     fprintf(stream, "           [-h]                              Display help.\n");
-    fprintf(stream, "           [-c <pds.conf path>]\n");
-    fprintf(stream, "           [-a <pds.anomalies path>]\n");
-    fprintf(stream, "           [-b <pds.bias path>]\n");
-    fprintf(stream, "           [-e <pds.exclude path>]\n");
-    fprintf(stream, "           [-m <pds.modes path>]\n");
-    fprintf(stream, "           [-d <pds.dataexcludetimes path>]\n");
+    fprintf(stream, "           [-c  <pds.conf path>]\n");
+    fprintf(stream, "           [-a  <pds.anomalies path>]\n");
+    fprintf(stream, "           [-b  <pds.bias path>]\n");
+    fprintf(stream, "           [-e  <pds.exclude path>]\n");
+    fprintf(stream, "           [-m  <pds.modes path>]\n");
+    fprintf(stream, "           [-d  <pds.dataexcludetimes path>]\n");
+    fprintf(stream, "           [-mc <mission calendar path>]     This option overrides the corresponding value in pds.conf.\n");
+    fprintf(stream, "\n");    
     fprintf(stream, "           [-calib]                          Produce CALIB dataset (EDITED is default).\n");
     fprintf(stream, "\n");
     fprintf(stream, "            -mp  <Mission phase abbrev.>     Mission phase abbreviation in DATA_SET_ID, e.g. ESC1, PRL.\n");
