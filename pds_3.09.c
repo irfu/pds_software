@@ -1461,7 +1461,7 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "   CALIB_COEFF_ENABLED                                 = %i\n", CALIB_COEFF_ENABLED);
     fprintf(stream, "   EXCLUDE_FINE_SWEEPS_FROM_CALIB                      = %i\n", EXCLUDE_FINE_SWEEPS_FROM_CALIB);
     fprintf(stream, "   USE_SATURATION_LIMITS                               = %i\n", USE_SATURATION_LIMITS);
-    fprintf(stream, "   SATURATION_TAB_CONSTANT                             = %i\n", SATURATION_TAB_CONSTANT);
+    fprintf(stream, "   MISSING_CONSTANT                                    = %i\n", MISSING_CONSTANT);
     fprintf(stream, "   USE_SPICE                                           = %i\n", USE_SPICE);
     fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS  = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
     fprintf(stream, "   ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES       = %i\n", ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES);
@@ -8393,7 +8393,7 @@ double handle_saturation(
             || (x_TM   == x_TM_saturation_1)
             || (x_TM   == x_TM_saturation_2))
         {
-            return SATURATION_TAB_CONSTANT;
+            return MISSING_CONSTANT;
         } else {
             return x_phys;
         }
@@ -8413,7 +8413,7 @@ double handle_saturation(
  * Uncertain what "dop" refers to and what the difference compared to "curr-->sensor" is. See "WritePTAB_File" (assuming it has the same meaning).
  * NOTE: This function only has very little dependence on "dop". Compare "WritePTAB_File".
  * 
- * NOTE: This function does not have a MISSING_CONSTANT value for SATURATION_TAB_CONSTANT and therefore does not technically produce proper
+ * NOTE: This function does not have a MISSING_CONSTANT label value and therefore does not technically produce proper
  * PDS-compliant LBL files.
  ================================================================================================================================================*/
 int WritePLBL_File(

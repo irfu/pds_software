@@ -409,7 +409,7 @@
 // #define SATURATION_DENSITY_HG_MIN              -1e-8    // Test value
 // #define SATURATION_DENSITY_HG_MAX               1e-8    // Test value
 
-#define SATURATION_TAB_CONSTANT                 -1000    // Special value used to represent saturation in sample in TAB files.
+#define MISSING_CONSTANT                        -1000    // Special value used to represent e.g. saturation in sample in TAB files.
 
 
 
