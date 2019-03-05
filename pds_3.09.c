@@ -7457,7 +7457,6 @@ int WritePTAB_File(
     int meas_value_TM;               // Measured value (i.e. not bias value) in TM units. NOTE: Integer.
     int sw_bias_voltage_TM = 0;      // Bias voltage during a sweep (sw) in TM units.
 
-    int macro_id; 
     int current_TM;                  // Current variable in TM units (TC or TM).
     int voltage_TM;                  // Voltage variable in TM units (TC or TM).
 
@@ -7959,29 +7958,30 @@ int WritePTAB_File(
                 }
             }
             
-            /*=================================================================================================================
-            * FKJN 2014-09-25: Extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
-            * We need to find the macro, compare to a list of macros and decide if we should let it pass or not.
-            * If a bias command is issued on forbidden macros, the bias will change for maximum one Macro Loop (see Meds),
-            * but pds will not know when it changes back.
-            * 
-            * FKJN 2014-10-31 added macro 515 & 807
-            *===============================================================================================================*/
-            if(extra_bias_setting)
-            {
-                FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	  // tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
-                
-                /* BUG FIX: Old code interpreted macro ID number in string as a decimal number when it should have
-                * been interpreted as a hexadecimal number. Old code should not have been a problem as long as
-                * (1) one does not need to check for macro numbers containing letters, and
-                * (2) if the code failed in a good way for non-decimal numbers which it seemed to do.
-                * /Erik P G Johansson 2015-12-07
-                */            
-                char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
-                sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
-                free(tempstr);
+            if (IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS) {
+                /*=================================================================================================================
+                * FKJN 2014-09-25: Extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
+                * We need to find the macro, compare to a list of macros and decide if we should let it pass or not.
+                * If a bias command is issued on forbidden macros, the bias will change for maximum one Macro Loop (see Meds),
+                * but pds will not know when it changes back.
+                * 
+                * FKJN 2014-10-31 added macro 515 & 807
+                *===============================================================================================================*/
+                if(extra_bias_setting)
+                {
+                    FindP(&comm,&property1,"INSTRUMENT_MODE_ID",1,DNTCARE);	  // tstr4 is now macro ID on form "MCID0X%04x" we need the 4 numerals.
+                    
+                    /* BUG FIX: Old code interpreted macro ID number in string as a decimal number when it should have
+                    * been interpreted as a hexadecimal number. Old code should not have been a problem as long as
+                    * (1) one does not need to check for macro numbers containing letters, and
+                    * (2) if the code failed in a good way for non-decimal numbers which it seemed to do.
+                    * /Erik P G Johansson 2015-12-07
+                    */
+                    char* tempstr = strndup(property1->value+6,4);   // Extract 4 (hex) digits. (Remove non-digit characters "MCID0X".)
+                    int macro_id;
+                    sscanf(tempstr, "%x", &macro_id);    // Interpret string as a HEXADECIMAL representation of a number.
+                    free(tempstr);
 
-                if (IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS) {
                     // BUGFIX (incomplete):
                     // "if" statement for entirely ignoring manually commanded bias for certain macros.
                     // This is intended for macros which re-set the bias (LF, HF) during the macro cycle
