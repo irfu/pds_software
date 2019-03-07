@@ -173,6 +173,8 @@
  *      /Erik P G Johansson 2019-01-24, 2019-01-29
  * * Bugfix: Moving average (ADC20, LF) timestamps are centered between first and last internal sample averaged over.
  *      /Erik P G Johansson 2019-02-18
+ * * ~Bugfix: Implemented use of special values for floating potential bias.
+ *      /Erik P G Johansson 2019-03-07
  *
  * 
  *
@@ -408,6 +410,9 @@ int WritePTAB_File(
     unsigned char *buff, char *fname, int data_type, int N_tmsmp, int id_code, int N_bytes, sweep_type *sw_info, adc20_type *a20_info,
     curr_type *curr, int param_type, int ADC16_P1_insmp_per_tmsmp, int ADC16_P2_insmp_per_tmsmp, int dop,
     m_type *m_conv, unsigned int **commanded_bias_table, int nbias, unsigned int **commanded_mode_table, int nmode, int N_non_tsweep_tmsmp, int N_plateau_tmsmp);
+
+int    handle_EDITED_floating_potential_bias(int current_bias_TM, int is_floating);
+double handle_CALIB_floating_potential_bias( double current_bias, int is_floating);
 
 void set_saturation_limits(
     double* x_phys_min,
@@ -1465,6 +1470,7 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "   USE_SPICE                                           = %i\n", USE_SPICE);
     fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS  = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
     fprintf(stream, "   ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES       = %i\n", ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES);
+    fprintf(stream, "   SET_PROPER_FLOATING_POTENTIAL_BIAS                  = %i\n", SET_PROPER_FLOATING_POTENTIAL_BIAS);
     fprintf(stream, "\n");
     //fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -7573,6 +7579,8 @@ int WritePTAB_File(
 
     const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);    // GAIN 1 <==> High gain
     const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
+    const int is_floating_P1  = !strncmp(curr->gain1, "\"FLOAT\"", 7);    // NOTE: Floating/non-floating choice only exists for E field mode.
+    const int is_floating_P2  = !strncmp(curr->gain2, "\"FLOAT\"", 7);
     const int uses_8kHz_filter = (curr->afilter == 8);
 
     // Derive constants needed for determining saturation.
@@ -8241,8 +8249,14 @@ int WritePTAB_File(
                     // CASE: P3
                     //==========
                     // NOTE: No saturation detection, since method does not work for P3.
-                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                            i_conv.C[ibias1][1],   i_conv.C[ibias2][2],   cvoltage); // Write time, calibrated currents 1 & 2, and voltage
+                    double ccurrent1 = handle_CALIB_floating_potential_bias( i_conv.C[ibias1][1], is_floating_P1 );
+                    double ccurrent2 = handle_CALIB_floating_potential_bias( i_conv.C[ibias2][2], is_floating_P2 );
+                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e,%14.7e\r\n",
+                        current_sample_utc_corrected,
+                        current_sample_sccd_corrected,
+                        ccurrent1,
+                        ccurrent2,
+                        cvoltage);   // Write time, calibrated currents 1 & 2, and voltage.
                 }
                 else
                 {
@@ -8252,6 +8266,10 @@ int WritePTAB_File(
                     double ccurrent;
                     if      (writing_P1_data) {   ccurrent = i_conv.C[ibias1][1];   }
                     else if (writing_P2_data) {   ccurrent = i_conv.C[ibias2][2];   }
+                    
+                    ccurrent = handle_CALIB_floating_potential_bias(
+                        ccurrent,
+                        (writing_P1_data && is_floating_P1) || (writing_P2_data && is_floating_P2));
                     cvoltage  = handle_saturation(
                         cvoltage,
                         voltage_TM,
@@ -8278,8 +8296,12 @@ int WritePTAB_File(
                     fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
                             current_TM,   vbias1,   vbias2);    // Write TWO VOLTAGE bias vectors.
                 } else {
-                    fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                            ibias1,   ibias2,   voltage_TM);    // Write TWO CURRENT bias vectors.
+                    fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d,%7d\r\n",
+                            current_sample_utc_corrected,
+                            current_sample_sccd_corrected,
+                            handle_EDITED_floating_potential_bias(ibias1, is_floating_P1),
+                            handle_EDITED_floating_potential_bias(ibias2, is_floating_P2),
+                            voltage_TM);    // Write TWO CURRENT bias vectors.
                 }
             }
             else
@@ -8288,11 +8310,22 @@ int WritePTAB_File(
                 // CASE: P1 or P2
                 //================
                 // Line width (incl. CR+LF): 26+1+16 + 1+7+1+7 + 2
-                fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
-                        current_TM,   voltage_TM); // Write time, current and voltage
+                if(bias_mode!=DENSITY) {
+                    current_TM = handle_EDITED_floating_potential_bias(
+                        current_TM, 
+                        (writing_P1_data && is_floating_P1) || (writing_P2_data && is_floating_P2));
+                }
+                
+                // CASE: E field or density mode.
+                fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d\r\n",
+                    current_sample_utc_corrected,
+                    current_sample_sccd_corrected,
+                    current_TM,   voltage_TM);   // Write time, current and voltage
             }
         }   // if(calib) ... else ...
     }   // for(k_tsweep_tmsmp=0,i_sample=0,j=0;i_sample<N_tmsmp;i_sample++)    // Iterate over all samples
+    
+    
     
     fclose(pds.stable_fd);
     pthread_testcancel();
@@ -8307,6 +8340,28 @@ int WritePTAB_File(
     
     return 0;
 }   // WritePTAB_File
+
+
+
+inline int handle_EDITED_floating_potential_bias(int current_bias_TM, int is_floating)
+{
+    if (SET_PROPER_FLOATING_POTENTIAL_BIAS && is_floating) {
+        return MISSING_CONSTANT;
+    } else {
+        return current_bias_TM;
+    }
+}
+
+
+
+inline double handle_CALIB_floating_potential_bias(double current_bias, int is_floating)
+{
+    if (SET_PROPER_FLOATING_POTENTIAL_BIAS && is_floating) {
+        return 0.0;
+    } else {
+        return current_bias;
+    }
+}
 
 
 

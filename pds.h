@@ -449,6 +449,19 @@
  ====================================================================================================================*/
 #define ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES   TRUE
 
+/*========================================================================================================
+ * Whether to use special values for floating potential current bias (E field mode).
+ * 
+ * Since the current bias is set to be zero via relay, there is no real commanded value, and we know that
+ * the physical value is exactly 0.0, not the calibrated one.
+ * 
+ * When set to true, then floating potential bias is set to
+ *      EDITED: MISSING_CONSTANT (instead of TM value, which can not represent exactly zero bias)
+ *      CALIB:  0.0 (exact value, instead of calculated calibrated value)
+ ========================================================================================================*/
+#define SET_PROPER_FLOATING_POTENTIAL_BIAS   TRUE
+//#define SET_PROPER_FLOATING_POTENTIAL_BIAS   FALSE
+
 
 
 // Time correlation data structure (for non-SPICE time conversion)
