@@ -913,7 +913,7 @@ int main(int argc, char *argv[])
     ProtectPlnkInit();
     
     // Loads first part of configuration information into the PDS structure
-    if((status=LoadConfig1(&pds))<0) 
+    if((status=LoadConfig1(&pds))<0)
     {
         fprintf(stderr,"Mangled configuration file (part 1): %d\n",status);
         exit(1);
@@ -1451,10 +1451,10 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "                                             threshold before exiting.\n");
     fprintf(stream, "                                             Default value: %i s.\n", SC_THREAD_CANCEL_THRESHOLD_TIMEOUT_DEFAULT);
     fprintf(stream, "\n");
-    fprintf(stream, "           [-dpd <Dataset parent dir>]       Directory under which to put the new dataset\n");
+    fprintf(stream, "           [-dpd <Dataset parent dir>]       Directory under which to put the new dataset.\n");
     fprintf(stream, "                                             NOTE: This setting overrides the corresponding setting in pds.conf.\n");
     fprintf(stream, "\n");
-    fprintf(stream, "   Override (1) values read from the mission calendar, and (2) default description string\n");
+    fprintf(stream, "   Override (1) values read from the mission calendar, and (2) default description string.\n");
     fprintf(stream, "        [   -ds <Description string>         The free-form component of DATA_SET_ID and DATA_SET_NAME. E.g. EDITED, CALIB, MTP014.\n");
 
     // Values normally obtained from the mission calendar.
@@ -1465,7 +1465,7 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "                                             (Characters between field values are not important, only their absolute positions in the string.)\n");
     fprintf(stream, "         (  -pe <Period end time>            Specific day or day+time, e.g. \"2015-12-13\", or \"2015-12-17 12:34:56\".\n");
     fprintf(stream, "                                             (Characters between field values are not important, only their absolute positions in the string.)\n");
-    fprintf(stream, "          | -pd <Period duration>  )          Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
+    fprintf(stream, "          | -pd <Period duration>  )         Positive decimal number. Unit: days. E.g. \"28\", \"0.0416666\"\n");    
     fprintf(stream, "                                             Footnote: Should be given as if there are no leap seconds, i.e. 1 day = 86400 s always.\n");
     fprintf(stream, "          [ -dsitn <Target in DSI>           Target in PDS keyword DATA_SET_ID (DSI).\n");
     fprintf(stream, "            -dsntn <Target in DSN>           Target in PDS keyword DATA_SET_NAME (DSN).\n");
@@ -5127,8 +5127,8 @@ int LoadConfig2(pds_type *p, char *data_set_id)
     sprintf(p->apathpds,"%s%s/", p->apathpds_parent, data_set_id);    // Assigns final value to p->apathpds.
     
     
-    printf(    "\nCreate archive path:         %s\n",p->apathpds);
-    YPrintf(   "\nCreate archive path:         %s\n",p->apathpds);
+    printf( "\nCreate archive path         : %s\n",p->apathpds);
+    YPrintf("\nCreate archive path         : %s\n",p->apathpds);
     
     if(mkdir(p->apathpds,0775)<0)
     {
@@ -5138,8 +5138,8 @@ int LoadConfig2(pds_type *p, char *data_set_id)
     }
     if(SetupPath("PDS data set path           ", p->apathpds)<0) return -2;     // NOTE: Checks if created directory exists.
     
-    printf( "Copying template archive to:  %s\n",p->apathpds);
-    YPrintf("Copying template archive to:  %s\n",p->apathpds);
+    printf( "Copying template archive to : %s\n",p->apathpds);
+    YPrintf("Copying template archive to : %s\n",p->apathpds);
     
     sprintf(tstr,"cp -r %s* %s", p->templp, p->apathpds); // Setup shell command line.
     printf( "%s\n",tstr);
@@ -5414,7 +5414,7 @@ int LoadBias(unsigned int ***commanded_bias_table, unsigned int ***commanded_mod
     bias=CallocIntMatrix(bias_cnt,3);   // Allocate a matrix of integers.
     mode=CallocIntMatrix(mode_cnt,2);
 
-    
+
     
     //========================================
     // Fill "bias" and "mode" and with values
@@ -6467,7 +6467,7 @@ void FreeDirEntryList(struct dirent **dir_entry_list, int N_dir_entries)
 
 
 
-/* Given a path (p->mcpath) and mission phase abbreviation (m->mission_phase_abbrev),
+/* Given a specified path to the mission calendar file, and a mission phase abbreviation (m->mission_phase_abbrev),
  * initialize an instance of mp_type with data from the mission calendar file.
  * Function previously called "GetMissionP".
  * 
@@ -6491,7 +6491,6 @@ int InitMissionPhaseStructFromMissionCalendar(mp_type *m, char *mission_calendar
     int stat;         // Just a status variable
     int dataset_duration_days;
 
-//     if((fd=fopen(p->mcpath,"r"))==NULL)
     if((fd=fopen(mission_calendar_path,"r"))==NULL) 
     {
         printf("ERROR: Could not open mission calendar file\n");
@@ -7521,7 +7520,7 @@ int WritePTAB_File(
         (data_type==D20 ) |
         (data_type==D201) |
         (data_type==D202);
-    
+
     /*======================================================================================================
      * There is a bug in the flight software implementation of moving average for ADC20 data.
      * 
@@ -7591,7 +7590,7 @@ int WritePTAB_File(
     const int writing_P2_data = (curr->sensor==SENS_P2   || dop==2);
     const int writing_P3_data = (curr->sensor==SENS_P1P2 && dop==0);
 
-    const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);    // GAIN 1 <==> High gain
+    const int is_high_gain_P1 = !strncmp(curr->gain1, "\"GAIN 1\"", 8);    // GAIN 1 <==> High gain. NOTE: High/low gain choice only exists in density mode.
     const int is_high_gain_P2 = !strncmp(curr->gain2, "\"GAIN 1\"", 8);
     const int is_floating_P1  = !strncmp(curr->gain1, "\"FLOAT\"", 7);    // NOTE: Floating/non-floating choice only exists for E field mode.
     const int is_floating_P2  = !strncmp(curr->gain2, "\"FLOAT\"", 7);
@@ -7610,7 +7609,7 @@ int WritePTAB_File(
         is_ADC20_nontrunc, 
         (is_high_gain_P1 && writing_P1_data) || (is_high_gain_P2 && writing_P2_data) || (is_high_gain_P1 && writing_P3_data),
         bias_mode==E_FIELD);  // NOTE: Handling P3 case just for safety. P3 does not presently utilize saturation detection.
-    
+
     if(calib)
     {
         //=============
@@ -7625,17 +7624,17 @@ int WritePTAB_File(
                 YPrintf("WritePTAB_File: Can not obtain CALIB_COEFF coefficients for time SCCD=curr->seq_time_TM=%f, first_sample_utc_TM=%s\n", curr->seq_time_TM, first_sample_utc_TM);
                 return -1;
             }
-            
+
             const double p1 = cc_coeff_array[CALIB_COEFF_P_P1];
             const double q1 = cc_coeff_array[CALIB_COEFF_Q_P1];
             const double r1 = cc_coeff_array[CALIB_COEFF_R_P1];
             const double s1 = cc_coeff_array[CALIB_COEFF_S_P1];
-            
+
             const double p2 = cc_coeff_array[CALIB_COEFF_P_P2];
             const double q2 = cc_coeff_array[CALIB_COEFF_Q_P2];
             const double r2 = cc_coeff_array[CALIB_COEFF_R_P2];
             const double s2 = cc_coeff_array[CALIB_COEFF_S_P2];
-            
+
             // Calculate offsets from CALIB_COEFF coefficients using third-order polynomial.
             for (j=0; j<256; j++) {
                 bdco[0][j] = p1*pow(j-s1, 3) + q1*(j-s1) + r1;
@@ -7692,9 +7691,9 @@ int WritePTAB_File(
             
             global_calib_offset_ADC16TM = calib_ADC16_8kHz_offset_ADC16TM + calib_ADC20_offset_ADC16TM;
         }
-        
 
-        
+
+
         if(bias_mode==DENSITY) // Check if current data originates from a density mode measurement
         {
             //====================
@@ -8250,7 +8249,7 @@ int WritePTAB_File(
                 }   // if(param_type==SWEEP_PARAMS) ... else ...
 
             }   // if(bias_mode==DENSITY)
-            else // Assume bias mode is E_FIELD no other possible
+            else
             {
                 //====================
                 // CASE: E-FIELD MODE
@@ -8291,7 +8290,12 @@ int WritePTAB_File(
                         saturation_phys_max,
                         saturation_TM_1,
                         saturation_TM_2);
-                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,   ccurrent,   cvoltage);
+                    
+                    fprintf(pds.stable_fd,"%s,%016.6f,%14.7e,%14.7e\r\n",
+                        current_sample_utc_corrected,
+                        current_sample_sccd_corrected,
+                        ccurrent,
+                        cvoltage);
                 }
             }   // if(bias_mode==DENSITY) ... else ...
         }   // if(calib)
@@ -8307,7 +8311,8 @@ int WritePTAB_File(
                 //==========
                 // For difference data P1-P2 we need to add two bias vectors. They can be different!
                 if(bias_mode==DENSITY) {
-                    fprintf(pds.stable_fd,"%s,%016.6f,%7d,%7d,%7d\r\n",current_sample_utc_corrected,current_sample_sccd_corrected,
+                    fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d,%7d\r\n",
+                            current_sample_utc_corrected,   current_sample_sccd_corrected,
                             current_TM,   vbias1,   vbias2);    // Write TWO VOLTAGE bias vectors.
                 } else {
                     fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d,%7d\r\n",
@@ -10406,9 +10411,9 @@ void AssembleHKLine(unsigned char *b, char *line, double sccd, char *utc_3decima
     else
     {
         if(f11dedc)
-            strcpy(tstr,"FLOAT,");   
+            strcpy(tstr,"FLOAT,");
         else
-            strcpy(tstr,"BIAS ,");   
+            strcpy(tstr,"BIAS ,");
     }
     strcat(line,tstr); // Add string to table line
     
