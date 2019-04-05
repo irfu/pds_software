@@ -228,6 +228,8 @@
  *      See data for 2015-05-20.
  *      /Erik P G Johansson =<2017
  * 
+ * ~BUG: MISSING_CONSTANT that does not fit in %7d (e.g. -10^-9) will extend the column width for EDITED1, making the pds LBL files incorrect.
+ * 
  * 
  * NOTES
  * =====
@@ -724,9 +726,19 @@ static pthread_mutex_t protect_spice = PTHREAD_MUTEX_INITIALIZER;
 //----------------------------------------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-//     if (RUN_TEST_CODE) {
-//         return main_TEST(argc, argv);   // INFORMAL TEST CODE. WILL (PROBABLY) EXIT PDS ON ITS OWN.
-//     }
+    if (RUN_TEST_CODE) {
+        return main_TEST(argc, argv);   // INFORMAL TEST CODE. WILL (PROBABLY) EXIT PDS ON ITS OWN.
+    }
+    
+    
+    
+    // ASSERTION
+    // Try to guarantee that MISSING_CONSTANT fits into int variables.
+    if (sizeof(int) < 4) {
+        fprintf(stderr, "ERROR: pds has been compiled for sizeof(int)=%i < 4. Therefore, pds is not guaranteed to work.\n\n", sizeof(int));
+        exit(1);
+    }
+        
     
     
 
@@ -8345,6 +8357,7 @@ int WritePTAB_File(
 
 
 
+// NOTE: The type of the return value must be able to handle MISSING_CONSTANT.
 inline int handle_EDITED_floating_potential_bias(int current_bias_TM, int is_floating)
 {
     if (SET_PROPER_FLOATING_POTENTIAL_BIAS && is_floating) {
@@ -12140,6 +12153,12 @@ int main_TEST(int argc, char* argv[]) {
     printf("The normal main() function has been DISABLED in this executable. This is test code.\n");
     printf("###################################################################################\n");
     ProtectPlnkInit();
+    
+    int i=0;
+    long long int n_bytes = sizeof(i);
+    printf("sizeof(<type>) = %lli\n", n_bytes);
+    printf("min <type>     = %lli\n", -(1LL << (n_bytes*8-1)));
+    printf("max <type>     = %lli\n",  (1LL << (n_bytes*8-1))-1);
     
     // NOTE: SPICE may or may not have been initialized by the core pds code, depending on from where main_TEST was called.
 //     InitSpice("/home/erjo/ROSETTA_SPICE_KERNELS_spiftp.esac.esa.int___ROS_V040___birra.TM");

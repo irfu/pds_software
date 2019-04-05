@@ -355,7 +355,7 @@
  * Constants controlling how saturation is detected in CALIB data sets using
  * (1) min-max limits (in calibrated values; voltage, ampere)
  * (2) special values (in TM units) that ADC:s generate when they are saturated.
- * When a saturated sample is detected, it is replaced by a special value.
+ * When a saturated sample is detected, it is replaced by a special value, MISSING_CONSTANT.
  *
  * NOTE: This saturation detection algorithm does not work for P3 and is not used for P3, since:
  * (1) There are no (calibrated) min-max limits that separate saturated from non-saturated values
@@ -379,9 +379,6 @@
  * NOTE: This functionality is unlikely to detect saturation for diffs since diffs are calculate (onboard) from
  * digital values. If, for example, both probes are saturated, then the diff will still appear to be
  * non-saturated.
- * 
- * NOTE: Lapdog uses the special value to represent the absence of data for many types of causes, whereas in pds
- * this special value ONLY REPRESENTS SATURATION.
  ===============================================================================================================*/
 #define USE_SATURATION_LIMITS                   TRUE   // Enable/disable saturation
 //#define USE_SATURATION_LIMITS                   FALSE
@@ -415,7 +412,8 @@
  * (2) bias during floating potential (EDITED only; CALIB uses exact 0.0).
  *
  * 
- * NOTE: long int is always (?) -2,147,483,648 to 2,147,483,647, and int seems to be the same for relevant platforms.
+ * NOTE: long int is always (?) -2,147,483,648 to 2,147,483,647, and int seems to be the same for relevant
+ * platforms but C does not guarantee it.
 ===============================================================================================================*/
 #define MISSING_CONSTANT                        -1000000000   // Special value used to represent e.g. saturation in sample in TAB files.
 
@@ -464,7 +462,7 @@
  * the physical value is exactly 0.0, not the calibrated one.
  * 
  * When set to true, then floating potential bias is set to
- *      EDITED: MISSING_CONSTANT (instead of TM value, which can not represent exactly zero bias)
+ *      EDITED: MISSING_CONSTANT (instead of TC value, which can not represent exactly zero bias)
  *      CALIB:  0.0 (exact value, instead of calculated calibrated value)
  ========================================================================================================*/
 #define SET_PROPER_FLOATING_POTENTIAL_BIAS   TRUE
