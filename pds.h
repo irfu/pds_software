@@ -409,7 +409,15 @@
 // #define SATURATION_DENSITY_HG_MIN              -1e-8    // Test value
 // #define SATURATION_DENSITY_HG_MAX               1e-8    // Test value
 
-#define MISSING_CONSTANT                        -1000    // Special value used to represent e.g. saturation in sample in TAB files.
+/*===============================================================================================================
+ * IMPLEMENTATION NOTE: MISSING_CONSTANT is used for
+ * (1) saturation in measured samples (CALIB only), and
+ * (2) bias during floating potential (EDITED only; CALIB uses exact 0.0).
+ *
+ * 
+ * NOTE: long int is always (?) -2,147,483,648 to 2,147,483,647, and int seems to be the same for relevant platforms.
+===============================================================================================================*/
+#define MISSING_CONSTANT                        -1000000000   // Special value used to represent e.g. saturation in sample in TAB files.
 
 
 

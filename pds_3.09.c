@@ -175,6 +175,8 @@
  *      /Erik P G Johansson 2019-02-18
  * * ~Bugfix: Implemented use of special values for floating potential bias.
  *      /Erik P G Johansson 2019-03-07
+ * * Updated MISSING_CONSTANT value.
+ *      /Erik P G Johansson 2019-04-05
  *
  * 
  *
