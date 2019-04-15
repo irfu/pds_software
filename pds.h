@@ -443,6 +443,22 @@
  ==========================================================================================================*/
 #define IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS   FALSE
 
+/*==========================================================================================================
+ * Time that is added to the timestamps of manually commanded E field/current bias settings (pds.bias).
+ * 
+ * Introduced to handle that manually commanded E field bias appears to be delayed by three seconds.
+ * When the bias command is extracted from the command logs, there is no way to distinguish between E field
+ * and density bias, and therefore the issue can not be corrected for there.
+ * 
+ * NOTE: pds.bias also contains fake bias settings (manually added) to simulate the actions of malformed
+ * macros which unexpectedly change the bias. Those are (2019-04-12) however only density bias and are
+ * therefore not affected by this.
+ * 
+ * NOTE: Must be integer.
+ * Unit: seconds
+ ==========================================================================================================*/
+#define MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S 3
+
 /*====================================================================================================================
  * How to set the timestamp for ADC20 moving average TM samples
  * 

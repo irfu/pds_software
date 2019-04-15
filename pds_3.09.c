@@ -177,6 +177,8 @@
  *      /Erik P G Johansson 2019-03-07
  * * Updated MISSING_CONSTANT value.
  *      /Erik P G Johansson 2019-04-05
+ * * Implemented MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S to add 3 s to the time stamps of manually commanded E field bias.
+ *      /Erik P G Johansson 2019-04-15
  *
  * 
  *
@@ -1485,6 +1487,7 @@ void PrintUserHelpInfo(FILE *stream, char *executable_name) {
     fprintf(stream, "   IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS  = %i\n", IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS);
     fprintf(stream, "   ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES       = %i\n", ADC20_MA_TIMESTAMP_CENTER_OF_INTERNAL_SAMPLES);
     fprintf(stream, "   SET_PROPER_FLOATING_POTENTIAL_BIAS                  = %i\n", SET_PROPER_FLOATING_POTENTIAL_BIAS);
+    fprintf(stream, "   MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S      = %i\n", MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S);
     fprintf(stream, "\n");
     //fprintf(stream, "NOTE: The caller should NOT submit parameter values surrounded by quotes (more than what is required by the command shell.\n");
 }
@@ -7958,19 +7961,27 @@ int WritePTAB_File(
             extra_bias_setting=0;
             for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
             {
-                if(    commanded_bias_table[l][0] <=     current_sample_timet_TM
-                    && commanded_bias_table[l][0] >  old_current_sample_timet_TM)   // Find any bias setting before current time.
+                int commanded_bias_time = commanded_bias_table[l][0];
+                if (bias_mode==E_FIELD) {
+                    commanded_bias_time += MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S;   // NOTE: Has to be integer.
+                }
+                
+                if(    commanded_bias_time <=     current_sample_timet_TM
+                    && commanded_bias_time >  old_current_sample_timet_TM)
                 {
+                    // CASE: A manually commanded bias setting happened (1) after the previous sample, and (2) before (or at) current sample.
+                    //       old_current_sample_timet_TM < commanded_bias_time <= current_sample_timet_TM
                     extra_bias_setting=1;
                     
                     // Check if any mode change happened after the found bias setting, but before the current time.
                     for(m=0;m<nmode;m++)
                     {
                         old_current_sample_timet_TM = current_sample_timet_TM;
-                        if(    commanded_mode_table[m][0] >  commanded_bias_table[l][0]
+                        if(    commanded_mode_table[m][0] >  commanded_bias_time
                             && commanded_mode_table[m][0] <= current_sample_timet_TM)
                         {
-                            // CASE: A mode change happened (1) after the found bias setting, and (2) before current data (utime).
+                            // CASE: A mode change happened (1) after the found bias setting, and (2) before (or at) current data.
+                            //       commanded_bias_time < commanded_mode_table[m][0] <= current_sample_timet_TM
                             extra_bias_setting=0;
                             break;
                         }
@@ -7978,7 +7989,35 @@ int WritePTAB_File(
                     break;   // Do NOT continue iterating over other bias settings.
                 }
             }
+
             
+            
+            /*==============================================================================================================
+             * DEBUG
+             * Write extra information to TAB file to give information on how the bias is set for each sample.
+             * Print the information that determines which bias is used:
+             * Column 2: Macro/mode change (UTC)
+             * Column 4: Manually commanded bias timestamp (UTC; the value in pds.bias, before E field time stamp addition)
+             * Column 5: extra_bias_setting, i.e. 0=Previous bias is used, 1=(New) manually commanded bias is used
+             ==============================================================================================================*/
+//             char mode_change_utc[MAX_STR];
+//             char mcb_utc[MAX_STR];
+//             //printf("nbias=%i, nmode=%i, l=%3i, m=%4i\n", nbias, nmode, l, m);
+//             if ((0<=m) && (m<nmode)) {                
+//                 ConvertTimet2Utc(commanded_mode_table[m][0], mode_change_utc, FALSE);
+//             } else {
+//                 strncpy(mode_change_utc, "xxxx-xx-xxTxx:xx:xx.xxx", MAX_STR);
+//             }
+//             if ((0<=l) && (l<nbias)) {
+//                 ConvertTimet2Utc(commanded_bias_table[l][0], mcb_utc, FALSE);
+//             } else {
+//                 strncpy(mcb_utc, "xxxx-xx-xxTxx:xx:xx.xxx", MAX_STR);
+//             }
+//             // Write to TAB file. No line break, so that information is added (to the beginning of) every TAB row.
+//             fprintf(pds.stable_fd, "%4i: %s, %3i: %s, %i, ", m, mode_change_utc,   l, mcb_utc,   extra_bias_setting);
+
+
+
             if (IGNORE_MANUALLY_COMMANDED_BIAS_FOR_SELECTED_MACROS) {
                 /*=================================================================================================================
                 * FKJN 2014-09-25: Extra bias commands are only allowed for certain macros!!! That's three exclamation marks.
