@@ -7502,7 +7502,7 @@ int WritePTAB_File(
     double ccalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
 
     double current_sample_timet_TM;        // Current time in UTC for test of extra bias settings. Interpreted as time_t.
-    time_t old_current_sample_timet_TM;    // Previous value of utime in algorithm for detecting commanded bias. NOTE: No subseconds since time_t.
+    double old_current_sample_timet_TM;    // Previous value of utime in algorithm for detecting commanded bias. NOTE: No subseconds since time_t.
     // Time of current data. Used for selecting calibration and commanded bias, not the samples. TM=Time according to TM (no group delay). NOTE: No subseconds since time_t.
     time_t first_sample_timet_TM;
 
@@ -7953,15 +7953,15 @@ int WritePTAB_File(
         //==============================================================================
         // Check for commanded bias (outside of macro lopp). If found, then set biases.
         //==============================================================================
+        current_sample_timet_TM = first_sample_timet_TM + sample_delta_s;   // Current time in raw UTC format. 
         if(nbias>0 && commanded_bias_table!=NULL)
         {
             // Figure out if any extra bias settings have been done outside of macros.
-            current_sample_timet_TM = (unsigned int)first_sample_timet_TM + sample_delta_s;   // Current time in raw UTC format
             
             extra_bias_setting=0;
             for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
             {
-                int commanded_bias_time = commanded_bias_table[l][0];
+                double commanded_bias_time = commanded_bias_table[l][0];
                 if (bias_mode==E_FIELD) {
                     commanded_bias_time += MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S;   // NOTE: Has to be integer.
                 }
