@@ -2,10 +2,11 @@
 # Generated from command logs
 # with command: run_mpb filename
 #
-# Note delimiter is a tab
+# NOTE: Delimiter is a tab.
+# NOTE: E field probe order: P2 first, P1 second.
 #
 #
-# TIME|TAB|DENSITY P1P2|TAB|EFIELD P2P1|
+# TIME | TAB | DENSITY P1P2/*Mode* | TAB | EFIELD P2P1/MACRO NBR
 #
 2004-03-21T20:24:39.000	*Mode*	0x0011
 2004-05-08T11:42:50.000	0xd0d0	0x0000
