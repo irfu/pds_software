@@ -1,17 +1,21 @@
 #! /bin/bash
-
-# Produce pds.bias file that is used by the pds software. Calls mpb (compiled C code).
-# 
-# ARGUMENTS: <pds.bias file> <pds.bias exclude file> <pds.bias before removing excludes>
-#            <Root path for Rosetta command logs>
 #
-# Put ddsData path in argument too?
+# Create
+# (1) pds.bias file that is used by the pds software. Calls mpb (compiled C code), and
+# (2) "unedited" pds.bias file (intermediate result) for documentation
+#
+# pds.bias = unedited pds.bias \ pds.bias excludes  (set difference)
+# 
+# ARGUMENTS: <pds.bias file>
+#            <pds.bias exclude file>
+#            <pds.bias unedited; before removing excludes>
+#            <Root path for Rosetta command logs>
 
 pds_bias="$1"
 pds_bias_exclude="$2"
 pds_bias_unedited="$3"
 DDS_logs_path="$4"
-#DDS_logs_path=/data/ddsData/archivex/tlm/     # Example
+#DDS_logs_path=/data/rosetta/ddsData/archivex/tlm/     # Example
 
 # DEBUG 
 #echo "pds_bias          = $pds_bias"
@@ -22,25 +26,30 @@ DDS_logs_path="$4"
 
 
 # Find command history files
-# list=`find /opt/ddsData/archivex/tlm/* -name rpc*_cmh_cmdpf.txt`
-list=`find "$DDS_logs_path"/* -name rpc*_cmh_cmdpf.txt`
+# cmd_file_list=`find /opt/ddsData/archivex/tlm/* -name rpc*_cmh_cmdpf.txt`
+cmd_file_list=`find "$DDS_logs_path"/* -name rpc*_cmh_cmdpf.txt`
 
 
 
-file1=`tempfile`
-file2=`tempfile`
-file3=`tempfile`
-file4=`tempfile`
+file1=`mktemp`
+file2=`mktemp`
+file3=`mktemp`
+file4=`mktemp`
 
-#go through them looking for bias settings and store temporarily
-for i in $list
+
+
+#======================================================================================================
+echo "Search through selected DDS files, looking for bias settings and store the results temporarily."
+#======================================================================================================
+for cmd_file in $cmd_file_list
 do
-    grep -A 4 ARPF390A $i >>$file1
-    grep -A 7 ARPS809A $i >>$file1
-    grep -A 7 ARPS804A $i >>$file1
+    # echo "cmd_file = $cmd_file"
+    grep -A 4 ARPF390A $cmd_file >> $file1
+    grep -A 7 ARPS809A $cmd_file >> $file1
+    grep -A 7 ARPS804A $cmd_file >> $file1
     #added new OBCPs  2014-05-12 FJ AIE 
-    grep -A 7 ARPS809C $i >>$file1
-    grep -A 7 ARPS809D $i >>$file1
+    grep -A 7 ARPS809C $cmd_file >> $file1
+    grep -A 7 ARPS809D $cmd_file >> $file1
 done
 
 
@@ -52,19 +61,21 @@ mpb $file1 $file2
 
 sort $file2>$file4
 
-echo '#			        
-# Generated from command logs 	
-# with command: run_mpb filename 
-#			        
-# Note delimiter is a tab	
-#				
-#				
-# TIME|TAB|DENSITY P1P2|TAB|EFIELD P2P1|
+
+
+#=======================================================
+echo "Saving first (unedited) version of \"$pds_bias\""
+#=======================================================
+echo '#
+# Generated from command logs
+# with command: run_mpb filename
+#
+# NOTE: Delimiter is a tab.
+# NOTE: E field probe order: P2 first, P1 second.
+#
+#
+# TIME | TAB | DENSITY P1P2/*Mode* | TAB | EFIELD P2P1/MACRO NBR
 #' >$file3
-
-
-
-echo "Writing to \"$pds_bias\""
 cat $file3 $file4>$pds_bias
 rm $file1>/dev/null 2>&1
 rm $file2>/dev/null 2>&1
@@ -77,9 +88,9 @@ cp "$pds_bias" "$pds_bias_unedited"   # Saving the intermediate result in a sepa
 
 
 
-########## Remove selected bias settings
+#=====================================================================
 echo "Removing bias commands specified in \"$pds_bias_exclude\"" 2>&1
-
+#=====================================================================
 if [ -f "$pds_bias_exclude" ]; then
 	# Find all lines that are not in $pds_bias_exclude.
 	IFS=$'\n' read -d '' -r -a lines < "$pds_bias_exclude"
@@ -98,4 +109,3 @@ if [ -f "$pds_bias_exclude" ]; then
 else
 	echo "Can not find \"$pds_bias_exclude\"."
 fi
-

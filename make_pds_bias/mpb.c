@@ -1,5 +1,9 @@
 /*
-Code that reads one Rosetta command log file and PRESUMABLY extracts RPCLAP bias commands.
+Code that reads one Rosetta command log file and extracts manually commanded RPCLAP bias commands, and macro start commands.
+Generates the bulk data in pds.bias (not counting excluded bias settings, or added fake bias settings).
+
+NOTE: The output file is not automatically sorted in time. Depends on the input. Will produce unsorted output when using mpb via run_mpb.
+
 mpb = make pds bias
 
 Arguments: <Input file> <Output file>
@@ -12,6 +16,10 @@ Arguments: <Input file> <Output file>
 
 #define 	LINESZ 2048
 
+
+
+// dt     : String on format "16.213.04.59.33.000"  (two-digit year, doy, month, hour, minute, second, millisecond), extracted directly from command log.
+// Returns: String timestamp on format CCYY-MMDDThh:mm:ss.sss .
 char *time2pdsdate(unsigned char *dt)
 {
 
@@ -52,6 +60,8 @@ char *time2pdsdate(unsigned char *dt)
 
 }
 
+
+
 int main (int argc, char **argv) 
 {
   
@@ -75,19 +85,20 @@ int main (int argc, char **argv)
     int ostate=0;
 
     if (argc!=3) {
+        // Print help text
         printf("%s <infile> <outfile>\n",argv[0]);
         exit(1);
     }
 
     if (!(ifd=fopen(argv[1],"r"))) 
     {
-        perror("input file");
+        perror("Can not open input file");
         exit(1);
     }
   
     if (!(ofd=fopen(argv[2],"w"))) 
     {
-        perror("output file");
+        perror("Can not open output file");
         fclose(ifd);
         exit(1);
     }
@@ -106,7 +117,7 @@ int main (int argc, char **argv)
 
         switch(state)
         {
-        // Match start of bias settings
+            // Match start of bias settings
             case 0:
 
                 if(strstr(line,"ZRP23013")!=NULL)
@@ -117,13 +128,14 @@ int main (int argc, char **argv)
                         strtok(NULL," ");
                         strcpy(date,strtok(NULL," "));
 
-                        fprintf(ofd,"%s",time2pdsdate(date));
-                        state=2;
+                        fprintf(ofd,"%s",time2pdsdate(date));    // PRINT TIMESTAMP
+                        state=2;    // Continue to set BIAS.
                         continue;
                     }
                 }
 
                 //edit FKJN 8Jan2015  extra if statement	 
+                // "INSERTTT  INSERT TIME TAG"
                 if((match=strstr(line,"INSERTTT"))==NULL)
                 {
  
@@ -133,8 +145,8 @@ int main (int argc, char **argv)
                         strtok(NULL," ");
                         strcpy(date,strtok(NULL," "));
 
-                        fprintf(ofd,"%s",time2pdsdate(date));
-                        state=5;
+                        fprintf(ofd,"%s",time2pdsdate(date));    // PRINT TIMESTAMP
+                        state=5;   // Continue to set BIAS.
                         continue;
                     }
 
@@ -148,8 +160,8 @@ int main (int argc, char **argv)
                         strtok(NULL," ");
                         strcpy(date,strtok(NULL," "));
 
-                        fprintf(ofd,"%s",time2pdsdate(date));
-                        state=5;
+                        fprintf(ofd,"%s",time2pdsdate(date));    // PRINT TIMESTAMP
+                        state=5;   // Continue to set MACRO.
                         continue;
                     }
                 }
@@ -172,7 +184,11 @@ int main (int argc, char **argv)
                 break;
 
 
+            //=============================================================
+            // Obtain Density bias P2?! (P1+P2?) (not always valid value?)            
+            //=============================================================
             case 2:
+                // "PRPD3046Denisty Fix Bias param 2"
                 if((match=strstr(line,"PRPD3046"))!=NULL)
                 { 
                     token=strtok(match," ");
@@ -183,15 +199,19 @@ int main (int argc, char **argv)
     
                     sscanf(token," %d",&dbias_12);
         
-                    state=3;
+                    state=3;   // Only place which sets state=3.
                     continue;
                 }
                 break;
 
+            //===================================================
+            // Obtain Density bias P1? (not always valid value?)
+            //===================================================
             // The way procedure ARPF390A is made, is that it supports old software
             // with a fix. Thus Density P1 is not found in state 1 but here
             // ARPF390A could remove this step.
             case 3:
+                // "PRPD3055IO Poke param 3"
                 if((match=strstr(line,"PRPD3055"))!=NULL)
                 {
 	      
@@ -204,13 +224,17 @@ int main (int argc, char **argv)
 	      
                     sscanf(token," %d",&dbias_1);
 	       
-                    fprintf(ofd,"\t0x%02x%02x",dbias_1,(dbias_12 & 0xff));
-                    state=4;
+                    fprintf(ofd,"\t0x%02x%02x",dbias_1,(dbias_12 & 0xff));    // PRINT DENSITY/VOLTAGE BIAS
+                    state=4;   // Only place which sets state=4.
                     continue;
                 }
                 break;
 
+            //============================================
+            // Set E field bias (not always valid value?)
+            //============================================
             case 4:  
+                // "PRPD3050E Fix Bias param 2"
                 if((match=strstr(line,"PRPD3050"))!=NULL)
                 {
                     token=strtok(match," ");
@@ -222,12 +246,16 @@ int main (int argc, char **argv)
 	      
                     sscanf(token," %d",&ebias_12);
 	       
-                    fprintf(ofd,"\t0x%04x\n",ebias_12);
+                    // NOTE: First two hex digits represent P2 bias, last two hex digits represent P1.
+                    fprintf(ofd,"\t0x%04x\n",ebias_12);    // PRINT E-FIELD/CURRENT BIAS
                     state=0;
                     continue;
                 }
                 break;
 
+            //===========================
+            // Set/start specified macro
+            //===========================
             case 5:
                 if((match=strstr(line,"FSK01267LAPParam"))!=NULL)
                 { 
@@ -244,8 +272,8 @@ int main (int argc, char **argv)
                     continue;
                 }
                 break;
-        }
-    }
+        }    // switch
+    }    // while
     fclose(ofd);
     fclose(ifd);
 
