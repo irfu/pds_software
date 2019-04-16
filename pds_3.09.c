@@ -179,6 +179,9 @@
  *      /Erik P G Johansson 2019-04-05
  * * Implemented MANUALLY_COMMANDED_BIAS_EFIELD_TIME_ADDITION_S to add 3 s to the time stamps of manually commanded E field bias.
  *      /Erik P G Johansson 2019-04-15
+ * * Bugfix: UTC timestamps incremented unevenly due to that conversion SCCD-->UTC passed over SCCS which has too low time resolution for HF.
+ *      Now converts SCCD-->UTC using SPICE only for the first sample, and converts manually SCCD-->et (and SPICE for et-->UTC) for all other samples.
+ *      /Erik P G Johansson 2019-04-16
  *
  * 
  *
@@ -514,14 +517,18 @@ double DecodeLAPTime2Sccd(unsigned char *buff);                     // Decoding 
 //int DecodeRawTimeEst(double raw,char *stime);                       // Decodes raw S/C time (estimates UTC no calibration) and returns 
 // a PDS compliant time string. UNUSED
 
-int ConvertSccd2Utc         (double sccd, char *utc_3decimals, char *utc_6decimals);         // Decodes raw S/C time (calibration included) 
-int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decimals);
-int ConvertSccd2Utc_SPICE   (double sccd, char *utc_3decimals, char *utc_6decimals);
+int  ConvertSccd2Utc         (double sccd, char *utc_3decimals, char *utc_6decimals);         // Decodes raw S/C time (calibration included) 
+int  ConvertSccd2Et_SPICE    (double sccd, SpiceDouble* et);
+void ConvertEt2Utc_SPICE     (SpiceDouble et, char *utc_3decimals, char *utc_6decimals);
+int  ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decimals);
+int  ConvertSccd2Utc_SPICE   (double sccd, char *utc_3decimals, char *utc_6decimals);
 
 void ConvertUtc2Sccd_SPICE(char *utc, int *reset_counter, double *sccd);
 
 int ConvertSccd2Sccs(double sccd, int n_resets, char *sccs, int quote_sccs);    // Convert raw time to an OBT string (On Board Time)
 int ConvertSccs2Sccd(char *sccs, int *reset_counter, double *sccd);             // Convert OBT string to raw time.
+
+int get_conversion_factor_sccd2et_SPICE(double sccd1, double sccd2, double* conversion_factor);
 
 //int Scet2Date(double raw,char *stime,int lfrac);     // Decodes SCET (Spacecraft event time, Calibrated OBT) into a date
 // lfrac is long or short fractions of seconds.
@@ -7505,6 +7512,7 @@ int WritePTAB_File(
     double old_current_sample_timet_TM;    // Previous value of utime in algorithm for detecting commanded bias. NOTE: No subseconds since time_t.
     // Time of current data. Used for selecting calibration and commanded bias, not the samples. TM=Time according to TM (no group delay). NOTE: No subseconds since time_t.
     time_t first_sample_timet_TM;
+    SpiceDouble first_sample_et_corrected;    
 
     int i_calib=0;                  // Valid index into structure with calibration data.
 
@@ -7563,7 +7571,19 @@ int WritePTAB_File(
 
     ConvertSccd2Utc(curr->seq_start_sccd_TM,     first_sample_utc_TM, NULL);    // First convert spacecraft time to UTC to get time calibration right.
     ConvertUtc2Timet(first_sample_utc_TM, &first_sample_timet_TM);
+    ConvertSccd2Et_SPICE(curr->seq_start_sccd_TM, &first_sample_et_corrected);
+    
+    double sccd2et_conversion_factor;
+    
+    // Derive the conversion factor when converting time differences SCCD-->et, i.e. "d(SCCD)/d(et)".
+    //
+    // In principle this varies over time, but should very stable, and very close to one.
+    // It is possible, that this value is not even needed since it is so close to one, but it has been added anyway to be sure.
+    // It does make a small difference in the timestamps.
+    get_conversion_factor_sccd2et_SPICE(curr->seq_start_sccd_TM, curr->seq_stop_sccd_TM, &sccd2et_conversion_factor);
+    
 
+    
     /*===================================================================================================================
      * (1) Determine whether ADC20 moving average is enabled (needed later), and
      * (2) set the ADC20 flight software moving average bug compensation factor.
@@ -7826,6 +7846,7 @@ int WritePTAB_File(
         CPrintf("    Couldn't open PDS TAB data file: %s!!\n", file_path);
         return -1;
     }
+    //fprintf(pds.stable_fd,"sccd2et_conversion_factor = %.20e\r\n", sccd2et_conversion_factor);    // DEBUG
     
     if (id_code==D_SWEEP_P2_LC_16BIT_BIP || id_code==D_SWEEP_P1_LC_16BIT_BIP) { // Log compression used
         LogDeComp(buff,N_bytes,ilogtab); // Decompress log data in buff result returned in buff
@@ -7950,9 +7971,23 @@ int WritePTAB_File(
         //==========================================================
         // Derive different measures of time for the current sample.
         //==========================================================
-        sample_delta_sccd = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: (SCCD) seconds.
-        current_sample_sccd_corrected = curr->seq_start_sccd_corrected + sample_delta_sccd;
-        ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);
+        {
+            /* IMPLEMENTATION NOTE: Does not convert SCCD-->UTC only via standard SPICE functions for individual samples, since the conversion passes over SCCS
+             * which has low time resolution (2^-16 s) which leads to the UTC timestamps incrementing very unevenly for HF (jumping betwee increments of 46 ms
+             * and 61 ms). Therefore only converts SCCD-->et for the first sample via SPICE, and then converts SCCD-->et manually using linear extrapolation.
+             * Technically, this means that the sequence as a whole can still be shifted somewhat, but at least the timestamps are correct relative to each other.
+             */
+            SpiceDouble current_sample_et_corrected;
+            
+            ConvertSccd2Et_SPICE(curr->seq_start_sccd_corrected, &first_sample_et_corrected);
+            sample_delta_sccd             = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: (SCCD) seconds.
+            current_sample_sccd_corrected = curr->seq_start_sccd_corrected + sample_delta_sccd;
+            current_sample_et_corrected   = first_sample_et_corrected      + sample_delta_sccd * sccd2et_conversion_factor;
+            
+            // ConvertSccd2Utc: Old implementation. BUG: To imprecise for HF, due to "rounding" when converting via SCCS which has too low time resolution.
+            //ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);    
+            ConvertEt2Utc_SPICE(current_sample_et_corrected, NULL, current_sample_utc_corrected);
+        }
         
         //==============================================================================
         // Check for commanded bias (outside of macro lopp). If found, then set biases.
@@ -10735,34 +10770,64 @@ int ConvertSccd2Utc_nonSPICE(double sccd, char *utc_3decimals, char *utc_6decima
  * Should have identical interface except where explicitly stated to be different.
  * See ConvertSccd2Utc_nonSPICE for interface details.
  * 
+ * utc_3decimals : Ignored if NULL, otherwise assigned with UTC string with 3 decimals.
+ * utc_6decimals : Ignored if NULL, otherwise assigned with UTC string with 6 decimals.
+ * 
  * Return value :  0 = No error
  *                -1 = Error, in particular illegal SCCD.
  * 
  * NOTE: Reacts on errors by exiting pds, rather than returning error code.
  *       Most (all?) calls to this function do not check the error code anyway.
  * NOTE: This function is THREAD-SAFE and uses the SPICE mutex.
+ * 
+ * NOTE: This function should suffer from rounding that is large enough to be affecting HF data.
+ * This is due to converting over SCCS which (by design) only has a time resolution of 2^-16 s.
  */ 
 int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
 {
-    SpiceChar sccs[MAX_STR];
-    SpiceChar utc_temp[MAX_STR];
     SpiceDouble et;
     
-//     printf("ConvertSccd2Utc_SPICE - BEGIN\n");   // DEBUG
+    int error_code = ConvertSccd2Et_SPICE(sccd, &et);
+    if (error_code != 0) {
+        return error_code;
+    }
+    
+    ConvertEt2Utc_SPICE(et, utc_3decimals, utc_6decimals);
+    
+    return 0;
+}
+
+
+
+int ConvertSccd2Et_SPICE(double sccd, SpiceDouble* et)
+{
+    SpiceChar   sccs[MAX_STR];
 
     ConvertSccd2Sccs(sccd, ROSETTA_SPACECRAFT_CLOCK_RESET_COUNTER, sccs, FALSE);         // Convert SCCD-->SCCS
-
+    
     pthread_mutex_lock(&protect_spice);
 
-    scs2e_c(ROSETTA_SPICE_ID, sccs, &et);    // Convert SCCS-->et    
+    scs2e_c(ROSETTA_SPICE_ID, sccs, et);    // Convert SCCS-->et
     if (CheckSpiceError("SPICE failed to convert SCCS (spacecraft clock count string)-->et, probably because of out-of-range SCCS.", FALSE, FALSE)) {
         // NOTE: Will not exit PDS for this error. This error may occur "legitimately" because of errors in the data,
         // or the (calling) state machine not being synched to the byte stream (it makes the wrong assumption of where to
-        // find what data in the byte stream), which leads to strange SSCDs being used. Failure here is used
+        // find what data in the byte stream), which leads to strange SCCDs being used. Failure here is used
         // to detect that the state machine is out of sync.
         pthread_mutex_unlock(&protect_spice);
         return -1;
     }
+    
+    pthread_mutex_unlock(&protect_spice);
+    return 0;
+}
+
+
+
+void ConvertEt2Utc_SPICE(SpiceDouble et, char *utc_3decimals, char *utc_6decimals)
+{
+    SpiceChar   utc_temp[MAX_STR];
+    
+    pthread_mutex_lock(&protect_spice);
 
     // Convert et-->UTC
     // 
@@ -10784,9 +10849,6 @@ int ConvertSccd2Utc_SPICE(double sccd, char *utc_3decimals, char *utc_6decimals)
     }
     
     pthread_mutex_unlock(&protect_spice);
-
-//     printf("ConvertSccd2Utc_SPICE - END\n");   // DEBUG
-    return 0;
 }
 
 
@@ -10931,6 +10993,26 @@ int ConvertSccs2Sccd(char *sccs, int *reset_counter, double *sccd)
     return 0;
 }//*/
 
+
+int get_conversion_factor_sccd2et_SPICE(double sccd1, double sccd2, double* conversion_factor)
+{
+    SpiceDouble et1;
+    SpiceDouble et2;
+    int error_code;
+    
+    error_code = ConvertSccd2Et_SPICE(sccd1, &et1);
+    if (error_code != 0) {
+        return error_code;
+    }
+    error_code = ConvertSccd2Et_SPICE(sccd2, &et2);
+    if (error_code != 0) {    
+        return error_code;
+    }
+    
+    *conversion_factor = (et2 - et1) / (sccd2 - sccd1);
+    
+    return 0;
+}
 
 
 
