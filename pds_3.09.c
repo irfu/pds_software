@@ -3860,7 +3860,7 @@ void *DecodeScience(void *arg)
                                                         {
                                                             CPrintf("    %d sequence starts %d AQPs from start of sequence\n", meas_seq, aqps_seq);
                                                             curr.offset_time = aqps_seq*AQP_LENGTH_S;
-                                                            curr.seq_time_TM = sccd + curr.offset_time;   // Calculate time of current sequence.
+                                                            curr.seq_start_sccd_TM = sccd + curr.offset_time;   // Calculate time of current sequence.
 
                                                             /*======================================================
                                                              * Adjust the timestamps when moving average is enabled
@@ -3869,7 +3869,7 @@ void *DecodeScience(void *arg)
                                                                 && ((param_type==ADC20_PARAMS) && (a20_info.N_MA_length_insmp != 1))) {
                                                                 // Put timestamp in the middle between the first and the last internal sample averaged over.
                                                                 // NOTE: Does not consider the additional internal sample that is also averaged over due to a bug in flight s/w.
-                                                                curr.seq_time_TM = curr.seq_time_TM + 0.5*(a20_info.N_MA_length_insmp-1)/(SAMP_FREQ_ADC20);
+                                                                curr.seq_start_sccd_TM = curr.seq_start_sccd_TM + 0.5*(a20_info.N_MA_length_insmp-1)/(SAMP_FREQ_ADC20);
                                                             }
                                                             
                                                             
@@ -3897,15 +3897,15 @@ void *DecodeScience(void *arg)
                                                              * features of pds can choose which timestamp to use.
                                                              */
                                                             if (calib && (param_type==ADC20_PARAMS)) {
-                                                                curr.seq_time_corrected = curr.seq_time_TM - ADC20_DELAY_S;
+                                                                curr.seq_start_sccd_corrected = curr.seq_start_sccd_TM - ADC20_DELAY_S;
                                                             } else {
-                                                                curr.seq_time_corrected = curr.seq_time_TM;
+                                                                curr.seq_start_sccd_corrected = curr.seq_start_sccd_TM;
                                                             }
 
-                                                            ConvertSccd2Sccs(curr.seq_time_corrected, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.                                                            
+                                                            ConvertSccd2Sccs(curr.seq_start_sccd_corrected, pds.SCResetCounter, tstr1, TRUE);  // Compile OBT string and add reset number of S/C clock.                                                            
                                                             SetP(&comm,"SPACECRAFT_CLOCK_START_COUNT", tstr1, 1);
                                                             
-                                                            ConvertSccd2Utc(curr.seq_time_corrected, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
+                                                            ConvertSccd2Utc(curr.seq_start_sccd_corrected, tstr1, NULL);   // Decode raw time into PDS compliant UTC time
                                                             CPrintf("    Current sequence start time (ADC20: corrected for group delay) is: %s\n", tstr1);
                                                             SetP(&comm, "START_TIME", tstr1, 1);
                                                             
@@ -4030,13 +4030,13 @@ void *DecodeScience(void *arg)
                                                             }    // (param_type==SWEEP_PARAMS) ... else
                                                             
                                                             // Calculate current STOP time.
-                                                            curr.stop_time_corrected = curr.seq_time_corrected + (N_tmsmp-1)*curr.sec_per_tmsmp;   
-                                                            curr.stop_time_TM        = curr.seq_time_TM        + (N_tmsmp-1)*curr.sec_per_tmsmp;
+                                                            curr.seq_stop_sccd_corrected = curr.seq_start_sccd_corrected + (N_tmsmp-1)*curr.sec_per_tmsmp;
+                                                            curr.seq_stop_sccd_TM        = curr.seq_start_sccd_TM        + (N_tmsmp-1)*curr.sec_per_tmsmp;
                                                             
-                                                            ConvertSccd2Sccs(curr.stop_time_corrected, pds.SCResetCounter, tstr5, TRUE);
+                                                            ConvertSccd2Sccs(curr.seq_stop_sccd_corrected, pds.SCResetCounter, tstr5, TRUE);
                                                             SetP(&comm,"SPACECRAFT_CLOCK_STOP_COUNT", tstr5, 1);
                                                             
-                                                            ConvertSccd2Utc(curr.stop_time_corrected, tstr5, NULL);  // Decode raw time into PDS compliant UTC time.
+                                                            ConvertSccd2Utc(curr.seq_stop_sccd_corrected, tstr5, NULL);  // Decode raw time into PDS compliant UTC time.
                                                             CPrintf("    Current sequence stop  time is: %s\n", tstr5);
                                                             SetP(&comm, "STOP_TIME",  tstr5, 1);         // Update STOP_TIME in common PDS parameters.
                                                         }   // if((aqps_seq=TotAQPs(&macros[mb][ma],meas_seq))>=0)
@@ -5721,8 +5721,8 @@ int DecideWhetherToExcludeData(
 {
     int i = -1;
 
-    const double sccd_file_begin = curr.seq_time_TM;    // NOTE: Time deliberately NOT corrected for ADC20 group delay.
-    const double sccd_file_end   = curr.stop_time_TM;   // NOTE: Time deliberately NOT corrected for ADC20 group delay.
+    const double sccd_file_begin = curr.seq_start_sccd_TM;        // NOTE: Time deliberately NOT corrected for ADC20 group delay.
+    const double sccd_file_end   = curr.seq_stop_sccd_TM;   // NOTE: Time deliberately NOT corrected for ADC20 group delay.
     const int writing_P1_data = (curr.sensor==SENS_P1   || dop==1);
     const int writing_P2_data = (curr.sensor==SENS_P2   || dop==2);
     const int writing_P3_data = (curr.sensor==SENS_P1P2 && dop==0);
@@ -7469,7 +7469,7 @@ int WritePTAB_File(
 
     int sw_bias_step_size_TM = 3;               // Current sweep step, default value just there to get rid of compilation warning.
 
-    double sample_delta_s;                  // Time since first sample. Unit: seconds
+    double sample_delta_sccd;               // Time since first sample. Unit: seconds
     double current_sample_sccd_corrected;   // Time of current sample (current row) as SCCD.
 
     int i_sample;                    // Sample number.
@@ -7561,8 +7561,8 @@ int WritePTAB_File(
 
 
 
-    ConvertSccd2Utc(curr->seq_time_TM, first_sample_utc_TM, NULL);    // First convert spacecraft time to UTC to get time calibration right.
-    ConvertUtc2Timet(first_sample_utc_TM, &first_sample_timet_TM);    // Convert back to seconds.
+    ConvertSccd2Utc(curr->seq_start_sccd_TM,     first_sample_utc_TM, NULL);    // First convert spacecraft time to UTC to get time calibration right.
+    ConvertUtc2Timet(first_sample_utc_TM, &first_sample_timet_TM);
 
     /*===================================================================================================================
      * (1) Determine whether ADC20 moving average is enabled (needed later), and
@@ -7622,9 +7622,13 @@ int WritePTAB_File(
         // Figure out which calibration data to use for the given time of the data.
         if (CALIB_COEFF_ENABLED)
         {
+            //===================
+            // CASE: CALIB_COEFF
+            //===================
             double cc_coeff_array[2*N_CALIB_COEFFS];
-            if (GetCalibCoeff(pds.cpathd, &calib_coeff_data, curr->seq_time_TM, cc_coeff_array)) {
-                YPrintf("WritePTAB_File: Can not obtain CALIB_COEFF coefficients for time SCCD=curr->seq_time_TM=%f, first_sample_utc_TM=%s\n", curr->seq_time_TM, first_sample_utc_TM);
+            // Select calibration data baed on first sample timestamp.
+            if (GetCalibCoeff(pds.cpathd, &calib_coeff_data, curr->seq_start_sccd_TM, cc_coeff_array)) {
+                YPrintf("WritePTAB_File: Can not obtain CALIB_COEFF coefficients for time SCCD=curr->seq_start_sccd_TM=%f, first_sample_utc_TM=%s\n", curr->seq_start_sccd_TM, first_sample_utc_TM);
                 return -1;
             }
 
@@ -7946,14 +7950,14 @@ int WritePTAB_File(
         //==========================================================
         // Derive different measures of time for the current sample.
         //==========================================================
-        sample_delta_s = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: Seconds.                
-        current_sample_sccd_corrected = curr->seq_time_corrected + sample_delta_s;             // Calculate SCCD.
-        ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);    // Decode raw time to UTC.
+        sample_delta_sccd = i_sample * curr->sec_per_tmsmp;         // Calculate current time relative to first time (first sample). Unit: (SCCD) seconds.
+        current_sample_sccd_corrected = curr->seq_start_sccd_corrected + sample_delta_sccd;
+        ConvertSccd2Utc(current_sample_sccd_corrected, NULL, current_sample_utc_corrected);
         
         //==============================================================================
         // Check for commanded bias (outside of macro lopp). If found, then set biases.
         //==============================================================================
-        current_sample_timet_TM = first_sample_timet_TM + sample_delta_s;   // Current time in raw UTC format. 
+        current_sample_timet_TM = first_sample_timet_TM + sample_delta_sccd;   // Current time in raw UTC format. 
         if(nbias>0 && commanded_bias_table!=NULL)
         {
             // Figure out if any extra bias settings have been done outside of macros.

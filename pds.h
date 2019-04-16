@@ -620,16 +620,16 @@ typedef struct adc20_type_def
 // Current settings for various parameters
 typedef struct curr_type_def
 {
-  unsigned int sensor;              // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
-  unsigned int transmitter;         // LAP currently transmitting sensor
-  double       seq_time_TM;         // Current time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
-  double       stop_time_TM;        // Current stop time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
-  double       seq_time_corrected;  // Like seq_time_TM  (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
-  double       stop_time_corrected; // Like stop_time_TM (SCCD), but (possibly) adjusted for analog signal delays, ADC20_DELAY_S.
-  double       offset_time;         // Time since raw start time
-  double       old_time;            // Used to test if we have extra bias settings
-  unsigned int old_macro;           // Used to test if we have a new macro
-  double       sec_per_tmsmp;       // Time [seconds] between TM samples.
+  unsigned int sensor;                      // LAP sensor(s) currently in use. See constants SENS_P1P2 etc.
+  unsigned int transmitter;                 // LAP currently transmitting sensor
+  double       seq_start_sccd_TM;           // Current start time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
+  double       seq_stop_sccd_TM;            // Current stop  time (SCCD) of a measurement sequence in a macro cycle, as it occurs in the TM.
+  double       seq_start_sccd_corrected;    // Like seq_start_sccd_TM (SCCD), but adjusted for analog signal delays (ADC20_DELAY_S) when appropriate.
+  double       seq_stop_sccd_corrected;     // Like seq_stop_sccd_TM  (SCCD), but adjusted for analog signal delays (ADC20_DELAY_S) when appropriate.
+  double       offset_time;                 // Time since raw start time
+  double       old_time;                    // Used to test if we have extra bias settings. NOTE: Unused?!!
+  unsigned int old_macro;                   // Used to test if we have a new macro
+  double       sec_per_tmsmp;               // Time [seconds] between TM samples.
   unsigned int afilter;     // Current analog filter (if data from both sensors (i.e. correlation) we assume the same filter on both)
   int ibias1;               // Fix current bias p1
   int vbias1;               // Fix voltage bias p1
