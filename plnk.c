@@ -173,8 +173,9 @@ int InsertTopQ(prp_type *p,char *name,char *value)
     
     pthread_mutex_lock(&protect_plnk);	
     
-    if(value!=NULL)
+    if(value!=NULL) {
         sprintf(tstr,"\"%s\"",value);//Add quotes
+    }
         
         if(p->no_prop==0)
         {
@@ -198,6 +199,7 @@ int InsertTopQ(prp_type *p,char *name,char *value)
             return 0; //Ok
         }
         else
+        {
             if(p->no_prop>0)
             {
                 if((tmp=malloc(sizeof(property_type)))==NULL) 
@@ -220,9 +222,10 @@ int InsertTopQ(prp_type *p,char *name,char *value)
                 pthread_mutex_unlock(&protect_plnk);
                 return 0; //Ok
             }
+        }
             
-            pthread_mutex_unlock(&protect_plnk);
-            return -2; // Error
+        pthread_mutex_unlock(&protect_plnk);
+        return -2; // Error
 }
 
 int InsertTopK(prp_type *p,char *name,char *value)
@@ -252,6 +255,7 @@ int InsertTopK(prp_type *p,char *name,char *value)
         return 0; //Ok
     }
     else
+    {
         if(p->no_prop>0)
         {
             if((tmp=malloc(sizeof(property_type)))==NULL) 
@@ -274,8 +278,10 @@ int InsertTopK(prp_type *p,char *name,char *value)
             pthread_mutex_unlock(&protect_plnk);
             return 0; //Ok
         }     
-        pthread_mutex_unlock(&protect_plnk);
-        return -2; // Error
+    }
+    
+    pthread_mutex_unlock(&protect_plnk);
+    return -2; // Error
 }
 
 int InsertTopV(prp_type *p,char *name,unsigned int value)
@@ -307,6 +313,7 @@ int InsertTopV(prp_type *p,char *name,unsigned int value)
         return 0; //Ok
     }
     else
+    {
         if(p->no_prop>0)
         {
             if((tmp=malloc(sizeof(property_type)))==NULL) 
@@ -329,8 +336,10 @@ int InsertTopV(prp_type *p,char *name,unsigned int value)
             pthread_mutex_unlock(&protect_plnk);
             return 0; //Ok
         }
-        pthread_mutex_unlock(&protect_plnk);
-        return -2; // Error
+    }
+    
+    pthread_mutex_unlock(&protect_plnk);
+    return -2; // Error
 }
 
 int InsertTopQV(prp_type *p,char *name,unsigned int value)
@@ -363,6 +372,7 @@ int InsertTopQV(prp_type *p,char *name,unsigned int value)
         return 0; //Ok
     }
     else
+    {
         if(p->no_prop>0)
         {
             if((tmp=malloc(sizeof(property_type)))==NULL) 
@@ -384,9 +394,11 @@ int InsertTopQV(prp_type *p,char *name,unsigned int value)
             p->no_prop++;     
             pthread_mutex_unlock(&protect_plnk);
             return 0; //Ok
-        }     
-        pthread_mutex_unlock(&protect_plnk);
-        return -2; // Error
+        }
+    }
+    
+    pthread_mutex_unlock(&protect_plnk);
+    return -2; // Error
 }
 
 
@@ -1185,15 +1197,21 @@ int InsertB(prp_type *p,char *name,char *iname,char *ivalue,int occ)
                     }
                     
                     if(tmp1->prev_p!=NULL)
+                    {
                         tmp1->prev_p->next_p=tmp2; // Set previous next to new node
-                        else
-                            p->properties=tmp2; // New start of list
-                            tmp2->prev_p=tmp1->prev_p; // Set new previous to old previous
-                            tmp2->next_p=tmp1; // Set new next to current
-                            tmp1->prev_p=tmp2; // Set current previous to new
-                            p->no_prop++; // Increase number of property nodes
-                            pthread_mutex_unlock(&protect_plnk); 
-                        return 0; //Ok
+                    }
+                    else
+                    {
+                        p->properties=tmp2; // New start of list
+                    }
+                    
+                    tmp2->prev_p=tmp1->prev_p; // Set new previous to old previous
+                    tmp2->next_p=tmp1; // Set new next to current
+                    tmp1->prev_p=tmp2; // Set current previous to new
+                    p->no_prop++; // Increase number of property nodes
+                    pthread_mutex_unlock(&protect_plnk); 
+                    
+                    return 0; //Ok
                 }
             } 
             tmp1=tmp1->next_p;

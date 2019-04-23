@@ -48,6 +48,14 @@
 #
 #        -D name
 #            Predefine name as a macro, with definition 1.
+#
+#            -Wformat-overflow
+#            -Wformat-overflow=level
+#                Warn about calls to formatted input/output functions such as "sprintf" and "vsprintf" that might overflow
+#                the destination buffer.  When the exact number of bytes written by a format directive cannot be determined
+#                at compile-time it is estimated based on heuristics that depend on the level argument and on optimization.
+#                While enabling optimization will in most cases improve the accuracy of the warning, it may also result in
+#                false positives.
 #            
 # NOTE: If one adds debugging info when compiling (gcc -ggdb), then the compiled binary appears to depend on the number of rows, i.e. NOT only on the
 # logic/functionality of the code. The executable changes if one e.g. adds/removes comments.
@@ -66,7 +74,7 @@ CC   = gcc
 OBJ1 = pds_$(VER).o   plnk.o   cirb.o   id.o   calib_coeff.o
 #EF      = -lefence
 #CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
-CFLAGS  = -Wall -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
+CFLAGS  = -Wall -m32 -Wformat-overflow=0      # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
 
 # Path to CSPICE directory (32-bit). To be system-independent, it should be a path under the pds directory. To put CSPICE outside of pds, use a symlink.
 CSPICE_PATH = CSPICE_32bit/

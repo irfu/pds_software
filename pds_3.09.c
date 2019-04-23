@@ -11712,73 +11712,74 @@ void ProcessDDSFile(unsigned char *ibuff,int len,struct stat *sp,FTSENT *fe)
         scet = DecodeDDSTime2Timet(ibuff); // Get time of DDS packet
         
         // Determine if data lies within the specified data set (time interval).
-        if(mp.t_start>0)
+        if(mp.t_start>0) {
             if(scet<mp.t_start || scet>mp.t_stop)
             {
                 ibuff+=(18+N_bytes); // Skip DDS packet
                 continue;
             }
+        }
             
-            // We are most likely to have already processed this DDS packet if a jump back in time occurs 
-            // because we are going through the data in time order.
-            if(scet<(old-eps)) // - eps makes sure we really detect a true jump back in time
+        // We are most likely to have already processed this DDS packet if a jump back in time occurs 
+        // because we are going through the data in time order.
+        if(scet<(old-eps)) // - eps makes sure we really detect a true jump back in time
+        {
+            // If previous DDS packets had monotonic time do one message that it is not so anymore
+            // toggle prevents multiple messages!
+            if(toggle) 
             {
-                // If previous DDS packets had monotonic time do one message that it is not so anymore
-                // toggle prevents multiple messages!
-                if(toggle) 
-                {
-                    DPrintf("Found likely DDS packet duplicate, skipping\n");
-                    toggle=0;
-                }
-                ibuff+=(18+N_bytes); // Skip DDS packet, most probably done this one before!
-                continue;
-            }      
-            
-            ConvertTimet2Utc(scet,tmp_str,0);
-            DPrintf("SCET: %s\n",tmp_str);
-            
-            DPrintf("Length: %d\n",N_bytes);
-            
-            gsid=(ibuff[12]<<8 | ibuff[13]);        // Ground station ID
-            DDSGroundSN(gsid,tmp_str);              // Get Ground station name from global variable gstations
-            
-            DPrintf("Ground station:%s\n",tmp_str);
-            vch=DDSVirtualCh(ibuff);                // Get virtual channel
-            DPrintf("Virtual channel %d\n",vch);
-            
-            SLE=ibuff[16];                          // SLE type
-            TQ=ibuff[17];                           // Time quality
-            
-            DPrintf("SLE Type %d Time quality %d\n",SLE,TQ);
-            DPrintf("SC TM FIFO buffer usage %4.1f %\n",100.0*cbtm.fill/cbtm.max);
-            
-            ibuff+=18;                              // Skip DDS packet header
-            
-            // CRC=crc16(ibuff,N_bytes);
-            // DPrintf("Data CRC: 0x%x\n",CRC);
-            
-            InB(&cbtm,ibuff,N_bytes);                // Store data in cicular S/C TM buffer
-            
-            ibuff+=N_bytes;                          // Go forward
-            
-            // If the circular S/C TM buffer is filled to more than 85% then relinquish cpu until its not
-            while(FullBuffer(&cbtm,0.85)) 
+                DPrintf("Found likely DDS packet duplicate, skipping\n");
+                toggle=0;
+            }
+            ibuff+=(18+N_bytes); // Skip DDS packet, most probably done this one before!
+            continue;
+        }      
+        
+        ConvertTimet2Utc(scet,tmp_str,0);
+        DPrintf("SCET: %s\n",tmp_str);
+        
+        DPrintf("Length: %d\n",N_bytes);
+        
+        gsid=(ibuff[12]<<8 | ibuff[13]);        // Ground station ID
+        DDSGroundSN(gsid,tmp_str);              // Get Ground station name from global variable gstations
+        
+        DPrintf("Ground station:%s\n",tmp_str);
+        vch=DDSVirtualCh(ibuff);                // Get virtual channel
+        DPrintf("Virtual channel %d\n",vch);
+        
+        SLE=ibuff[16];                          // SLE type
+        TQ=ibuff[17];                           // Time quality
+        
+        DPrintf("SLE Type %d Time quality %d\n",SLE,TQ);
+        DPrintf("SC TM FIFO buffer usage %4.1f %\n",100.0*cbtm.fill/cbtm.max);
+        
+        ibuff+=18;                              // Skip DDS packet header
+        
+        // CRC=crc16(ibuff,N_bytes);
+        // DPrintf("Data CRC: 0x%x\n",CRC);
+        
+        InB(&cbtm,ibuff,N_bytes);                // Store data in cicular S/C TM buffer
+        
+        ibuff+=N_bytes;                          // Go forward
+        
+        // If the circular S/C TM buffer is filled to more than 85% then relinquish cpu until its not
+        while(FullBuffer(&cbtm,0.85)) 
+        {
+            pthread_testcancel();
+            sched_yield();
+        }
+        
+        // If the circular S/C TM buffer is filled to more than 55% then relinquish cpu, test finite times
+        for(i=0;i<FINITE_YIELDS;i++)
+        {
+            if(FullBuffer(&cbtm,0.55)) 
             {
-                pthread_testcancel();
+                pthread_testcancel();             
                 sched_yield();
             }
-            
-            // If the circular S/C TM buffer is filled to more than 55% then relinquish cpu, test finite times
-            for(i=0;i<FINITE_YIELDS;i++)
-            {
-                if(FullBuffer(&cbtm,0.55)) 
-                {
-                    pthread_testcancel();             
-                    sched_yield();
-                }
-                else
-                    break;
-            }
+            else
+                break;
+        }
             
     }while(ibuff<endp);
     
