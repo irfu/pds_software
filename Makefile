@@ -74,6 +74,8 @@ CC   = gcc
 OBJ1 = pds_$(VER).o   plnk.o   cirb.o   id.o   calib_coeff.o
 #EF      = -lefence
 #CFLAGS  = -Wall -ggdb -m32       # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
+
+# NOTE: -Wformat-overflow=0 works on irony (EJ's laptop) but not on spis. Compile on spis by just removing this option.
 CFLAGS  = -Wall -m32 -Wformat-overflow=0      # -m32 : Force compilation as 32-bit application also on non-32-bit platforms.
 
 # Path to CSPICE directory (32-bit). To be system-independent, it should be a path under the pds directory. To put CSPICE outside of pds, use a symlink.

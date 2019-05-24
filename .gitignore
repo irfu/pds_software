@@ -4,6 +4,12 @@ bin/
 
 
 
-
 # Is re-generated when compiling.
 id.c
+
+UnAccepted_Data/
+template_archive/
+
+# Must be without slash in case the directory is really a symlink..
+CSPICE_32bit
+

@@ -5354,7 +5354,7 @@ int  LoadModeDesc(prp_type *p,char *path)
 
 
 
-// Load bias settings = Load file with commanded biases (pds.bias?)
+// Load bias settings = Load file with macro/mode changes and manually commanded bias (pds.bias).
 // 
 // Output : bias_s     : 2D array of integers, size bias_cnt_s x 3. Contains content of rows where second column is NOT "*Mode*".
 //                       [i][0] = First  file column value = time (time_t).
@@ -7162,12 +7162,15 @@ char GetBiasMode(curr_type *curr, int dop) {
  * NOTE: The function will set the flag mc->calibration_used.
  *
  * t_data   : The time for which we have science data that needs to be calibrated.
- * UTC_data : The time for which we have science data as a UTC string.
+ * UTC_data : The time for which we have science data as a UTC string. This is used for calculating the nearest middle of UTC day.
  * mc       : Calibration data.
  * Return value : An index into the corresponding arrays in "mc".
  */
 int SelectCalibrationData(time_t t_data, char *UTC_data, m_type *mc)
 {
+    // PROPOSAL: Abolish UTC_data argument.
+    //  CON: Is legacy code. Should not be used anyway.
+    
     /*
      * Algorithm for selecting the calibration nearest in time.
      *
@@ -7472,9 +7475,9 @@ int WritePTAB_File(
     char file_path[PATH_MAX];        // Temporary string
 
     char current_sample_utc_corrected[MAX_STR];
-    char first_sample_utc_TM[MAX_STR];   // TM=Time according to TM (no group delay).
+    char first_sample_utc_TM[MAX_STR];      // TM=Time according to TM (no group delay).
 
-    int sw_bias_step_size_TM = 3;               // Current sweep step, default value just there to get rid of compilation warning.
+    int sw_bias_step_size_TM = 3;           // Current sweep step, default value just there to get rid of compilation warning.
 
     double sample_delta_sccd;               // Time since first sample. Unit: seconds
     double current_sample_sccd_corrected;   // Time of current sample (current row) as SCCD.
@@ -7509,7 +7512,7 @@ int WritePTAB_File(
     double ccalf_ADC16 = 0.0/0.0;    // Current calibration factor for ADC16.
 
     double current_sample_timet_TM;        // Current time in UTC for test of extra bias settings. Interpreted as time_t.
-    double old_current_sample_timet_TM;    // Previous value of utime in algorithm for detecting commanded bias. NOTE: No subseconds since time_t.
+    double old_current_sample_timet_TM;    // Previous value of utime in algorithm for detecting commanded bias.
     // Time of current data. Used for selecting calibration and commanded bias, not the samples. TM=Time according to TM (no group delay). NOTE: No subseconds since time_t.
     time_t first_sample_timet_TM;
     SpiceDouble first_sample_et_corrected;    
@@ -7670,6 +7673,10 @@ int WritePTAB_File(
         }
         else
         {
+            //==================
+            // CASE: CALIB_MEAS
+            //==================
+            // Select calibration data baed on first sample timestamp.
             i_calib = SelectCalibrationData(first_sample_timet_TM, first_sample_utc_TM, mc);
             if (debug >= 1) {
                 CPrintf("    Using calibration file %i: %s\n", i_calib, mc->calib_meas_data[i_calib].LBL_filename);
@@ -7998,7 +8005,7 @@ int WritePTAB_File(
             // Figure out if any extra bias settings have been done outside of macros.
             
             extra_bias_setting=0;
-            for(l=(nbias-1);l>=0 && extra_bias_setting==0;l--)   // Go through all extra bias settings (iterate backwards in time).
+            for (l=(nbias-1); l>=0 && extra_bias_setting==0; l--)   // Search through extra bias settings, BACKWARDS in time.
             {
                 double commanded_bias_time = commanded_bias_table[l][0];
                 if (bias_mode==E_FIELD) {
@@ -8012,7 +8019,7 @@ int WritePTAB_File(
                     //       old_current_sample_timet_TM < commanded_bias_time <= current_sample_timet_TM
                     extra_bias_setting=1;
                     
-                    // Check if any mode change happened after the found bias setting, but before the current time.
+                    // Check if any mode change happened after the found bias setting, but before the current sample.
                     for(m=0;m<nmode;m++)
                     {
                         old_current_sample_timet_TM = current_sample_timet_TM;
@@ -8104,10 +8111,10 @@ int WritePTAB_File(
             
             if(extra_bias_setting)
             {
-                vbias1 = ((commanded_bias_table[l][1] & 0xff00)>>8);  // Override macro present voltage bias p1.
-                vbias2 =  (commanded_bias_table[l][1] & 0xff);        // Override macro present voltage bias p2.
-                ibias2 = ((commanded_bias_table[l][2] & 0xff00)>>8);  // Override macro present current bias p1.
-                ibias1 =  (commanded_bias_table[l][2] & 0xff);        // Override macro present current bias p2.
+                vbias1 = ((commanded_bias_table[l][1] & 0xff00)>>8);  // Override macro present voltage bias P1.
+                vbias2 =  (commanded_bias_table[l][1] & 0xff);        // Override macro present voltage bias P2.
+                ibias2 = ((commanded_bias_table[l][2] & 0xff00)>>8);  // Override macro present current bias P2. NOTE: P2! Reverse probe order!
+                ibias1 =  (commanded_bias_table[l][2] & 0xff);        // Override macro present current bias P1. NOTE: P1!
                 /* The above lines were corrected by aie@irfu.se 2012-08-22 as the current bias is permuted 
                  * in the bias command. Original code:
                  *      curr->ibias1=((bias[l][2] & 0xff00)>>8);  // Override macro present current bias p1 
@@ -10991,7 +10998,8 @@ int ConvertSccs2Sccd(char *sccs, int *reset_counter, double *sccd)
     }
     
     return 0;
-}//*/
+}
+
 
 
 int get_conversion_factor_sccd2et_SPICE(double sccd1, double sccd2, double* conversion_factor)
