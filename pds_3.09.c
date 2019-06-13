@@ -182,7 +182,10 @@
  * * Bugfix: UTC timestamps incremented unevenly due to that conversion SCCD-->UTC passed over SCCS which has too low time resolution for HF.
  *      Now converts SCCD-->UTC using SPICE only for the first sample, and converts manually SCCD-->et (and SPICE for et-->UTC) for all other samples.
  *      /Erik P G Johansson 2019-04-16
- *
+ * * ~Bugfix: Correct EDITED file format.
+ *      Previously, the new MISSING_CONSTANT = -1e9 caused columns to grow wider than specified (when used).
+ *      Sets all EDITED current and voltage columns to %11d in TAB, and BYTES=11 in LBL.
+ *      /Erik P G Johansson 2019-06-13
  * 
  *
  * BUGS
@@ -8396,11 +8399,11 @@ int WritePTAB_File(
                 //==========
                 // For difference data P1-P2 we need to add two bias vectors. They can be different!
                 if(bias_mode==DENSITY) {
-                    fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d,%7d\r\n",
+                    fprintf(pds.stable_fd, "%s,%016.6f,%11d,%11d,%11d\r\n",
                             current_sample_utc_corrected,   current_sample_sccd_corrected,
                             current_TM,   vbias1,   vbias2);    // Write TWO VOLTAGE bias vectors.
                 } else {
-                    fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d,%7d\r\n",
+                    fprintf(pds.stable_fd, "%s,%016.6f,%11d,%11d,%11d\r\n",
                             current_sample_utc_corrected,
                             current_sample_sccd_corrected,
                             handle_EDITED_floating_potential_bias(ibias1, is_floating_P1),
@@ -8421,7 +8424,7 @@ int WritePTAB_File(
                 }
                 
                 // CASE: E field or density mode.
-                fprintf(pds.stable_fd, "%s,%016.6f,%7d,%7d\r\n",
+                fprintf(pds.stable_fd, "%s,%016.6f,%11d,%11d\r\n",
                     current_sample_utc_corrected,
                     current_sample_sccd_corrected,
                     current_TM,   voltage_TM);   // Write time, current and voltage
@@ -8672,12 +8675,12 @@ int WritePLBL_File(
             // CASE: EDITED
             //##############
 
-            row_bytes += 2*(1+7);   // += 16; Add TWO columns: EDITED current + voltage.
+            row_bytes += 2*(1+11);   // += 16; Add TWO columns: EDITED current + voltage.
 
             if(diff)
             {
                 //row_bytes+=7; // Extra bias column current or voltage
-                row_bytes += 1+7;   // Add ONE extra column: EDITED current OR voltage.
+                row_bytes += 1+11;   // Add ONE extra column: EDITED current OR voltage.
                 columns++;    // One extra column
             }
         }
@@ -8730,7 +8733,7 @@ int WritePLBL_File(
                 fprintf(pds.slabel_fd,"OBJECT     = COLUMN\r\n");          // OBJECT = COLUMN, first one
                 fprintf(pds.slabel_fd,"NAME        = UTC_TIME\r\n");
                 fprintf(pds.slabel_fd,"DATA_TYPE   = TIME\r\n");
-                fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte); 
+                fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                 fprintf(pds.slabel_fd,"BYTES       = 26\r\n"); start_byte+=(26+1);
                 fprintf(pds.slabel_fd,"DESCRIPTION = \"UTC TIME\"\r\n");
                 fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
@@ -8802,7 +8805,7 @@ int WritePLBL_File(
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                         fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                         //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
-                        fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
+                        fprintf(pds.slabel_fd,"BYTES       = 11\r\n");start_byte+=(11+1);
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CURRENT BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
@@ -8815,7 +8818,7 @@ int WritePLBL_File(
                     fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                     fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                     //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
-                    fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
+                    fprintf(pds.slabel_fd,"BYTES       = 11\r\n");start_byte+=(11+1);
 
                     if(bias_mode==E_FIELD)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"CURRENT BIAS\"\r\n");
@@ -8887,7 +8890,7 @@ int WritePLBL_File(
                         fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                         fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                         //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
-                        fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
+                        fprintf(pds.slabel_fd,"BYTES       = 11\r\n");start_byte+=(11+1);
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"VOLTAGE BIAS\"\r\n");
                         fprintf(pds.slabel_fd,"END_OBJECT = COLUMN\r\n");
                         
@@ -8900,7 +8903,7 @@ int WritePLBL_File(
                     fprintf(pds.slabel_fd,"DATA_TYPE   = ASCII_INTEGER\r\n");
                     fprintf(pds.slabel_fd,"START_BYTE  = %d\r\n",start_byte);
                     //fprintf(pds.slabel_fd,"BYTES       = 6\r\n");start_byte+=(6+1);
-                    fprintf(pds.slabel_fd,"BYTES       = 7\r\n");start_byte+=(7+1);
+                    fprintf(pds.slabel_fd,"BYTES       = 11\r\n");start_byte+=(11+1);
                     
                     if(bias_mode==DENSITY)
                         fprintf(pds.slabel_fd,"DESCRIPTION = \"VOLTAGE BIAS\"\r\n");
