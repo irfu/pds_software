@@ -6709,7 +6709,7 @@ int UpdateODLFile(char *file_path, prp_type *odl_prp, int update_PUBLICATION_DAT
 {
     prp_type temp_odl_prp;
     
-    YPrintf("Reading and updating ODL file: %s\n", file_path);
+    //YPrintf("Reading and updating ODL file: %s\n", file_path);    // Leads to many-many rows of log messages.
     InitP(&temp_odl_prp);
     
     // Read file
