@@ -135,7 +135,7 @@ RPCLAP030101_CALIB_FRQ_E_P2.LBL              % Filename of e-field frequency res
    Currently level above 4 doesn't add anything new.
    Setting level to 0 or removing option turns debugging off.
 
- -mp mission_phase_abreviation
+ -mp mission_phase_abbreviation
    The -mp option acts as a filter selecting a certain mission phase. The mission phase is abbreviated as
   in the Mission_Calendar.txt file in the source directory.
  
