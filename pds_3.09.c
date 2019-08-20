@@ -238,6 +238,10 @@
  * 
  * ~BUG: MISSING_CONSTANT that does not fit in %7d (e.g. -10^-9) will extend the column width for EDITED1, making the pds LBL files incorrect.
  * 
+ * ~BUG: pds still requires the presence of CALIB_MEAS+CALIB_MEAS_EXCEPT files in CALIB/ even if when pds does not use that type of
+ *  calibration (uses CALIB_COEFF instead). pds produces an empty data set if these files are missing.
+ *  /Erik P G Johansson 2019-05-24
+ * 
  * 
  * NOTES
  * =====
@@ -937,7 +941,7 @@ int main(int argc, char *argv[])
     //==================
     if(GetOption("-mc", argc, argv, pds.mcpath))
     {
-        printf("Mission calendar file      : %s (command-line override)\n", pds.mcpath);
+        printf("Mission calendar file       : %s (command-line override)\n", pds.mcpath);
     }
 
 

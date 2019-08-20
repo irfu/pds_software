@@ -16,6 +16,10 @@
 # it has to be compiled as 32-bit also on 64-bit systems, e.g. spis 
 # and birra, using the gcc -m32 flag.
 # /Erik P G Johansson 2015-04-27
+# NOTE: pds compiles on spis but not on brain. (Has no tried hard to resolve.)
+# Binary compiled on spis can run on brain.
+# /Erik P G Johansson 2019-08-08
+#
 #
 # gcc options:
 #       -Wall
